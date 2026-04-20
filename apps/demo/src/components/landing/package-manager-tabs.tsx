@@ -132,7 +132,8 @@ function AnnotateCode() {
       <span className="text-gray-300"> {"{"} </span>
       <span className="text-yellow-300">initCcmFeedback</span>
       <span className="text-gray-300"> {"}"} </span>
-      <span className="text-purple-400">from</span> <span className="text-green-400">&apos;@ccm-feedback/widget&apos;</span>
+      <span className="text-purple-400">from</span>{" "}
+      <span className="text-green-400">&apos;@ccm-feedback/widget&apos;</span>
       {"\n"}
       {"\n"}
       <span className="text-yellow-300">initCcmFeedback</span>

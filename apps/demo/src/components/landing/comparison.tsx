@@ -113,7 +113,9 @@ export function Comparison() {
       <div className="mx-auto max-w-5xl">
         <div data-gsap="section-title" className="text-center">
           <div className="mx-auto mb-4 h-px w-8 bg-accent/50" />
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">CCM Feedback vs. the alternatives</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            CCM Feedback vs. the alternatives
+          </h2>
           <p className="mt-4 text-lg text-gray-400">Why pay $39-79/mo for features you can self-host for free?</p>
         </div>
 

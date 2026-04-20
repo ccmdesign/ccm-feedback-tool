@@ -373,25 +373,25 @@ describe("launch", () => {
   // -------------------------------------------------------------------------
 
   describe("locale", () => {
-    it("defaults to French locale", () => {
+    it("defaults to English locale", () => {
       const instance = launch(defaultConfig());
 
       const widget = document.querySelector("ccm-feedback-widget")!;
       const shadow = widget.shadowRoot!;
       const fabBtn = shadow.querySelector<HTMLButtonElement>(".sp-fab")!;
-      // French ARIA label
-      expect(fabBtn.getAttribute("aria-label")).toContain("Menu feedback");
+      // English ARIA label — "Feedback menu"
+      expect(fabBtn.getAttribute("aria-label")).toBe("Feedback menu");
 
       instance.destroy();
     });
 
-    it("supports English locale", () => {
-      const instance = launch(defaultConfig({ locale: "en" }));
+    it("supports French locale", () => {
+      const instance = launch(defaultConfig({ locale: "fr" }));
 
       const widget = document.querySelector("ccm-feedback-widget")!;
       const shadow = widget.shadowRoot!;
       const panel = shadow.querySelector<HTMLElement>('[role="complementary"]')!;
-      expect(panel.getAttribute("aria-label")).toBe("Feedback panel");
+      expect(panel.getAttribute("aria-label")).toBe("Panneau de feedback");
 
       instance.destroy();
     });

@@ -1,13 +1,13 @@
 import {
   type AnnotationRecord,
   type AnnotationResponse,
+  type CcmFeedbackStore,
   type FeedbackPayload,
   type FeedbackRecord,
   type FeedbackResponse,
   type FeedbackStatus,
   type FeedbackType,
   flattenAnnotation,
-  type CcmFeedbackStore,
 } from "@ccm-feedback/core";
 import type { WidgetClient } from "./api-client.js";
 

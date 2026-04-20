@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FeedbackResponse, CcmFeedbackConfig } from "@ccm-feedback/core";
+import type { CcmFeedbackConfig, FeedbackResponse } from "@ccm-feedback/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockMatchMedia } from "../helpers.js";
 

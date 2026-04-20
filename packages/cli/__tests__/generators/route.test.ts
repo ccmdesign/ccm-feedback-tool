@@ -88,7 +88,7 @@ describe("generateRoute", () => {
     expect(content).toContain('import { prisma } from "@/lib/prisma"');
     expect(content).toContain("export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({");
     expect(content).toContain("prisma,");
-    expect(content).toContain("// apiKey: process.env.SITEPING_API_KEY,");
+    expect(content).toContain("// apiKey: process.env.CCM_FEEDBACK_API_KEY,");
     expect(content).toContain('// allowedOrigins: ["https://your-site.com"],');
   });
 

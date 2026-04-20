@@ -1,4 +1,9 @@
-import type { FeedbackPayload, CcmFeedbackConfig, CcmFeedbackInstance, CcmFeedbackPublicEvents } from "@ccm-feedback/core";
+import type {
+  CcmFeedbackConfig,
+  CcmFeedbackInstance,
+  CcmFeedbackPublicEvents,
+  FeedbackPayload,
+} from "@ccm-feedback/core";
 import { Annotator } from "./annotator.js";
 import { ApiClient, flushRetryQueue, type WidgetClient } from "./api-client.js";
 import { MOBILE_BREAKPOINT, PAGE_SIZE, Z_INDEX_MAX } from "./constants.js";
@@ -278,12 +283,18 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
     refresh: () => {
       panel.refresh();
     },
-    on: <K extends keyof CcmFeedbackPublicEvents>(event: K, listener: (...args: CcmFeedbackPublicEvents[K]) => void) => {
+    on: <K extends keyof CcmFeedbackPublicEvents>(
+      event: K,
+      listener: (...args: CcmFeedbackPublicEvents[K]) => void,
+    ) => {
       // Safe cast: CcmFeedbackPublicEvents and PublicWidgetEvents have identical keys and value types
       type TargetKey = K & keyof PublicWidgetEvents;
       return publicBus.on(event as TargetKey, listener as unknown as (...args: PublicWidgetEvents[TargetKey]) => void);
     },
-    off: <K extends keyof CcmFeedbackPublicEvents>(event: K, listener: (...args: CcmFeedbackPublicEvents[K]) => void) => {
+    off: <K extends keyof CcmFeedbackPublicEvents>(
+      event: K,
+      listener: (...args: CcmFeedbackPublicEvents[K]) => void,
+    ) => {
       // Safe cast: CcmFeedbackPublicEvents and PublicWidgetEvents have identical keys and value types
       type TargetKey = K & keyof PublicWidgetEvents;
       publicBus.off(event as TargetKey, listener as unknown as (...args: PublicWidgetEvents[TargetKey]) => void);

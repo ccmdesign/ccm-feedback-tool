@@ -1,7 +1,7 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import * as p from "@clack/prompts";
 import { CCM_FEEDBACK_MODELS } from "@ccm-feedback/core";
+import * as p from "@clack/prompts";
 import type { Field, Model } from "@mrleebo/prisma-ast";
 import { getSchema } from "@mrleebo/prisma-ast";
 import { findPrismaSchema } from "../utils/find-schema.js";

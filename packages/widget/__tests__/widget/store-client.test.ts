@@ -1,9 +1,9 @@
 import type {
   AnnotationPayload,
+  CcmFeedbackStore,
   FeedbackCreateInput,
   FeedbackPayload,
   FeedbackRecord,
-  CcmFeedbackStore,
 } from "@ccm-feedback/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreClient } from "../../src/store-client.js";
