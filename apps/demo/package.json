@@ -15,9 +15,9 @@
     "@ccm-feedback/adapter-memory": "workspace:*",
     "@ccm-feedback/adapter-prisma": "workspace:*",
     "@ccm-feedback/widget": "workspace:*",
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "^7.7.0",
     "gsap": "^3.14.2",
-    "next": "^15.3.0",
+    "next": "^16.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
