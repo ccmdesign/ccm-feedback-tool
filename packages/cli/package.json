@@ -1,10 +1,10 @@
 {
-  "name": "@siteping/cli",
+  "name": "@ccm-feedback/cli",
   "version": "0.4.3",
-  "description": "CLI tool to set up Siteping in your project",
+  "description": "CLI tool to set up CCM Feedback in your project",
   "type": "module",
   "bin": {
-    "siteping": "./dist/index.js"
+    "ccm-feedback": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -15,7 +15,7 @@
     "clean": "rm -rf dist"
   },
   "keywords": [
-    "siteping",
+    "ccm-feedback",
     "cli",
     "prisma",
     "setup",
@@ -25,16 +25,16 @@
     "prisma-generator",
     "typescript"
   ],
-  "author": "neosianexus",
+  "author": "ccmdesign",
   "license": "MIT",
-  "homepage": "https://siteping.dev",
+  "homepage": "https://feedback.ccmdesign.ca",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NeosiaNexus/SitePing.git",
+    "url": "git+https://github.com/ccmdesign/ccm-feedback-tool.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/NeosiaNexus/SitePing/issues"
+    "url": "https://github.com/ccmdesign/ccm-feedback-tool/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -43,7 +43,7 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "@siteping/core": "workspace:*",
+    "@ccm-feedback/core": "workspace:*",
     "commander": "^13.0.0",
     "@clack/prompts": "^0.9.0",
     "@mrleebo/prisma-ast": "^0.12.0"

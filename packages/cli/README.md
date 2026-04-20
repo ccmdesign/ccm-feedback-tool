@@ -1,17 +1,16 @@
-[![npm version](https://img.shields.io/npm/v/@siteping/cli)](https://www.npmjs.com/package/@siteping/cli)
-[![Live Demo](https://img.shields.io/badge/demo-try%20it%20live-22c55e)](https://siteping.dev/demo)
+[![npm version](https://img.shields.io/npm/v/@ccm-feedback/cli)](https://www.npmjs.com/package/@ccm-feedback/cli)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 
-# @siteping/cli
+# @ccm-feedback/cli
 
-CLI tool to set up [Siteping](https://github.com/NeosiaNexus/SitePing) in your project — scaffolds Prisma schema and API routes.
+CLI tool to set up [CCM Feedback](https://github.com/ccmdesign/ccm-feedback-tool) in your project — scaffolds Prisma schema and API routes.
 
-Part of the [@siteping](https://github.com/NeosiaNexus/SitePing) monorepo — **[try the live demo](https://siteping.dev/demo)**.
+Part of the [@ccm-feedback](https://github.com/ccmdesign/ccm-feedback-tool) monorepo.
 
 ## Usage
 
 ```bash
-npx @siteping/cli init
+npx @ccm-feedback/cli init
 ```
 
 ## Commands
@@ -20,18 +19,18 @@ npx @siteping/cli init
 |---------|-------------|
 | `init` | Interactive setup: Prisma schema + API route generation |
 | `sync` | Non-interactive Prisma schema sync (CI-friendly) |
-| `status` | Diagnostic check of your Siteping integration |
+| `status` | Diagnostic check of your CCM Feedback integration |
 | `doctor` | Test API endpoint connectivity |
 
 ### `init`
 
-Walks you through setting up Siteping:
+Walks you through setting up CCM Feedback:
 1. Detects your `prisma/schema.prisma`
-2. Merges `SitepingFeedback` and `SitepingAnnotation` models (idempotent)
+2. Merges `FeedbackItem` and `FeedbackAnnotation` models (idempotent)
 3. Generates the Next.js App Router API route
 
 ```bash
-npx @siteping/cli init
+npx @ccm-feedback/cli init
 npx prisma db push
 ```
 
@@ -40,7 +39,7 @@ npx prisma db push
 Non-interactive schema sync, useful for CI:
 
 ```bash
-npx @siteping/cli sync --schema prisma/schema.prisma
+npx @ccm-feedback/cli sync --schema prisma/schema.prisma
 ```
 
 ### `status`
@@ -48,7 +47,7 @@ npx @siteping/cli sync --schema prisma/schema.prisma
 Checks your integration:
 
 ```bash
-npx @siteping/cli status
+npx @ccm-feedback/cli status
 ```
 
 ### `doctor`
@@ -56,18 +55,20 @@ npx @siteping/cli status
 Tests API connectivity:
 
 ```bash
-npx @siteping/cli doctor --url http://localhost:3000
+npx @ccm-feedback/cli doctor --url http://localhost:3000
 ```
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
-| [`@siteping/widget`](https://www.npmjs.com/package/@siteping/widget) | Browser feedback widget |
-| [`@siteping/adapter-prisma`](https://www.npmjs.com/package/@siteping/adapter-prisma) | Server-side Prisma adapter |
-| [`@siteping/adapter-memory`](https://www.npmjs.com/package/@siteping/adapter-memory) | In-memory adapter (testing, demos) |
-| [`@siteping/adapter-localstorage`](https://www.npmjs.com/package/@siteping/adapter-localstorage) | Client-side localStorage adapter |
+| [`@ccm-feedback/widget`](https://www.npmjs.com/package/@ccm-feedback/widget) | Browser feedback widget |
+| [`@ccm-feedback/adapter-prisma`](https://www.npmjs.com/package/@ccm-feedback/adapter-prisma) | Server-side Prisma adapter |
+| [`@ccm-feedback/adapter-memory`](https://www.npmjs.com/package/@ccm-feedback/adapter-memory) | In-memory adapter (testing, demos) |
+| [`@ccm-feedback/adapter-localstorage`](https://www.npmjs.com/package/@ccm-feedback/adapter-localstorage) | Client-side localStorage adapter |
 
 ## License
 
-[MIT](https://github.com/NeosiaNexus/SitePing/blob/main/LICENSE)
+[MIT](https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE)
+
+Based on [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus — MIT licensed.

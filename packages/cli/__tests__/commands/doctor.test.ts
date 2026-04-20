@@ -100,10 +100,10 @@ describe("doctorCommand", () => {
     it("shows success message when response has data.total", async () => {
       vi.stubGlobal("fetch", mockFetchOk({ total: 5, feedbacks: [] }));
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" });
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" });
 
-      expect(p.intro).toHaveBeenCalledWith("siteping — Network diagnostics");
-      expect(spinnerMock.start).toHaveBeenCalledWith("Testing connection to http://localhost:3000/api/siteping");
+      expect(p.intro).toHaveBeenCalledWith("ccm-feedback — Network diagnostics");
+      expect(spinnerMock.start).toHaveBeenCalledWith("Testing connection to http://localhost:3000/api/feedback");
       expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining("Connection successful"));
       expect(p.log.success).toHaveBeenCalledWith(expect.stringContaining("5 feedback(s) found"));
       expect(p.outro).toHaveBeenCalledWith("Diagnostics complete");
@@ -112,7 +112,7 @@ describe("doctorCommand", () => {
     it("shows warning when response has no data.total", async () => {
       vi.stubGlobal("fetch", mockFetchOk({ something: "else" }));
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" });
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" });
 
       expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining("Connection successful"));
       expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Unexpected response"));
@@ -121,7 +121,7 @@ describe("doctorCommand", () => {
     it("shows warning when response is non-JSON", async () => {
       vi.stubGlobal("fetch", mockFetchOkNonJson());
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" });
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" });
 
       expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining("Connection successful"));
       expect(p.log.warn).toHaveBeenCalledWith(expect.stringContaining("Unexpected response"));
@@ -136,7 +136,7 @@ describe("doctorCommand", () => {
     it("shows error + body text for HTTP error with body", async () => {
       vi.stubGlobal("fetch", mockFetchHttpError(500, "Internal Server Error", "Something went wrong on the server"));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -148,7 +148,7 @@ describe("doctorCommand", () => {
     it("shows error only for HTTP error with empty body", async () => {
       vi.stubGlobal("fetch", mockFetchHttpError(404, "Not Found", ""));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -160,7 +160,7 @@ describe("doctorCommand", () => {
     it("shows error when text() rejects", async () => {
       vi.stubGlobal("fetch", mockFetchHttpErrorTextRejects(502, "Bad Gateway"));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -178,7 +178,7 @@ describe("doctorCommand", () => {
     it("shows timeout message for DOMException TimeoutError", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("Signal timed out.", "TimeoutError")));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -189,7 +189,7 @@ describe("doctorCommand", () => {
     it("shows connectivity message for TypeError containing 'fetch'", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
 
-      const err = await doctorCommand({ url: "http://localhost:9999", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:9999", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -201,7 +201,7 @@ describe("doctorCommand", () => {
     it("shows generic error message for Error instances", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -212,7 +212,7 @@ describe("doctorCommand", () => {
     it("uses String() for non-Error values in catch", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue("raw string error"));
 
-      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -227,7 +227,7 @@ describe("doctorCommand", () => {
 
   describe("URL validation", () => {
     it("exits(1) for invalid URL without http(s) prefix", async () => {
-      const err = await doctorCommand({ url: "ftp://example.com", endpoint: "/api/siteping" }).catch((e) => e);
+      const err = await doctorCommand({ url: "ftp://example.com", endpoint: "/api/feedback" }).catch((e) => e);
 
       expect(err).toBeInstanceOf(ExitError);
       expect((err as ExitError).code).toBe(1);
@@ -272,10 +272,10 @@ describe("doctorCommand", () => {
       const fetchFn = mockFetchOk({ total: 0 });
       vi.stubGlobal("fetch", fetchFn);
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" });
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" });
 
       const calledUrl = fetchFn.mock.calls[0][0];
-      expect(calledUrl).toBe("http://localhost:3000/api/siteping?projectName=__siteping_health_check__");
+      expect(calledUrl).toBe("http://localhost:3000/api/feedback?projectName=__ccm_feedback_health_check__");
     });
   });
 
@@ -287,7 +287,7 @@ describe("doctorCommand", () => {
     it("uses provided options without prompting", async () => {
       vi.stubGlobal("fetch", mockFetchOk({ total: 0 }));
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" });
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" });
 
       expect(p.text).not.toHaveBeenCalled();
     });
@@ -310,7 +310,7 @@ describe("doctorCommand", () => {
     it("stops spinner with 'Connection failed' on network error", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")));
 
-      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/siteping" }).catch(() => {});
+      await doctorCommand({ url: "http://localhost:3000", endpoint: "/api/feedback" }).catch(() => {});
 
       expect(spinnerMock.stop).toHaveBeenCalledWith("Connection failed");
     });

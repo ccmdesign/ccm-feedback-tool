@@ -9,7 +9,7 @@ describe("generateRoute", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "siteping-route-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "ccm-feedback-route-test-"));
   });
 
   afterEach(() => {
@@ -20,23 +20,23 @@ describe("generateRoute", () => {
   // Directory detection
   // -------------------------------------------------------------------------
 
-  it("creates route in app/api/siteping/route.ts when app/ exists", () => {
+  it("creates route in app/api/feedback/route.ts when app/ exists", () => {
     mkdirSync(join(tmpDir, "app"), { recursive: true });
 
     const result = generateRoute(tmpDir);
 
     expect(result.created).toBe(true);
-    expect(result.path).toBe(join(tmpDir, "app", "api", "siteping", "route.ts"));
+    expect(result.path).toBe(join(tmpDir, "app", "api", "feedback", "route.ts"));
     expect(existsSync(result.path)).toBe(true);
   });
 
-  it("creates route in src/app/api/siteping/route.ts when src/app/ exists", () => {
+  it("creates route in src/app/api/feedback/route.ts when src/app/ exists", () => {
     mkdirSync(join(tmpDir, "src", "app"), { recursive: true });
 
     const result = generateRoute(tmpDir);
 
     expect(result.created).toBe(true);
-    expect(result.path).toBe(join(tmpDir, "src", "app", "api", "siteping", "route.ts"));
+    expect(result.path).toBe(join(tmpDir, "src", "app", "api", "feedback", "route.ts"));
     expect(existsSync(result.path)).toBe(true);
   });
 
@@ -46,7 +46,7 @@ describe("generateRoute", () => {
 
     const result = generateRoute(tmpDir);
 
-    expect(result.path).toBe(join(tmpDir, "src", "app", "api", "siteping", "route.ts"));
+    expect(result.path).toBe(join(tmpDir, "src", "app", "api", "feedback", "route.ts"));
   });
 
   // -------------------------------------------------------------------------
@@ -84,9 +84,9 @@ describe("generateRoute", () => {
     const result = generateRoute(tmpDir);
     const content = readFileSync(result.path, "utf-8");
 
-    expect(content).toContain('import { createSitepingHandler } from "@siteping/adapter-prisma"');
+    expect(content).toContain('import { createCcmFeedbackHandler } from "@ccm-feedback/adapter-prisma"');
     expect(content).toContain('import { prisma } from "@/lib/prisma"');
-    expect(content).toContain("export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({");
+    expect(content).toContain("export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({");
     expect(content).toContain("prisma,");
     expect(content).toContain("// apiKey: process.env.SITEPING_API_KEY,");
     expect(content).toContain('// allowedOrigins: ["https://your-site.com"],');
@@ -100,11 +100,11 @@ describe("generateRoute", () => {
     mkdirSync(join(tmpDir, "app"), { recursive: true });
 
     // Create the directory structure so mkdirSync succeeds, but writeFileSync will fail
-    mkdirSync(join(tmpDir, "app", "api", "siteping"), { recursive: true });
+    mkdirSync(join(tmpDir, "app", "api", "feedback"), { recursive: true });
 
     // Make the target directory read-only to trigger EACCES on write
     const { chmodSync } = require("node:fs");
-    const targetDir = join(tmpDir, "app", "api", "siteping");
+    const targetDir = join(tmpDir, "app", "api", "feedback");
     chmodSync(targetDir, 0o444);
 
     try {
