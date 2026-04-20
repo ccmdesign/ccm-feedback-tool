@@ -1,8 +1,9 @@
 ---
 title: "Add explicit `runtime = 'nodejs'` + `dynamic = 'force-dynamic'` on `/api/feedback` route"
 priority: p3
-status: ready
+status: resolved
 source: ce-code-review (CCM-277)
+resolution: "Added `export const runtime = 'nodejs'` and `export const dynamic = 'force-dynamic'` to `apps/demo/src/app/api/feedback/route.ts`. Verified build output shows the route as ƒ (Dynamic)."
 ---
 
 ## Problem
