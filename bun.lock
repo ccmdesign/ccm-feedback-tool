@@ -6,6 +6,7 @@
       "name": "ccm-feedback",
       "devDependencies": {
         "@biomejs/biome": "2.4.10",
+        "@netlify/plugin-nextjs": "^5.14.0",
         "@playwright/test": "^1.59.1",
         "@prisma/client": "^6.0.0",
         "@types/node": "^25.5.0",
@@ -316,6 +317,8 @@
     "@medv/finder": ["@medv/finder@3.2.0", "", {}, "sha512-JmU7JIBwyL8RAzefvzALT4sP2M0biGk8i2invAgpQmma/QgfsaqoHIvJ7S0YC8n9hUVG8X3Leul2nGa06PvhbQ=="],
 
     "@mrleebo/prisma-ast": ["@mrleebo/prisma-ast@0.12.1", "", { "dependencies": { "chevrotain": "^10.5.0", "lilconfig": "^2.1.0" } }, "sha512-JwqeCQ1U3fvccttHZq7Tk0m/TMC6WcFAQZdukypW3AzlJYKYTGNVd1ANU2GuhKnv4UQuOFj3oAl0LLG/gxFN1w=="],
+
+    "@netlify/plugin-nextjs": ["@netlify/plugin-nextjs@5.15.9", "", {}, "sha512-4kJvV+wrt4/ncehfaOXfhv1FYKCv9EFjq6/tgXXYSlqPDcbsuTXR0DTz9IvyZ/CpPRadRD/zzIqD9wXgCmA2lg=="],
 
     "@next/env": ["@next/env@15.5.15", "", {}, "sha512-vcmyu5/MyFzN7CdqRHO3uHO44p/QPCZkuTUXroeUmhNP8bL5PHFEhik22JUazt+CDDoD6EpBYRCaS2pISL+/hg=="],
 

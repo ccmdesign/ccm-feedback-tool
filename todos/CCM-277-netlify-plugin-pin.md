@@ -1,8 +1,9 @@
 ---
 title: "Pin `@netlify/plugin-nextjs` version in `netlify.toml`"
 priority: p2
-status: ready
+status: resolved
 source: ce-code-review (CCM-277)
+resolution: "Added `@netlify/plugin-nextjs@^5.14.0` as a root devDependency so Netlify uses the repo-pinned version (v5 is the Next 15-compatible major) instead of auto-installing the latest plugin each build."
 ---
 
 ## Problem

@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
+    "@netlify/plugin-nextjs": "^5.14.0",
     "@playwright/test": "^1.59.1",
     "@prisma/client": "^6.0.0",
     "@types/node": "^25.5.0",

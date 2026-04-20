@@ -1,8 +1,9 @@
 ---
 title: "Netlify build does not run `prisma generate` before Next build"
 priority: p1
-status: ready
+status: resolved
 source: ce-code-review (CCM-277)
+resolution: "Added `bunx prisma generate --schema=prisma/schema.prisma` to the Netlify build command in `netlify.toml` so the Prisma client is generated every deploy before `next build` runs."
 ---
 
 ## Problem

@@ -2,12 +2,22 @@
 #
 # Netlify resolves `base` from the root of the deployed repo, so the build
 # command uses `cd ../..` to run the workspace-level build via Turborepo.
+#
+# `prisma generate` runs every build (not just once) — without it the Prisma
+# client ships default stubs and the first Prisma-mode request crashes with
+# "@prisma/client did not initialize yet".
 
 [build]
 base    = "apps/demo"
-command = "cd ../.. && bun install --frozen-lockfile && bun run build --filter=@ccm-feedback/demo"
+command = "cd ../.. && bun install --frozen-lockfile && bunx prisma generate --schema=prisma/schema.prisma && bun run build --filter=@ccm-feedback/demo"
 publish = ".next"
 
+# `@netlify/plugin-nextjs` is pinned via a root-level devDependency on
+# `@netlify/plugin-nextjs` (see root `package.json`). When the plugin is
+# present in the repo's `node_modules`, Netlify uses that version instead of
+# auto-installing the latest. This keeps the build deterministic across
+# deploys and gives us a lockstep bump path for Next major upgrades.
+# v5.x is the current major that supports Next 15.
 [[plugins]]
 package = "@netlify/plugin-nextjs"
 
