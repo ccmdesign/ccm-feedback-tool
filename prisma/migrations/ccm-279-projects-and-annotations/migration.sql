@@ -43,16 +43,30 @@ CREATE INDEX IF NOT EXISTS "ReviewBatch_dispatchStatus_idx" ON "ReviewBatch"("di
 CREATE INDEX IF NOT EXISTS "ReviewBatch_dispatchStatus_nextAttemptAt_idx"
   ON "ReviewBatch"("dispatchStatus", "nextAttemptAt");
 
-ALTER TABLE "ReviewBatch"
-  ADD CONSTRAINT "ReviewBatch_projectId_fkey"
-  FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- Postgres < 17 has no `ADD CONSTRAINT IF NOT EXISTS`; wrap each
+-- `ADD CONSTRAINT` in a DO block so re-running the migration against a db
+-- that already has the FK doesn't raise `duplicate_object` and abort the
+-- enclosing transaction.
+DO $$ BEGIN
+  ALTER TABLE "ReviewBatch"
+    ADD CONSTRAINT "ReviewBatch_projectId_fkey"
+    FOREIGN KEY ("projectId") REFERENCES "Project"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 3. FeedbackItem additions
 ALTER TABLE "FeedbackItem" ADD COLUMN IF NOT EXISTS "projectId" TEXT;
 CREATE INDEX IF NOT EXISTS "FeedbackItem_projectId_idx" ON "FeedbackItem"("projectId");
-ALTER TABLE "FeedbackItem"
-  ADD CONSTRAINT "FeedbackItem_projectId_fkey"
-  FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "FeedbackItem"
+    ADD CONSTRAINT "FeedbackItem_projectId_fkey"
+    FOREIGN KEY ("projectId") REFERENCES "Project"("id")
+    ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 4. FeedbackAnnotation additions
 ALTER TABLE "FeedbackAnnotation" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'submitted';

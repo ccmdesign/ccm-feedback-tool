@@ -13,6 +13,23 @@ Backfill script: `scripts/backfill-project-id.mjs`
 4. Creates supporting indexes on `ReviewBatch.dispatchStatus,nextAttemptAt` and `FeedbackAnnotation.status`.
 5. Leaves `FeedbackItem.projectName` in place for this release — removal is a follow-up.
 
+## Idempotency
+
+The migration is safe to re-run:
+
+- `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` for all table, index, and column operations.
+- Both `ADD CONSTRAINT` statements (the two FKs on `ReviewBatch.projectId` and `FeedbackItem.projectId`) are wrapped in `DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL END $$` blocks because Postgres < 17 has no `ADD CONSTRAINT IF NOT EXISTS`. Re-running does not raise `duplicate_object` or abort the enclosing transaction.
+- The backfill script (`scripts/backfill-project-id.mjs`) uses `prisma.project.upsert` on `name` and `updateMany` with `where: { projectId: null }`, so it produces no duplicate `Project` rows and does not overwrite previously-backfilled `FeedbackItem.projectId` values.
+
+To verify locally:
+
+```bash
+# Fresh db
+psql --single-transaction -f prisma/migrations/ccm-279-projects-and-annotations/migration.sql
+# Re-run — must complete without error
+psql --single-transaction -f prisma/migrations/ccm-279-projects-and-annotations/migration.sql
+```
+
 ## Pre-flight
 
 - Supabase project: `ccm-feedback-prod` (ref `qnkvkumtssihbjmocbtv`).

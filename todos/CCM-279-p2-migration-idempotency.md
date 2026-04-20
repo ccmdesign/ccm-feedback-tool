@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-279)
 run_id: 20260420-150800-d7209778
+resolution: Wrapped both `ALTER TABLE ... ADD CONSTRAINT` statements (ReviewBatch/FeedbackItem FKs) in `DO $$ ... EXCEPTION WHEN duplicate_object THEN NULL END $$` blocks so the migration is safe to re-run. Verified backfill script was already idempotent (upsert + updateMany where projectId:null). Documented idempotency in docs/migrations/CCM-279-projects-and-annotations.md.
 ---
 
 # CCM-279 — `ADD CONSTRAINT` statements in migration SQL are not idempotent
