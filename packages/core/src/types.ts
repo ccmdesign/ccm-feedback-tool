@@ -144,6 +144,8 @@ export interface FeedbackRecord {
   message: string;
   status: FeedbackStatus;
   projectName: string;
+  /** Optional — hydrated by the adapter during the CCM-279 migration window. */
+  projectId?: string | null;
   url: string;
   authorName: string;
   authorEmail: string;
@@ -179,6 +181,12 @@ export interface AnnotationRecord {
   viewportH: number;
   devicePixelRatio: number;
   createdAt: Date;
+  /** Implementation status — defaults to "submitted" at DB level. */
+  status?: string;
+  /** Implementation agent result payload (PR URL, task URL, reasoning, etc.). */
+  implementationResult?: unknown;
+  /** When the latest status update was received. */
+  implementationUpdatedAt?: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +313,158 @@ export interface FeedbackPayload {
 }
 
 // ---------------------------------------------------------------------------
+// CCM-279 — Project + ReviewBatch store interfaces (siblings of CcmFeedbackStore)
+// ---------------------------------------------------------------------------
+
+/**
+ * Project store contract. Implemented by the Prisma adapter. Non-Prisma
+ * adapters (memory, localStorage) may leave these methods unimplemented —
+ * projects are persistent configuration, not ephemeral widget state.
+ */
+export interface CcmProjectStore {
+  createProject(input: { name: string; stagingUrl: string; implementationWebhookUrl?: string | null }): Promise<{
+    id: string;
+    name: string;
+    stagingUrl: string;
+    implementationWebhookUrl: string | null;
+    createdAt: Date;
+    /** Plaintext secret — shown exactly once. */
+    secret: string;
+  }>;
+  listProjects(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      stagingUrl: string;
+      implementationWebhookUrl: string | null;
+      hasSecret: boolean;
+      createdAt: Date;
+    }>
+  >;
+  getProject(id: string): Promise<{
+    id: string;
+    name: string;
+    stagingUrl: string;
+    implementationWebhookUrl: string | null;
+    hasSecret: boolean;
+    createdAt: Date;
+  } | null>;
+  /** Internal getter — includes the hash for dispatch-time signing. */
+  getProjectWithSecret(id: string): Promise<{
+    id: string;
+    name: string;
+    stagingUrl: string;
+    implementationWebhookUrl: string | null;
+    implementationWebhookSecretHash: string | null;
+    createdAt: Date;
+  } | null>;
+  updateProject(
+    id: string,
+    patch: {
+      name?: string;
+      stagingUrl?: string;
+      implementationWebhookUrl?: string | null;
+    },
+  ): Promise<void>;
+  rotateProjectSecret(id: string): Promise<{ secret: string }>;
+  verifyProjectSecret(id: string, plaintext: string): Promise<boolean>;
+  deleteProject(id: string): Promise<void>;
+}
+
+/**
+ * ReviewBatch store contract. Implemented by the Prisma adapter. The dispatcher
+ * operates against this interface so it can be exercised in tests without a
+ * real Prisma client.
+ */
+export interface CcmReviewBatchStore {
+  createReviewBatch(input: {
+    projectId: string;
+    reviewerName: string;
+    reviewerEmail?: string | null;
+    annotationIds: string[];
+  }): Promise<{
+    id: string;
+    projectId: string;
+    reviewerName: string;
+    reviewerEmail: string | null;
+    submittedAt: Date;
+    annotationIds: string[];
+  }>;
+  getReviewBatch(id: string): Promise<{
+    id: string;
+    projectId: string;
+    reviewerName: string;
+    reviewerEmail: string | null;
+    submittedAt: Date;
+    dispatchStatus: string;
+    dispatchAttempts: number;
+    dispatchedAt: Date | null;
+    nextAttemptAt: Date | null;
+    dispatchLastError: string | null;
+    canonicalBody: string | null;
+    annotationIds: string[];
+  } | null>;
+  listRetryingReviewBatches(limit: number): Promise<
+    Array<{
+      id: string;
+      projectId: string;
+      submittedAt: Date;
+      dispatchAttempts: number;
+      nextAttemptAt: Date | null;
+    }>
+  >;
+  updateReviewBatchDispatch(
+    id: string,
+    patch: {
+      dispatchStatus?: string;
+      dispatchAttempts?: number;
+      dispatchedAt?: Date | null;
+      nextAttemptAt?: Date | null;
+      dispatchLastError?: string | null;
+      canonicalBody?: string | null;
+    },
+  ): Promise<void>;
+  /** Update the per-annotation status record; "newer updated_at wins" semantics. */
+  applyAnnotationStatus(input: {
+    annotationId: string;
+    status: string;
+    result: unknown;
+    updatedAt: Date;
+  }): Promise<{ applied: boolean }>;
+  /** Load annotations by id with the parent feedback for payload assembly. */
+  getAnnotationsForDispatch(ids: string[]): Promise<
+    Array<{
+      id: string;
+      feedbackId: string;
+      feedbackProjectId: string | null;
+      feedbackProjectName: string;
+      feedbackType: string;
+      feedbackMessage: string;
+      feedbackUrl: string;
+      cssSelector: string;
+      xpath: string;
+      textSnippet: string;
+      elementTag: string;
+      elementId: string | null;
+      textPrefix: string;
+      textSuffix: string;
+      fingerprint: string;
+      neighborText: string;
+      xPct: number;
+      yPct: number;
+      wPct: number;
+      hPct: number;
+      scrollX: number;
+      scrollY: number;
+      viewportW: number;
+      viewportH: number;
+      devicePixelRatio: number;
+      createdAt: Date;
+    }>
+  >;
+}
+
+// ---------------------------------------------------------------------------
 // Annotation — multi-selector anchoring (Hypothesis / W3C Web Annotation)
 // ---------------------------------------------------------------------------
 
@@ -398,4 +558,10 @@ export interface AnnotationResponse {
   viewportH: number;
   devicePixelRatio: number;
   createdAt: string;
+  /** CCM-279 implementation status. */
+  status?: string;
+  /** CCM-279 implementation agent result payload. */
+  implementationResult?: unknown;
+  /** CCM-279 when the implementation agent last reported status. ISO string. */
+  implementationUpdatedAt?: string | null;
 }

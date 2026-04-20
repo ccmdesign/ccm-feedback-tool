@@ -20,6 +20,16 @@ base    = "apps/demo"
 command = "cd ../.. && bun install --frozen-lockfile && bunx prisma generate --schema=prisma/schema.prisma && bun run build --filter=@ccm-feedback/demo && node scripts/copy-prisma-rhel-engine.mjs"
 publish = ".next"
 
+# User-level Netlify Functions (CCM-279: dispatch-retry scheduled fn).
+# Configured alongside the Next.js plugin's internal functions — both are
+# discovered and bundled.
+[functions]
+directory = "netlify/functions"
+included_files = [
+  "../../node_modules/.prisma/client/**",
+  "../../node_modules/@prisma/client/**"
+]
+
 # `@netlify/plugin-nextjs` is pinned via a root-level devDependency on
 # `@netlify/plugin-nextjs` (see root `package.json`). When the plugin is
 # present in the repo's `node_modules`, Netlify uses that version instead of

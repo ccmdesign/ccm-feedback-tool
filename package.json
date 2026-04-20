@@ -26,7 +26,9 @@
     "test:run": "vitest run",
     "test:e2e": "playwright test",
     "lint": "biome check .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "verify:webhook": "bun scripts/verify-webhook-signature.mjs",
+    "backfill:project-id": "bun scripts/backfill-project-id.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",

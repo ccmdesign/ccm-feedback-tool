@@ -15,6 +15,15 @@ export interface WidgetClient {
   resolveFeedback(id: string, resolved: boolean): Promise<FeedbackResponse>;
   deleteFeedback(id: string): Promise<void>;
   deleteAllFeedbacks(projectName: string): Promise<void>;
+  /**
+   * CCM-279: submit a review batch for downstream dispatch.
+   * HTTP clients POST to `/api/v1/reviews`; store clients throw.
+   */
+  submitReview?(input: {
+    projectId: string;
+    annotationIds: string[];
+    reviewer?: { name: string; email?: string };
+  }): Promise<{ batchId: string; dispatchStatus: string; dispatchAttempts: number }>;
 }
 
 const MAX_RETRIES = 3;
@@ -235,5 +244,32 @@ export class ApiClient {
     if (!response.ok) {
       throw new Error(`Failed to delete all feedbacks: ${response.status}`);
     }
+  }
+
+  /**
+   * CCM-279 — submit a review batch. The dispatcher signs + POSTs the §6.1
+   * payload to the project's configured implementation webhook.
+   *
+   * Resolves against `${baseUrl}/api/v1/reviews` where `baseUrl` is derived
+   * from the widget's `endpoint` config (strip `/api/feedback` suffix if
+   * present, else fall back to the site origin).
+   */
+  async submitReview(input: {
+    projectId: string;
+    annotationIds: string[];
+    reviewer?: { name: string; email?: string };
+  }): Promise<{ batchId: string; dispatchStatus: string; dispatchAttempts: number }> {
+    const base = this.endpoint.replace(/\/api\/feedback\/?$/, "");
+    const url = `${base || ""}/api/v1/reviews`;
+    const response = await resilientFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Failed to submit review: ${response.status} ${text}`);
+    }
+    return (await response.json()) as { batchId: string; dispatchStatus: string; dispatchAttempts: number };
   }
 }

@@ -9,7 +9,7 @@ import { statusCommand } from "../../src/commands/status.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** A valid Prisma schema with both CCM Feedback models — complete and up-to-date. */
+/** A valid Prisma schema with all CCM Feedback models — complete and up-to-date. */
 const FULL_SCHEMA = `
 datasource db {
   provider = "postgresql"
@@ -20,9 +20,44 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model Project {
+  id                              String        @id @default(cuid())
+  name                            String        @unique
+  stagingUrl                      String        @default("")
+  implementationWebhookUrl        String?       @db.Text
+  implementationWebhookSecretHash String?       @db.Text
+  createdAt                       DateTime      @default(now())
+  feedbacks                       FeedbackItem[]
+  reviewBatches                   ReviewBatch[]
+
+  @@index([name])
+}
+
+model ReviewBatch {
+  id                 String    @id @default(cuid())
+  projectId          String
+  project            Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewerName       String
+  reviewerEmail      String?
+  submittedAt        DateTime  @default(now())
+  dispatchStatus     String    @default("pending")
+  dispatchAttempts   Int       @default(0)
+  dispatchedAt       DateTime?
+  nextAttemptAt      DateTime?
+  dispatchLastError  String?   @db.Text
+  canonicalBody      String?   @db.Text
+  annotationIds      String[]
+
+  @@index([projectId])
+  @@index([dispatchStatus])
+  @@index([dispatchStatus, nextAttemptAt])
+}
+
 model FeedbackItem {
   id           String              @id @default(cuid())
   projectName  String
+  projectId    String?
+  project      Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
   type         String
   message      String              @db.Text
   status       String              @default("open")
@@ -39,33 +74,38 @@ model FeedbackItem {
 
   @@index([projectName])
   @@index([projectName, status, createdAt])
+  @@index([projectId])
 }
 
 model FeedbackAnnotation {
-  id               String           @id @default(cuid())
-  feedbackId       String
-  feedback         FeedbackItem @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
-  cssSelector      String           @db.Text
-  xpath            String           @db.Text
-  textSnippet      String           @db.Text
-  elementTag       String
-  elementId        String?
-  textPrefix       String           @db.Text
-  textSuffix       String           @db.Text
-  fingerprint      String
-  neighborText     String           @db.Text
-  xPct             Float
-  yPct             Float
-  wPct             Float
-  hPct             Float
-  scrollX          Float
-  scrollY          Float
-  viewportW        Int
-  viewportH        Int
-  devicePixelRatio Float            @default(1)
-  createdAt        DateTime         @default(now())
+  id                      String           @id @default(cuid())
+  feedbackId              String
+  feedback                FeedbackItem     @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  cssSelector             String           @db.Text
+  xpath                   String           @db.Text
+  textSnippet             String           @db.Text
+  elementTag              String
+  elementId               String?
+  textPrefix              String           @db.Text
+  textSuffix              String           @db.Text
+  fingerprint             String
+  neighborText            String           @db.Text
+  xPct                    Float
+  yPct                    Float
+  wPct                    Float
+  hPct                    Float
+  scrollX                 Float
+  scrollY                 Float
+  viewportW               Int
+  viewportH               Int
+  devicePixelRatio        Float            @default(1)
+  createdAt               DateTime         @default(now())
+  status                  String           @default("submitted")
+  implementationResult    Json?
+  implementationUpdatedAt DateTime?
 
   @@index([feedbackId])
+  @@index([status])
 }
 `;
 

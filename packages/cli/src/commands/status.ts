@@ -123,7 +123,7 @@ function checkSchema(schemaPath: string | null): SchemaCheckResult {
       // Check type match
       const expectedType = fieldDef.relation ? fieldDef.relation.model : fieldDef.type;
       const expectedOptional = fieldDef.optional ?? false;
-      const expectedArray = fieldDef.relation?.kind === "1-to-many";
+      const expectedArray = fieldDef.relation?.kind === "1-to-many" || (fieldDef.isList ?? false);
 
       const typeMatch = existing.fieldType === expectedType;
       const optionalMatch = (existing.optional ?? false) === expectedOptional;

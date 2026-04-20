@@ -19,6 +19,26 @@ import {
 
 export type { CcmFeedbackStore } from "@ccm-feedback/core";
 export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
+export type { CcmProjectPrismaClient } from "./project-store.js";
+export { ProjectStore } from "./project-store.js";
+export type { ReviewBatchPrismaClient } from "./review-batch-store.js";
+export { ReviewBatchStore } from "./review-batch-store.js";
+export type { DispatchContext, DispatchDeps, DispatchOutcome } from "./review-dispatch.js";
+export {
+  dispatchReviewBatch,
+  forgetSigningSecret,
+  processPendingReviewBatches,
+  registerSigningSecret,
+} from "./review-dispatch.js";
+export type { AnnotationStatusHandlerOptions, ReviewsHandlerOptions } from "./review-handler.js";
+export { createAnnotationStatusHandler, createReviewsHandler } from "./review-handler.js";
+export { generateSecret, hashSecret, verifySecret } from "./secret.js";
+export type { AnnotationStatusCallbackRequest } from "./validation/callback.js";
+export { annotationStatusCallbackSchema } from "./validation/callback.js";
+export type { ProjectCreateRequest, ProjectUpdateRequest } from "./validation/project.js";
+export { projectCreateSchema, projectIdSchema, projectUpdateSchema } from "./validation/project.js";
+export type { ReviewSubmitRequest } from "./validation/review.js";
+export { reviewSubmitSchema } from "./validation/review.js";
 export type {
   FeedbackCreateInput as FeedbackCreateSchemaInput,
   FeedbackDeleteInput,

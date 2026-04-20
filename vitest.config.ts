@@ -5,7 +5,15 @@ export default defineConfig({
     conditions: ["import", "module", "default"],
   },
   test: {
-    include: ["packages/**/__tests__/**/*.test.ts"],
+    include: [
+      "packages/**/__tests__/**/*.test.ts",
+      "prisma/__tests__/**/*.test.ts",
+      "prisma/__tests__/**/*.test.mjs",
+      "apps/**/__tests__/**/*.test.ts",
+      "apps/**/src/**/__tests__/**/*.test.ts",
+      "apps/**/netlify/functions/__tests__/**/*.test.ts",
+      "scripts/__tests__/**/*.test.mjs",
+    ],
     coverage: {
       provider: "istanbul",
       reporter: ["text", "lcov", "json-summary"],
