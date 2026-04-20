@@ -291,6 +291,83 @@ describe("dispatchReviewBatch", () => {
     forgetSigningSecret(projectId);
   });
 
+  it("marks a 4xx response as failed without scheduling a retry", async () => {
+    const { id: projectId, secret } = await projectStore.createProject({
+      name: "client-err",
+      stagingUrl: "",
+      implementationWebhookUrl: "https://hook.example.com/webhook",
+    });
+    registerSigningSecret(projectId, secret);
+    seedAnnotation(prisma, "ann-4xx", projectId, "client-err");
+    const batch = await reviewBatchStore.createReviewBatch({
+      projectId,
+      reviewerName: "Claudio",
+      annotationIds: ["ann-4xx"],
+    });
+    const fetchFn = vi.fn(async () => new Response("bad request", { status: 400 }));
+    const outcome = await dispatchReviewBatch(
+      { projectStore, reviewBatchStore, deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 } },
+      batch.id,
+    );
+    expect(outcome.dispatchStatus).toBe("failed");
+    expect(outcome.dispatchAttempts).toBe(1);
+    expect(outcome.error).toBe("http-400");
+    const stored = await reviewBatchStore.getReviewBatch(batch.id);
+    expect(stored?.dispatchStatus).toBe("failed");
+    expect(stored?.dispatchAttempts).toBe(1);
+    expect(stored?.nextAttemptAt).toBeFalsy();
+    expect(stored?.dispatchLastError).toBe("http-400");
+    forgetSigningSecret(projectId);
+  });
+
+  it("retries on 429 (Too Many Requests) — transient despite being 4xx", async () => {
+    const { id: projectId, secret } = await projectStore.createProject({
+      name: "rate-limited",
+      stagingUrl: "",
+      implementationWebhookUrl: "https://hook.example.com/webhook",
+    });
+    registerSigningSecret(projectId, secret);
+    seedAnnotation(prisma, "ann-429", projectId, "rate-limited");
+    const batch = await reviewBatchStore.createReviewBatch({
+      projectId,
+      reviewerName: "Claudio",
+      annotationIds: ["ann-429"],
+    });
+    const fetchFn = vi.fn(async () => new Response("slow down", { status: 429 }));
+    const outcome = await dispatchReviewBatch(
+      { projectStore, reviewBatchStore, deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 } },
+      batch.id,
+    );
+    expect(outcome.dispatchStatus).toBe("retrying");
+    const stored = await reviewBatchStore.getReviewBatch(batch.id);
+    expect(stored?.dispatchStatus).toBe("retrying");
+    expect(stored?.dispatchAttempts).toBe(1);
+    expect(stored?.nextAttemptAt).toBeTruthy();
+    forgetSigningSecret(projectId);
+  });
+
+  it("retries on 408 (Request Timeout) — transient despite being 4xx", async () => {
+    const { id: projectId, secret } = await projectStore.createProject({
+      name: "timeout-4xx",
+      stagingUrl: "",
+      implementationWebhookUrl: "https://hook.example.com/webhook",
+    });
+    registerSigningSecret(projectId, secret);
+    seedAnnotation(prisma, "ann-408", projectId, "timeout-4xx");
+    const batch = await reviewBatchStore.createReviewBatch({
+      projectId,
+      reviewerName: "Claudio",
+      annotationIds: ["ann-408"],
+    });
+    const fetchFn = vi.fn(async () => new Response("timeout", { status: 408 }));
+    const outcome = await dispatchReviewBatch(
+      { projectStore, reviewBatchStore, deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 } },
+      batch.id,
+    );
+    expect(outcome.dispatchStatus).toBe("retrying");
+    forgetSigningSecret(projectId);
+  });
+
   it("re-uses the cached canonical body across retries (idempotency)", async () => {
     const { id: projectId, secret } = await projectStore.createProject({
       name: "idem",

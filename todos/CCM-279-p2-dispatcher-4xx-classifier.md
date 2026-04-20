@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-279)
 run_id: 20260420-150800-d7209778
+resolution: Dispatcher now classifies 4xx (except 408/429) as non-retryable → marked `failed` with no backoff; 5xx/408/429/network errors remain retryable. Added 3 tests (400 → failed, 429 → retrying, 408 → retrying) and updated docs/webhook-contract.md §"Retry semantics".
 ---
 
 # CCM-279 — dispatcher should not retry 4xx responses

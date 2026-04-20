@@ -159,8 +159,14 @@ verified under the new secret.
 ## Retry semantics
 
 - First attempt is synchronous with the `POST /api/v1/reviews` request.
-- On non-2xx / timeout / network error the batch transitions to
-  `retrying`. The scheduled function (`apps/demo/netlify/functions/dispatch-retry.mts`)
+- HTTP response classification:
+  - **2xx** → delivered.
+  - **4xx** (except `408 Request Timeout` and `429 Too Many Requests`) →
+    `failed` immediately. These are permanent client-side errors (bad URL,
+    bad signature, schema mismatch, gone) where retrying will not change
+    the outcome.
+  - **5xx**, `408`, `429`, timeouts, and network errors → `retrying`.
+- The scheduled function (`apps/demo/netlify/functions/dispatch-retry.mts`)
   wakes every 5 minutes (UTC), selects retry-eligible batches, and
   re-dispatches.
 - Retries stop at 10 attempts or 24h from `submittedAt`, whichever comes first.

@@ -54,6 +54,23 @@ function safeErrorMessage(error: unknown): string {
 }
 
 /**
+ * Classify HTTP status codes for retry semantics.
+ *
+ * 4xx responses indicate a permanent client-side problem (bad URL, bad
+ * signature, schema mismatch, gone, etc.) and should NOT be retried — the
+ * consumer has rejected the payload and retrying will not change the outcome.
+ *
+ * Exceptions: `408 Request Timeout` and `429 Too Many Requests` are transient
+ * despite being 4xx and fall through to the normal backoff path alongside 5xx
+ * responses.
+ */
+function isNonRetryableClientError(status: number): boolean {
+  if (status < 400 || status >= 500) return false;
+  if (status === 408 || status === 429) return false;
+  return true;
+}
+
+/**
  * Dispatch a single ReviewBatch by id. Updates the row to reflect the outcome.
  */
 export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string): Promise<DispatchOutcome> {
@@ -189,8 +206,23 @@ export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string)
       return { batchId, dispatchStatus: "delivered", dispatchAttempts: attempts };
     }
 
-    // Non-2xx response
     const errorText = `http-${res.status}`;
+
+    // 4xx (except 408 / 429) is non-retryable — the consumer has rejected the
+    // payload and retrying will not change the outcome. Mark `failed` once and
+    // stop. 408 Request Timeout and 429 Too Many Requests are transient and
+    // fall through to the normal backoff path.
+    if (isNonRetryableClientError(res.status)) {
+      await ctx.reviewBatchStore.updateReviewBatchDispatch(batchId, {
+        dispatchStatus: "failed",
+        dispatchAttempts: attempts,
+        dispatchLastError: errorText,
+        canonicalBody,
+      });
+      return { batchId, dispatchStatus: "failed", dispatchAttempts: attempts, error: errorText };
+    }
+
+    // 5xx, 408, 429, network/timeout errors → retryable via backoff.
     return await handleFailure(ctx, batchId, batch.submittedAt, attempts, errorText, canonicalBody);
   } catch (error) {
     return await handleFailure(ctx, batchId, batch.submittedAt, attempts, safeErrorMessage(error), canonicalBody);
