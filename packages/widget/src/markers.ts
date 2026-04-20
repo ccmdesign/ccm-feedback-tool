@@ -1,4 +1,4 @@
-import type { AnchorData, FeedbackResponse, RectData } from "@siteping/core";
+import type { AnchorData, FeedbackResponse, RectData } from "@ccm-feedback/core";
 import { Z_INDEX_MAX } from "./constants.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
@@ -98,7 +98,7 @@ export class MarkerManager {
     this.container = el("div", {
       style: `position:absolute;top:0;left:0;pointer-events:none;z-index:${Z_INDEX_MAX - 1};`,
     });
-    this.container.id = "siteping-markers";
+    this.container.id = "ccm-feedback-markers";
     document.body.appendChild(this.container);
 
     this.bus.on("annotations:toggle", (visible) => {

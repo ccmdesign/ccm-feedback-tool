@@ -1,4 +1,4 @@
-import type { AnchorData, RectData } from "@siteping/core";
+import type { AnchorData, RectData } from "@ccm-feedback/core";
 import { scoreFingerprint } from "./fingerprint.js";
 import { fuzzyIncludes, similarity } from "./fuzzy.js";
 import { adjacentText, neighborText } from "./text-context.js";

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { AnnotationResponse, FeedbackResponse } from "@siteping/core";
+import type { AnnotationResponse, FeedbackResponse } from "@ccm-feedback/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventBus, type WidgetEvents } from "../../src/events.js";
 import { createT } from "../../src/i18n/index.js";
@@ -134,7 +134,7 @@ describe("MarkerManager", () => {
   afterEach(() => {
     markers.destroy();
     // Clean up any leftover elements
-    for (const el of document.querySelectorAll("#siteping-markers")) {
+    for (const el of document.querySelectorAll("#ccm-feedback-markers")) {
       el.remove();
     }
     if (mockState.element) {
@@ -148,8 +148,8 @@ describe("MarkerManager", () => {
   // -------------------------------------------------------------------------
 
   describe("render", () => {
-    it("creates a container element with id siteping-markers", () => {
-      const container = document.getElementById("siteping-markers");
+    it("creates a container element with id ccm-feedback-markers", () => {
+      const container = document.getElementById("ccm-feedback-markers");
       expect(container).not.toBeNull();
     });
 
@@ -157,14 +157,14 @@ describe("MarkerManager", () => {
       markers.render([makeFeedback()]);
       markers.render([]);
 
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       expect(container.children.length).toBe(0);
     });
 
     it("render([feedback]) creates marker elements", () => {
       markers.render([makeFeedback()]);
 
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       const markerEls = container.querySelectorAll("[data-feedback-id]");
       expect(markerEls.length).toBe(1);
     });
@@ -329,7 +329,7 @@ describe("MarkerManager", () => {
     it("hides container when toggled to false", () => {
       bus.emit("annotations:toggle", false);
 
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       expect(container.style.display).toBe("none");
     });
 
@@ -337,7 +337,7 @@ describe("MarkerManager", () => {
       bus.emit("annotations:toggle", false);
       bus.emit("annotations:toggle", true);
 
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       expect(container.style.display).toBe("block");
     });
   });
@@ -512,7 +512,7 @@ describe("MarkerManager", () => {
      * They also aren't nested inside markers (cluster badges are nested).
      */
     function countHighlights(): number {
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       // Direct children that are not markers and not badges
       return Array.from(container.children).filter(
         (child) => !child.hasAttribute("data-feedback-id") && !child.classList.contains("sp-cluster-badge"),
@@ -777,7 +777,7 @@ describe("MarkerManager", () => {
       const topBefore = markerEl.style.top;
 
       // Add element inside the markers container (should be filtered out)
-      const container = document.getElementById("siteping-markers")!;
+      const container = document.getElementById("ccm-feedback-markers")!;
       const internalDiv = document.createElement("div");
       internalDiv.className = "internal-widget-element";
       container.appendChild(internalDiv);
@@ -800,7 +800,7 @@ describe("MarkerManager", () => {
     it("removes the container element from DOM", () => {
       markers.destroy();
 
-      const container = document.getElementById("siteping-markers");
+      const container = document.getElementById("ccm-feedback-markers");
       expect(container).toBeNull();
     });
 

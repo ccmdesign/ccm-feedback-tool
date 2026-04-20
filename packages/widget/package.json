@@ -1,5 +1,5 @@
 {
-  "name": "@siteping/widget",
+  "name": "@ccm-feedback/widget",
   "version": "0.9.5",
   "description": "Feedback widget for client review during development — annotations, bugs, questions directly on the site",
   "type": "module",
@@ -36,16 +36,16 @@
     "shadow-dom",
     "lightweight"
   ],
-  "author": "neosianexus",
+  "author": "ccmdesign",
   "license": "MIT",
-  "homepage": "https://siteping.dev",
+  "homepage": "https://feedback.ccmdesign.ca",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NeosiaNexus/SitePing.git",
+    "url": "git+https://github.com/ccmdesign/ccm-feedback-tool.git",
     "directory": "packages/widget"
   },
   "bugs": {
-    "url": "https://github.com/NeosiaNexus/SitePing/issues"
+    "url": "https://github.com/ccmdesign/ccm-feedback-tool/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -55,6 +55,6 @@
   },
   "devDependencies": {
     "@medv/finder": "^3.2.0",
-    "@siteping/core": "workspace:*"
+    "@ccm-feedback/core": "workspace:*"
   }
 }

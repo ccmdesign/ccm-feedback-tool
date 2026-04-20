@@ -1,19 +1,18 @@
-[![npm version](https://img.shields.io/npm/v/@siteping/widget)](https://www.npmjs.com/package/@siteping/widget)
-[![Live Demo](https://img.shields.io/badge/demo-try%20it%20live-22c55e)](https://siteping.dev/demo)
+[![npm version](https://img.shields.io/npm/v/@ccm-feedback/widget)](https://www.npmjs.com/package/@ccm-feedback/widget)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 
-# @siteping/widget
+# @ccm-feedback/widget
 
 **Client feedback, pinned to the pixel.**
 
 A lightweight feedback widget that lets your clients annotate websites during development. Draw rectangles, leave comments, track bugs — directly on the live site.
 
-Part of the [@siteping](https://github.com/NeosiaNexus/SitePing) monorepo — **[try the live demo](https://siteping.dev/demo)**.
+Part of the [@ccm-feedback](https://github.com/ccmdesign/ccm-feedback-tool) monorepo.
 
 ## Install
 
 ```bash
-npm install @siteping/widget
+npm install @ccm-feedback/widget
 ```
 
 ## Quick Start
@@ -22,13 +21,13 @@ npm install @siteping/widget
 // app/layout.tsx (or any client component)
 'use client'
 
-import { initSiteping } from '@siteping/widget'
+import { initCcmFeedback } from '@ccm-feedback/widget'
 import { useEffect } from 'react'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    const { destroy } = initSiteping({
-      endpoint: '/api/siteping',
+    const { destroy } = initCcmFeedback({
+      endpoint: '/api/feedback',
       projectName: 'my-project',
     })
     return destroy
@@ -38,23 +37,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 }
 ```
 
-You also need a server-side adapter — see [`@siteping/adapter-prisma`](https://www.npmjs.com/package/@siteping/adapter-prisma).
+You also need a server-side adapter — see [`@ccm-feedback/adapter-prisma`](https://www.npmjs.com/package/@ccm-feedback/adapter-prisma).
 
 ### Client-side mode (no server)
 
 Use a `store` instead of an `endpoint` to bypass HTTP entirely:
 
 ```ts
-import { initSiteping } from '@siteping/widget'
-import { LocalStorageStore } from '@siteping/adapter-localstorage'
+import { initCcmFeedback } from '@ccm-feedback/widget'
+import { LocalStorageStore } from '@ccm-feedback/adapter-localstorage'
 
-initSiteping({
+initCcmFeedback({
   store: new LocalStorageStore(),
   projectName: 'my-demo',
 })
 ```
 
-Feedback persists in `localStorage` — no server, no database. Perfect for demos and prototyping. See [`@siteping/adapter-localstorage`](https://www.npmjs.com/package/@siteping/adapter-localstorage) and [`@siteping/adapter-memory`](https://www.npmjs.com/package/@siteping/adapter-memory).
+Feedback persists in `localStorage` — no server, no database. Perfect for demos and prototyping. See [`@ccm-feedback/adapter-localstorage`](https://www.npmjs.com/package/@ccm-feedback/adapter-localstorage) and [`@ccm-feedback/adapter-memory`](https://www.npmjs.com/package/@ccm-feedback/adapter-memory).
 
 > **Framework-agnostic** — Works with any frontend framework (React, Vue, Svelte, Astro) or plain HTML. No framework dependency required.
 
@@ -62,12 +61,12 @@ Feedback persists in `localStorage` — no server, no database. Perfect for demo
 
 ## Configuration
 
-All configuration options for `initSiteping()`:
+All configuration options for `initCcmFeedback()`:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `endpoint` | `string` | — | Your API route (e.g. `/api/siteping`). Required unless `store` is provided |
-| `store` | `SitepingStore` | — | Direct store for client-side mode. When set, bypasses HTTP |
+| `endpoint` | `string` | — | Your API route (e.g. `/api/feedback`). Required unless `store` is provided |
+| `store` | `CcmFeedbackStore` | — | Direct store for client-side mode. When set, bypasses HTTP |
 | `projectName` | `string` | — | **Required.** Scopes feedbacks to this project |
 | `position` | `'bottom-right' \| 'bottom-left'` | `'bottom-right'` | Widget FAB position |
 | `accentColor` | `string` | `'#0066ff'` | Widget accent color — hex color (`#RGB`, `#RRGGBB`, `#RRGGBBAA`) |
@@ -91,8 +90,8 @@ All configuration options for `initSiteping()`:
 | `onSkip` | `(reason) => void` | Called when widget is skipped (production/mobile) |
 
 ```ts
-initSiteping({
-  endpoint: '/api/siteping',
+initCcmFeedback({
+  endpoint: '/api/feedback',
   projectName: 'my-project',
   position: 'bottom-right',
   accentColor: '#0066ff',
@@ -112,10 +111,10 @@ initSiteping({
 
 ## Return value API
 
-`initSiteping()` returns a `SitepingInstance` with the following methods:
+`initCcmFeedback()` returns a `CcmFeedbackInstance` with the following methods:
 
 ```ts
-const widget = initSiteping({ ... })
+const widget = initCcmFeedback({ ... })
 
 widget.open()       // Open the feedback panel
 widget.close()      // Close the feedback panel
@@ -128,7 +127,7 @@ widget.destroy()    // Remove the widget and clean up all DOM elements + listene
 Use `widget.on()` / `widget.off()` as an alternative to config callbacks:
 
 ```ts
-const widget = initSiteping({ ... })
+const widget = initCcmFeedback({ ... })
 
 // Subscribe to events
 const unsub = widget.on('feedback:sent', (feedback) => {
@@ -182,11 +181,13 @@ style-src 'unsafe-inline';
 
 | Package | Description |
 |---------|-------------|
-| [`@siteping/adapter-prisma`](https://www.npmjs.com/package/@siteping/adapter-prisma) | Server-side Prisma adapter |
-| [`@siteping/adapter-memory`](https://www.npmjs.com/package/@siteping/adapter-memory) | In-memory adapter (testing, demos) |
-| [`@siteping/adapter-localstorage`](https://www.npmjs.com/package/@siteping/adapter-localstorage) | Client-side localStorage adapter |
-| [`@siteping/cli`](https://www.npmjs.com/package/@siteping/cli) | CLI for project setup |
+| [`@ccm-feedback/adapter-prisma`](https://www.npmjs.com/package/@ccm-feedback/adapter-prisma) | Server-side Prisma adapter |
+| [`@ccm-feedback/adapter-memory`](https://www.npmjs.com/package/@ccm-feedback/adapter-memory) | In-memory adapter (testing, demos) |
+| [`@ccm-feedback/adapter-localstorage`](https://www.npmjs.com/package/@ccm-feedback/adapter-localstorage) | Client-side localStorage adapter |
+| [`@ccm-feedback/cli`](https://www.npmjs.com/package/@ccm-feedback/cli) | CLI for project setup |
 
 ## License
 
-[MIT](https://github.com/NeosiaNexus/SitePing/blob/main/LICENSE)
+[MIT](https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE)
+
+Based on [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus — MIT licensed.

@@ -7,12 +7,12 @@ import {
   type FeedbackStatus,
   type FeedbackType,
   flattenAnnotation,
-  type SitepingStore,
-} from "@siteping/core";
+  type CcmFeedbackStore,
+} from "@ccm-feedback/core";
 import type { WidgetClient } from "./api-client.js";
 
 /**
- * `WidgetClient` implementation that delegates directly to a `SitepingStore`.
+ * `WidgetClient` implementation that delegates directly to a `CcmFeedbackStore`.
  *
  * Used in client-side mode — the widget calls the store in-process instead of
  * making HTTP requests. Handles the same conversions the HTTP handler normally
@@ -20,7 +20,7 @@ import type { WidgetClient } from "./api-client.js";
  */
 export class StoreClient implements WidgetClient {
   constructor(
-    private readonly store: SitepingStore,
+    private readonly store: CcmFeedbackStore,
     private readonly projectName: string,
   ) {}
 

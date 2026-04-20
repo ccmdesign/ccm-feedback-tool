@@ -1,36 +1,36 @@
-import type { SitepingConfig, SitepingInstance } from "@siteping/core";
+import type { CcmFeedbackConfig, CcmFeedbackInstance } from "@ccm-feedback/core";
 import { launch } from "./launcher.js";
 
 export type {
   AnchorData,
   AnnotationPayload,
   AnnotationResponse,
+  CcmFeedbackConfig,
+  CcmFeedbackInstance,
+  CcmFeedbackPublicEvents,
+  CcmFeedbackStore,
   FeedbackPayload,
   FeedbackResponse,
   FeedbackStatus,
   FeedbackType,
   RectData,
-  SitepingConfig,
-  SitepingInstance,
-  SitepingPublicEvents,
-  SitepingStore,
-} from "@siteping/core";
+} from "@ccm-feedback/core";
 
 export type { Identity } from "./identity.js";
 
 /**
- * Initialize the Siteping feedback widget.
+ * Initialize the CCM Feedback widget.
  *
  * @example
  * ```ts
- * import { initSiteping } from '@siteping/widget'
+ * import { initCcmFeedback } from '@ccm-feedback/widget'
  *
- * const { destroy } = initSiteping({
- *   endpoint: '/api/siteping',
+ * const { destroy } = initCcmFeedback({
+ *   endpoint: '/api/feedback',
  *   projectName: 'my-project',
  * })
  * ```
  */
-export function initSiteping(config: SitepingConfig): SitepingInstance {
+export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance {
   return launch(config);
 }

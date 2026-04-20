@@ -17,7 +17,7 @@ function createShadowRoot(): ShadowRoot {
 
 function defaultConfig() {
   return {
-    endpoint: "/api/siteping",
+    endpoint: "/api/feedback",
     projectName: "test-project",
     position: "bottom-right" as const,
   };

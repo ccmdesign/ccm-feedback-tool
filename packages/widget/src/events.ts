@@ -33,7 +33,7 @@ export class EventBus<E extends { [K in keyof E]: unknown[] }> {
         fn(...args);
       } catch (err) {
         // Isolate listener errors — one bad listener must not kill others
-        console.error(`[siteping] Error in event listener for "${String(event)}":`, err);
+        console.error(`[ccm-feedback] Error in event listener for "${String(event)}":`, err);
       }
     }
   }
@@ -50,7 +50,7 @@ export class EventBus<E extends { [K in keyof E]: unknown[] }> {
 export interface WidgetEvents {
   open: [];
   close: [];
-  "feedback:sent": [import("@siteping/core").FeedbackResponse];
+  "feedback:sent": [import("@ccm-feedback/core").FeedbackResponse];
   "feedback:deleted": [string];
   "feedback:all-deleted": [];
   "feedback:error": [Error];
@@ -61,9 +61,9 @@ export interface WidgetEvents {
   "panel:toggle": [boolean];
 }
 
-/** Subset of WidgetEvents exposed to consumers via SitepingInstance */
+/** Subset of WidgetEvents exposed to consumers via CcmFeedbackInstance */
 export interface PublicWidgetEvents {
-  "feedback:sent": [import("@siteping/core").FeedbackResponse];
+  "feedback:sent": [import("@ccm-feedback/core").FeedbackResponse];
   "feedback:deleted": [string];
   "panel:open": [];
   "panel:close": [];

@@ -15,7 +15,7 @@ export function parseSvg(svgString: string): SVGSVGElement {
   const fragment = range.createContextualFragment(svgString);
   const svg = fragment.firstElementChild;
   if (!svg || svg.nodeName.toLowerCase() !== "svg") {
-    throw new Error("[siteping] Invalid SVG string");
+    throw new Error("[ccm-feedback] Invalid SVG string");
   }
   // Safety: strip any event handlers in case of accidental misuse
   for (const attr of [...svg.attributes]) {

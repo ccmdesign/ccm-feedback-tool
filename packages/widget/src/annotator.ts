@@ -1,4 +1,4 @@
-import type { AnnotationPayload, FeedbackType } from "@siteping/core";
+import type { AnnotationPayload, FeedbackType } from "@ccm-feedback/core";
 import { Z_INDEX_MAX } from "./constants.js";
 import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anchor.js";
 import { el, setText } from "./dom-utils.js";

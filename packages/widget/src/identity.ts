@@ -1,4 +1,4 @@
-const STORAGE_KEY = "siteping_identity";
+const STORAGE_KEY = "ccm_feedback_identity";
 
 export interface Identity {
   name: string;

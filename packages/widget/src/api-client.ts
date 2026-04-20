@@ -1,4 +1,4 @@
-import type { FeedbackPayload, FeedbackResponse, FeedbackStatus, FeedbackType } from "@siteping/core";
+import type { FeedbackPayload, FeedbackResponse, FeedbackStatus, FeedbackType } from "@ccm-feedback/core";
 
 /**
  * Abstract client interface used by the widget internals.
@@ -19,7 +19,7 @@ export interface WidgetClient {
 
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 10_000;
-const RETRY_QUEUE_KEY = "siteping_retry_queue";
+const RETRY_QUEUE_KEY = "ccm_feedback_retry_queue";
 const MAX_QUEUE_SIZE = 20;
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ async function resilientFetch(url: string, init: RequestInit, retries = MAX_RETR
 
 type RetryEntry = { endpoint: string; payload: FeedbackPayload };
 
-const LOCK_NAME = "siteping_retry_queue";
+const LOCK_NAME = "ccm_feedback_retry_queue";
 
 /**
  * Acquire a Web Lock to serialize cross-tab access to the retry queue.
