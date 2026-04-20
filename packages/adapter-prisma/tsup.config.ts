@@ -8,6 +8,6 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  noExternal: ["@siteping/core"],
+  noExternal: ["@ccm-feedback/core"],
   external: ["@prisma/client"],
 });
