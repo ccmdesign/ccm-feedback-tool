@@ -25,6 +25,28 @@ export type {
   FeedbackPatchInput,
   GetQueryInput,
 } from "./validation.js";
+export { ProjectStore } from "./project-store.js";
+export type { CcmProjectPrismaClient } from "./project-store.js";
+export { ReviewBatchStore } from "./review-batch-store.js";
+export type { ReviewBatchPrismaClient } from "./review-batch-store.js";
+export { generateSecret, hashSecret, verifySecret } from "./secret.js";
+export { projectCreateSchema, projectUpdateSchema, projectIdSchema } from "./validation/project.js";
+export type { ProjectCreateRequest, ProjectUpdateRequest } from "./validation/project.js";
+export { reviewSubmitSchema } from "./validation/review.js";
+export type { ReviewSubmitRequest } from "./validation/review.js";
+export {
+  annotationStatusCallbackSchema,
+} from "./validation/callback.js";
+export type { AnnotationStatusCallbackRequest } from "./validation/callback.js";
+export {
+  dispatchReviewBatch,
+  processPendingReviewBatches,
+  registerSigningSecret,
+  forgetSigningSecret,
+} from "./review-dispatch.js";
+export type { DispatchOutcome, DispatchContext, DispatchDeps } from "./review-dispatch.js";
+export { createReviewsHandler, createAnnotationStatusHandler } from "./review-handler.js";
+export type { ReviewsHandlerOptions, AnnotationStatusHandlerOptions } from "./review-handler.js";
 
 // ---------------------------------------------------------------------------
 // Minimal PrismaClient shape expected by this adapter
