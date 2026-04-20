@@ -1,3 +1,4 @@
+import type { CcmFeedbackPrismaClient } from "@ccm-feedback/adapter-prisma";
 import type { CcmFeedbackStore } from "@ccm-feedback/core";
 
 const RESET_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
@@ -25,9 +26,11 @@ export async function resolveStore(): Promise<CcmFeedbackStore> {
   if (process.env.DATABASE_URL) {
     const [{ PrismaStore }, { prisma }] = await Promise.all([
       import("@ccm-feedback/adapter-prisma"),
-      import("./prisma.js"),
+      import("./prisma"),
     ]);
-    g.__ccmFeedbackStore = new PrismaStore(prisma);
+    // Prisma's generated client is a superset of the adapter's minimal shape —
+    // cast to the adapter's interface so both sides line up at the type level.
+    g.__ccmFeedbackStore = new PrismaStore(prisma as unknown as CcmFeedbackPrismaClient);
     return g.__ccmFeedbackStore;
   }
 
