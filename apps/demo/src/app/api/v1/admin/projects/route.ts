@@ -6,8 +6,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function requireAdmin(): Promise<Response | null> {
-  if (process.env.CCM_E2E_ADMIN_BYPASS === "1") return null;
+async function requireAdmin(request: Request): Promise<Response | null> {
+  // Test bypass — must match middleware: requires BOTH env var AND header.
+  // Env var alone is not enough (defense against accidental prod leak).
+  if (process.env.CCM_E2E_ADMIN_BYPASS === "1" && request.headers.get("x-ccm-e2e-bypass") === "1") {
+    return null;
+  }
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -18,8 +22,8 @@ async function requireAdmin(): Promise<Response | null> {
   return null;
 }
 
-export async function GET(): Promise<Response> {
-  const gate = await requireAdmin();
+export async function GET(request: Request): Promise<Response> {
+  const gate = await requireAdmin(request);
   if (gate) return gate;
   const { projectStore } = await resolveProjectStores();
   const projects = await projectStore.listProjects();
@@ -27,7 +31,7 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const gate = await requireAdmin();
+  const gate = await requireAdmin(request);
   if (gate) return gate;
   const body = await request.json().catch(() => null);
   if (!body) return Response.json({ error: "Invalid JSON" }, { status: 400 });

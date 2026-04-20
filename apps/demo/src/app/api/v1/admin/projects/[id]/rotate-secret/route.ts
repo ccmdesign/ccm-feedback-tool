@@ -6,8 +6,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(_request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
-  if (process.env.CCM_E2E_ADMIN_BYPASS !== "1") {
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
+  // Test bypass — must match middleware: requires BOTH env var AND header.
+  // Env var alone is not enough (defense against accidental prod leak).
+  const bypassed = process.env.CCM_E2E_ADMIN_BYPASS === "1" && request.headers.get("x-ccm-e2e-bypass") === "1";
+  if (!bypassed) {
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },

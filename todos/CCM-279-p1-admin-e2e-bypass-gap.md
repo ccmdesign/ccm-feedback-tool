@@ -1,8 +1,9 @@
 ---
 priority: p1
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-279)
 run_id: 20260420-150800-d7209778
+resolution: Admin route bypass now requires both CCM_E2E_ADMIN_BYPASS=1 env var AND x-ccm-e2e-bypass:1 header (matches middleware exactly) across all three admin API routes.
 ---
 
 # CCM-279 — admin API E2E bypass check must require the header, not env alone
