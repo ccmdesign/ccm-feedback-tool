@@ -21,7 +21,7 @@ const faqs = [
   },
   {
     q: "Is it GDPR compliant?",
-    a: "Fully. Since SitePing is self-hosted, all data stays on your infrastructure. No data is ever sent to third-party servers. You control storage, retention, and deletion.",
+    a: "Fully. Since CCM Feedback is self-hosted, all data stays on your infrastructure. No data is ever sent to third-party servers. You control storage, retention, and deletion.",
   },
   {
     q: "Can I customize the widget appearance?",
@@ -29,7 +29,7 @@ const faqs = [
   },
   {
     q: "Do I need to create an account?",
-    a: "No. SitePing is an npm package you install and configure. No account, no API key, no signup. It runs entirely on your infrastructure.",
+    a: "No. CCM Feedback is an npm package you install and configure. No account, no API key, no signup. It runs entirely on your infrastructure.",
   },
 ];
 

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@siteping/core"],
+  transpilePackages: ["@ccm-feedback/core"],
   output: "standalone",
 };
 

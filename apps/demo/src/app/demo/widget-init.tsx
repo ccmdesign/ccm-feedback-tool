@@ -7,10 +7,10 @@ export function WidgetInit() {
     let destroyed = false;
     let instance: { destroy: () => void } | null = null;
 
-    import("@siteping/widget").then(({ initSiteping }) => {
+    import("@ccm-feedback/widget").then(({ initCcmFeedback }) => {
       if (destroyed) return;
-      instance = initSiteping({
-        endpoint: "/api/siteping",
+      instance = initCcmFeedback({
+        endpoint: "/api/feedback",
         projectName: "demo",
         forceShow: true,
         accentColor: "#173CFF",

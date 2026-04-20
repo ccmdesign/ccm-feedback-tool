@@ -18,7 +18,7 @@ export function Banner() {
           href="/"
           className="absolute right-0 shrink-0 font-medium text-amber-900 underline underline-offset-2 hover:text-amber-700"
         >
-          Back to SitePing
+          Back to CCM Feedback
         </Link>
       </div>
     </div>

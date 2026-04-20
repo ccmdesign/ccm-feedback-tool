@@ -1,5 +1,5 @@
 {
-  "name": "@siteping/demo",
+  "name": "@ccm-feedback/demo",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -10,16 +10,16 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@siteping/adapter-memory": "workspace:*",
-    "@siteping/adapter-prisma": "workspace:*",
-    "@siteping/widget": "workspace:*",
+    "@ccm-feedback/adapter-memory": "workspace:*",
+    "@ccm-feedback/adapter-prisma": "workspace:*",
+    "@ccm-feedback/widget": "workspace:*",
     "gsap": "^3.14.2",
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@siteping/core": "workspace:*",
+    "@ccm-feedback/core": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
