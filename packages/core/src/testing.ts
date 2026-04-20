@@ -1,5 +1,5 @@
 /**
- * Shared conformance test suite for `SitepingStore` implementations.
+ * Shared conformance test suite for `CcmFeedbackStore` implementations.
  *
  * Adapters import this and run it with their store factory to verify they
  * satisfy the full store contract — no need to write the same 20+ tests
@@ -7,15 +7,15 @@
  *
  * @example
  * ```ts
- * import { testSitepingStore } from '@siteping/core/testing'
+ * import { testCcmFeedbackStore } from '@ccm-feedback/core/testing'
  * import { DrizzleStore } from '../src/index.js'
  *
- * testSitepingStore(() => new DrizzleStore(mockDb))
+ * testCcmFeedbackStore(() => new DrizzleStore(mockDb))
  * ```
  */
 
 import { describe, expect, it } from "vitest";
-import type { FeedbackCreateInput, SitepingStore } from "./types.js";
+import type { CcmFeedbackStore, FeedbackCreateInput } from "./types.js";
 import { StoreNotFoundError } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -65,19 +65,19 @@ function createInput(overrides?: Partial<FeedbackCreateInput>): FeedbackCreateIn
 // ---------------------------------------------------------------------------
 
 /**
- * Run the full `SitepingStore` conformance test suite.
+ * Run the full `CcmFeedbackStore` conformance test suite.
  *
  * @param factory — called before each test to create a fresh, empty store instance.
  */
-export function testSitepingStore(factory: () => SitepingStore): void {
-  let store: SitepingStore;
+export function testCcmFeedbackStore(factory: () => CcmFeedbackStore): void {
+  let store: CcmFeedbackStore;
 
   // Use a describe-scoped beforeEach via the factory
   const freshStore = () => {
     store = factory();
   };
 
-  describe("SitepingStore conformance", () => {
+  describe("CcmFeedbackStore conformance", () => {
     // ------------------------------------------------------------------
     // createFeedback
     // ------------------------------------------------------------------

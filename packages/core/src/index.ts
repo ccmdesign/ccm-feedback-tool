@@ -1,12 +1,16 @@
 export type { FieldDef, IndexDef, ModelDef } from "./schema.js";
 
-export { SITEPING_MODELS } from "./schema.js";
+export { CCM_FEEDBACK_MODELS } from "./schema.js";
 export type {
   AnchorData,
   AnnotationCreateInput,
   AnnotationPayload,
   AnnotationRecord,
   AnnotationResponse,
+  CcmFeedbackConfig,
+  CcmFeedbackInstance,
+  CcmFeedbackPublicEvents,
+  CcmFeedbackStore,
   FeedbackCreateInput,
   FeedbackPayload,
   FeedbackQuery,
@@ -16,10 +20,6 @@ export type {
   FeedbackType,
   FeedbackUpdateInput,
   RectData,
-  SitepingConfig,
-  SitepingInstance,
-  SitepingPublicEvents,
-  SitepingStore,
 } from "./types.js";
 export {
   FEEDBACK_STATUSES,

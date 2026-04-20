@@ -2,14 +2,14 @@
 // Config
 // ---------------------------------------------------------------------------
 
-/** Configuration options for the Siteping widget. */
-export interface SitepingConfig {
-  /** HTTP endpoint that receives feedbacks (e.g. '/api/siteping'). Required unless `store` is provided. */
+/** Configuration options for the CCM Feedback widget. */
+export interface CcmFeedbackConfig {
+  /** HTTP endpoint that receives feedbacks (e.g. '/api/feedback'). Required unless `store` is provided. */
   endpoint?: string | undefined;
   /** Required — project identifier used to scope feedbacks */
   projectName: string;
   /** Direct store for client-side mode. When set, bypasses HTTP and uses the store directly in the browser. */
-  store?: SitepingStore | undefined;
+  store?: CcmFeedbackStore | undefined;
   /** FAB position — defaults to 'bottom-right' */
   position?: "bottom-right" | "bottom-left";
   /** Accent color for the widget UI — defaults to '#0066ff' */
@@ -38,8 +38,8 @@ export interface SitepingConfig {
   onAnnotationEnd?: () => void;
 }
 
-/** Instance returned by initSiteping() with lifecycle methods. */
-export interface SitepingInstance {
+/** Instance returned by initCcmFeedback() with lifecycle methods. */
+export interface CcmFeedbackInstance {
   /** Remove the widget from the DOM and clean up all listeners. */
   destroy: () => void;
   /** Open the panel programmatically */
@@ -49,16 +49,19 @@ export interface SitepingInstance {
   /** Reload feedbacks from server */
   refresh: () => void;
   /** Subscribe to a public widget event */
-  on: <K extends keyof SitepingPublicEvents>(
+  on: <K extends keyof CcmFeedbackPublicEvents>(
     event: K,
-    listener: (...args: SitepingPublicEvents[K]) => void,
+    listener: (...args: CcmFeedbackPublicEvents[K]) => void,
   ) => () => void;
   /** Unsubscribe from a public widget event */
-  off: <K extends keyof SitepingPublicEvents>(event: K, listener: (...args: SitepingPublicEvents[K]) => void) => void;
+  off: <K extends keyof CcmFeedbackPublicEvents>(
+    event: K,
+    listener: (...args: CcmFeedbackPublicEvents[K]) => void,
+  ) => void;
 }
 
-/** Events exposed to consumers via SitepingInstance.on / .off */
-export interface SitepingPublicEvents {
+/** Events exposed to consumers via CcmFeedbackInstance.on / .off */
+export interface CcmFeedbackPublicEvents {
   "feedback:sent": [FeedbackResponse];
   "feedback:deleted": [string];
   "panel:open": [];
@@ -256,11 +259,11 @@ export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput
 // ---------------------------------------------------------------------------
 
 /**
- * Abstract storage interface for Siteping.
+ * Abstract storage interface for CCM Feedback.
  *
  * Any adapter (Prisma, Drizzle, raw SQL, localStorage, etc.) implements this
  * interface. The HTTP handler and widget `StoreClient` operate against
- * `SitepingStore`, decoupled from the storage backend.
+ * `CcmFeedbackStore`, decoupled from the storage backend.
  *
  * ## Error contract
  *
@@ -271,7 +274,7 @@ export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput
  *   handles both patterns.
  * - Other methods should not throw on empty results — return empty arrays or `null`.
  */
-export interface SitepingStore {
+export interface CcmFeedbackStore {
   /** Create a feedback with its annotations. Idempotent on `clientId` — return existing record on duplicate, or throw `StoreDuplicateError`. */
   createFeedback(data: FeedbackCreateInput): Promise<FeedbackRecord>;
   /** Paginated query with optional filters. Returns empty array (not error) when no results. */
