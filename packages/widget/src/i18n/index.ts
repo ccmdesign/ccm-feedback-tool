@@ -22,7 +22,7 @@ export function registerLocale(code: string, translations: Translations): void {
 export function createT(locale: string): TFunction {
   const lang = (locale.split("-")[0] ?? locale).toLowerCase();
   if (!LOCALES[lang]) {
-    console.warn(`[siteping] Unknown locale "${locale}", falling back to "en"`);
+    console.warn(`[ccm-feedback] Unknown locale "${locale}", falling back to "en"`);
   }
   const dict = LOCALES[lang] ?? LOCALES.en ?? ({} as Translations);
   return (key) => dict[key] ?? key;

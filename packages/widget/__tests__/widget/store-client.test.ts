@@ -1,18 +1,18 @@
 import type {
   AnnotationPayload,
+  CcmFeedbackStore,
   FeedbackCreateInput,
   FeedbackPayload,
   FeedbackRecord,
-  SitepingStore,
-} from "@siteping/core";
+} from "@ccm-feedback/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreClient } from "../../src/store-client.js";
 
 // ---------------------------------------------------------------------------
-// Mock SitepingStore
+// Mock CcmFeedbackStore
 // ---------------------------------------------------------------------------
 
-function mockStore(): SitepingStore {
+function mockStore(): CcmFeedbackStore {
   return {
     createFeedback: vi.fn(),
     getFeedbacks: vi.fn(),

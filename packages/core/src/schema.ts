@@ -1,5 +1,5 @@
 /**
- * Siteping database models — single source of truth.
+ * CCM Feedback database models — single source of truth.
  *
  * Used by:
  * - CLI to generate Prisma schema (via prisma-ast)
@@ -10,7 +10,7 @@
  * The CLI generates the actual Prisma schema from this definition.
  */
 
-/** Definition of a single field in a Siteping database model. */
+/** Definition of a single field in a CCM Feedback database model. */
 export interface FieldDef {
   type: string;
   default?: string;
@@ -30,19 +30,19 @@ export interface FieldDef {
   isUpdatedAt?: boolean;
 }
 
-/** Definition of a composite index on a Siteping database model. */
+/** Definition of a composite index on a CCM Feedback database model. */
 export interface IndexDef {
   fields: string[];
 }
 
-/** Definition of a single Siteping database model (fields + indexes). */
+/** Definition of a single CCM Feedback database model (fields + indexes). */
 export interface ModelDef {
   fields: Record<string, FieldDef>;
   indexes?: IndexDef[];
 }
 
-const _SITEPING_MODELS = {
-  SitepingFeedback: {
+const _CCM_FEEDBACK_MODELS = {
+  FeedbackItem: {
     fields: {
       id: { type: "String", isId: true, default: "cuid()" },
       projectName: { type: "String" },
@@ -59,21 +59,21 @@ const _SITEPING_MODELS = {
       createdAt: { type: "DateTime", default: "now()" },
       updatedAt: { type: "DateTime", isUpdatedAt: true },
       annotations: {
-        type: "SitepingAnnotation",
-        relation: { kind: "1-to-many", model: "SitepingAnnotation" },
+        type: "FeedbackAnnotation",
+        relation: { kind: "1-to-many", model: "FeedbackAnnotation" },
       },
     },
     indexes: [{ fields: ["projectName"] }, { fields: ["projectName", "status", "createdAt"] }],
   },
-  SitepingAnnotation: {
+  FeedbackAnnotation: {
     fields: {
       id: { type: "String", isId: true, default: "cuid()" },
       feedbackId: { type: "String" },
       feedback: {
-        type: "SitepingFeedback",
+        type: "FeedbackItem",
         relation: {
           kind: "many-to-1",
-          model: "SitepingFeedback",
+          model: "FeedbackItem",
           fields: ["feedbackId"],
           references: ["id"],
           onDelete: "Cascade",
@@ -103,4 +103,4 @@ const _SITEPING_MODELS = {
   },
 } as const satisfies Record<string, ModelDef>;
 
-export const SITEPING_MODELS = Object.freeze(_SITEPING_MODELS);
+export const CCM_FEEDBACK_MODELS = Object.freeze(_CCM_FEEDBACK_MODELS);

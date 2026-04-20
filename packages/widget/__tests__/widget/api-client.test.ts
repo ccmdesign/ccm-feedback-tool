@@ -3,7 +3,7 @@ import { ApiClient, flushRetryQueue } from "../../src/api-client.js";
 
 describe("ApiClient", () => {
   let client: ApiClient;
-  const endpoint = "http://localhost/api/siteping";
+  const endpoint = "http://localhost/api/feedback";
 
   beforeEach(() => {
     client = new ApiClient(endpoint);
@@ -184,7 +184,7 @@ describe("ApiClient", () => {
 // ---------------------------------------------------------------------------
 
 describe("flushRetryQueue", () => {
-  const endpoint = "http://localhost/api/siteping";
+  const endpoint = "http://localhost/api/feedback";
 
   beforeEach(() => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 201 }));
@@ -239,7 +239,7 @@ describe("flushRetryQueue", () => {
     await flushRetryQueue(endpoint);
 
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(localStorage.removeItem).toHaveBeenCalledWith("siteping_retry_queue");
+    expect(localStorage.removeItem).toHaveBeenCalledWith("ccm_feedback_retry_queue");
   });
 
   it("keeps failed items in queue after partial failure", async () => {
@@ -273,7 +273,7 @@ describe("flushRetryQueue", () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
     // Should have saved the failed item back
-    expect(localStorage.setItem).toHaveBeenCalledWith("siteping_retry_queue", expect.stringContaining("item2"));
+    expect(localStorage.setItem).toHaveBeenCalledWith("ccm_feedback_retry_queue", expect.stringContaining("item2"));
   });
 
   it("preserves entries for other endpoints", async () => {
@@ -327,7 +327,7 @@ describe("flushRetryQueue", () => {
     await flushRetryQueue(endpoint);
 
     // Failed item should be kept in queue
-    expect(localStorage.setItem).toHaveBeenCalledWith("siteping_retry_queue", expect.stringContaining("fail"));
+    expect(localStorage.setItem).toHaveBeenCalledWith("ccm_feedback_retry_queue", expect.stringContaining("fail"));
   });
 });
 
@@ -336,7 +336,7 @@ describe("flushRetryQueue", () => {
 // ---------------------------------------------------------------------------
 
 describe("queueForRetry (via sendFeedback)", () => {
-  const endpoint = "http://localhost/api/siteping";
+  const endpoint = "http://localhost/api/feedback";
 
   beforeEach(() => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 200 }));
@@ -379,7 +379,7 @@ describe("queueForRetry (via sendFeedback)", () => {
 
     await expect(client.sendFeedback(payload)).rejects.toThrow();
 
-    expect(localStorage.setItem).toHaveBeenCalledWith("siteping_retry_queue", expect.stringContaining("queued"));
+    expect(localStorage.setItem).toHaveBeenCalledWith("ccm_feedback_retry_queue", expect.stringContaining("queued"));
   });
 
   it("appends to existing queue without overwriting", async () => {

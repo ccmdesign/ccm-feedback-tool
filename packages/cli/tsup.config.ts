@@ -9,5 +9,5 @@ export default defineConfig({
   dts: false,
   sourcemap: true,
   clean: true,
-  noExternal: ["@siteping/core", "commander", "@clack/prompts", "@mrleebo/prisma-ast"],
+  noExternal: ["@ccm-feedback/core", "commander", "@clack/prompts", "@mrleebo/prisma-ast"],
 });

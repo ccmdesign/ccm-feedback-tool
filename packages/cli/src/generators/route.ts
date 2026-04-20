@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const ROUTE_TEMPLATE = `import { createSitepingHandler } from "@siteping/adapter-prisma";
+const ROUTE_TEMPLATE = `import { createCcmFeedbackHandler } from "@ccm-feedback/adapter-prisma";
 import { prisma } from "@/lib/prisma";
 
-export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({
+export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({
   prisma,
   // Uncomment to require authentication:
-  // apiKey: process.env.SITEPING_API_KEY,
+  // apiKey: process.env.CCM_FEEDBACK_API_KEY,
   // allowedOrigins: ["https://your-site.com"],
 });
 `;
@@ -15,7 +15,7 @@ export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({
 /**
  * Generate the Next.js App Router API route file.
  *
- * Creates `app/api/siteping/route.ts` with the handler setup.
+ * Creates `app/api/feedback/route.ts` with the handler setup.
  * Skips if the file already exists.
  */
 export function generateRoute(basePath: string = process.cwd()): { created: boolean; path: string } {
@@ -26,7 +26,7 @@ export function generateRoute(basePath: string = process.cwd()): { created: bool
     throw new Error("Cannot find the app/ directory. Are you in a Next.js App Router project?");
   }
 
-  const routePath = join(appDir, "api", "siteping", "route.ts");
+  const routePath = join(appDir, "api", "feedback", "route.ts");
 
   if (existsSync(routePath)) {
     return { created: false, path: routePath };

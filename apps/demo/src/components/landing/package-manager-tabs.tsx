@@ -6,17 +6,17 @@ const packageManagers = ["npm", "bun", "yarn", "pnpm"] as const;
 type PackageManager = (typeof packageManagers)[number];
 
 const installCommands: Record<PackageManager, string> = {
-  npm: "npm install @siteping/widget @siteping/adapter-prisma",
-  bun: "bun add @siteping/widget @siteping/adapter-prisma",
-  yarn: "yarn add @siteping/widget @siteping/adapter-prisma",
-  pnpm: "pnpm add @siteping/widget @siteping/adapter-prisma",
+  npm: "npm install @ccm-feedback/widget @ccm-feedback/adapter-prisma",
+  bun: "bun add @ccm-feedback/widget @ccm-feedback/adapter-prisma",
+  yarn: "yarn add @ccm-feedback/widget @ccm-feedback/adapter-prisma",
+  pnpm: "pnpm add @ccm-feedback/widget @ccm-feedback/adapter-prisma",
 };
 
 const setupCommands: Record<PackageManager, string> = {
-  npm: "npx @siteping/cli init",
-  bun: "bunx @siteping/cli init",
-  yarn: "yarn dlx @siteping/cli init",
-  pnpm: "pnpm dlx @siteping/cli init",
+  npm: "npx @ccm-feedback/cli init",
+  bun: "bunx @ccm-feedback/cli init",
+  yarn: "yarn dlx @ccm-feedback/cli init",
+  pnpm: "pnpm dlx @ccm-feedback/cli init",
 };
 
 function TabBar({ selected, onChange }: { selected: PackageManager; onChange: (pm: PackageManager) => void }) {
@@ -130,18 +130,19 @@ function AnnotateCode() {
     <code>
       <span className="text-purple-400">import</span>
       <span className="text-gray-300"> {"{"} </span>
-      <span className="text-yellow-300">initSiteping</span>
+      <span className="text-yellow-300">initCcmFeedback</span>
       <span className="text-gray-300"> {"}"} </span>
-      <span className="text-purple-400">from</span> <span className="text-green-400">&apos;@siteping/widget&apos;</span>
+      <span className="text-purple-400">from</span>{" "}
+      <span className="text-green-400">&apos;@ccm-feedback/widget&apos;</span>
       {"\n"}
       {"\n"}
-      <span className="text-yellow-300">initSiteping</span>
+      <span className="text-yellow-300">initCcmFeedback</span>
       <span className="text-gray-500">({"{"}</span>
       {"\n"}
       {"  "}
       <span className="text-blue-300">endpoint</span>
       <span className="text-gray-500">: </span>
-      <span className="text-green-400">&apos;/api/siteping&apos;</span>
+      <span className="text-green-400">&apos;/api/feedback&apos;</span>
       <span className="text-gray-500">,</span>
       {"\n"}
       {"  "}

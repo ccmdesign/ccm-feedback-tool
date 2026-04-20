@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { SitepingConfig } from "@siteping/core";
+import type { CcmFeedbackConfig } from "@ccm-feedback/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // jsdom does not implement window.matchMedia — provide a stub
@@ -82,9 +82,9 @@ import { launch } from "../../src/launcher.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function defaultConfig(overrides: Partial<SitepingConfig> = {}): SitepingConfig {
+function defaultConfig(overrides: Partial<CcmFeedbackConfig> = {}): CcmFeedbackConfig {
   return {
-    endpoint: "/api/siteping",
+    endpoint: "/api/feedback",
     projectName: "test-project",
     forceShow: true, // bypass production guard in tests
     ...overrides,
@@ -97,8 +97,8 @@ function defaultConfig(overrides: Partial<SitepingConfig> = {}): SitepingConfig 
 
 describe("launch", () => {
   afterEach(() => {
-    // Clean up any siteping-widget elements left in the DOM
-    for (const el of document.querySelectorAll("siteping-widget")) {
+    // Clean up any ccm-feedback-widget elements left in the DOM
+    for (const el of document.querySelectorAll("ccm-feedback-widget")) {
       el.remove();
     }
     for (const el of document.querySelectorAll('[role="status"]')) {
@@ -120,7 +120,7 @@ describe("launch", () => {
         const instance = launch({ endpoint: "/api", projectName: "test" });
 
         // No widget element should be added
-        const widget = document.querySelector("siteping-widget");
+        const widget = document.querySelector("ccm-feedback-widget");
         expect(widget).toBeNull();
 
         // Should return an instance with no-op methods
@@ -148,7 +148,7 @@ describe("launch", () => {
       try {
         const instance = launch(defaultConfig({ forceShow: true }));
 
-        const widget = document.querySelector("siteping-widget");
+        const widget = document.querySelector("ccm-feedback-widget");
         expect(widget).not.toBeNull();
 
         instance.destroy();
@@ -184,7 +184,7 @@ describe("launch", () => {
       try {
         const instance = launch(defaultConfig());
 
-        const widget = document.querySelector("siteping-widget");
+        const widget = document.querySelector("ccm-feedback-widget");
         expect(widget).toBeNull();
 
         // Shouldn't throw
@@ -215,7 +215,7 @@ describe("launch", () => {
       try {
         const instance = launch(defaultConfig());
 
-        const widget = document.querySelector("siteping-widget");
+        const widget = document.querySelector("ccm-feedback-widget");
         expect(widget).not.toBeNull();
 
         instance.destroy();
@@ -279,10 +279,10 @@ describe("launch", () => {
   // -------------------------------------------------------------------------
 
   describe("widget DOM structure", () => {
-    it("creates a siteping-widget custom element", () => {
+    it("creates a ccm-feedback-widget custom element", () => {
       const instance = launch(defaultConfig());
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).not.toBeNull();
 
       instance.destroy();
@@ -300,7 +300,7 @@ describe("launch", () => {
     it("uses open shadow mode in test environment", () => {
       const instance = launch(defaultConfig());
 
-      const widget = document.querySelector("siteping-widget")!;
+      const widget = document.querySelector("ccm-feedback-widget")!;
       expect(widget.shadowRoot).not.toBeNull();
 
       instance.destroy();
@@ -312,11 +312,11 @@ describe("launch", () => {
   // -------------------------------------------------------------------------
 
   describe("destroy", () => {
-    it("removes the siteping-widget element", () => {
+    it("removes the ccm-feedback-widget element", () => {
       const instance = launch(defaultConfig());
       instance.destroy();
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
     });
 
@@ -373,25 +373,25 @@ describe("launch", () => {
   // -------------------------------------------------------------------------
 
   describe("locale", () => {
-    it("defaults to French locale", () => {
+    it("defaults to English locale", () => {
       const instance = launch(defaultConfig());
 
-      const widget = document.querySelector("siteping-widget")!;
+      const widget = document.querySelector("ccm-feedback-widget")!;
       const shadow = widget.shadowRoot!;
       const fabBtn = shadow.querySelector<HTMLButtonElement>(".sp-fab")!;
-      // French ARIA label
-      expect(fabBtn.getAttribute("aria-label")).toContain("Siteping");
+      // English ARIA label — "Feedback menu"
+      expect(fabBtn.getAttribute("aria-label")).toBe("Feedback menu");
 
       instance.destroy();
     });
 
-    it("supports English locale", () => {
-      const instance = launch(defaultConfig({ locale: "en" }));
+    it("supports French locale", () => {
+      const instance = launch(defaultConfig({ locale: "fr" }));
 
-      const widget = document.querySelector("siteping-widget")!;
+      const widget = document.querySelector("ccm-feedback-widget")!;
       const shadow = widget.shadowRoot!;
       const panel = shadow.querySelector<HTMLElement>('[role="complementary"]')!;
-      expect(panel.getAttribute("aria-label")).toBe("Siteping feedback panel");
+      expect(panel.getAttribute("aria-label")).toBe("Panneau de feedback");
 
       instance.destroy();
     });
@@ -403,9 +403,9 @@ describe("launch", () => {
 
   describe("config validation guards", () => {
     it("returns no-op when endpoint is missing", () => {
-      const instance = launch({ projectName: "test", forceShow: true } as SitepingConfig);
+      const instance = launch({ projectName: "test", forceShow: true } as CcmFeedbackConfig);
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       expect(instance.destroy).toBeTypeOf("function");
       instance.destroy();
@@ -414,15 +414,15 @@ describe("launch", () => {
     it("returns no-op when endpoint is empty string", () => {
       const instance = launch(defaultConfig({ endpoint: "" }));
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       instance.destroy();
     });
 
     it("returns no-op when projectName is missing", () => {
-      const instance = launch({ endpoint: "/api", forceShow: true } as SitepingConfig);
+      const instance = launch({ endpoint: "/api", forceShow: true } as CcmFeedbackConfig);
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       instance.destroy();
     });
@@ -430,7 +430,7 @@ describe("launch", () => {
     it("returns no-op when projectName is empty string", () => {
       const instance = launch(defaultConfig({ projectName: "" }));
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       instance.destroy();
     });
@@ -438,7 +438,7 @@ describe("launch", () => {
     it("returns no-op when endpoint is not a string (number)", () => {
       const instance = launch(defaultConfig({ endpoint: 42 as unknown as string }));
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       instance.destroy();
     });
@@ -446,7 +446,7 @@ describe("launch", () => {
     it("returns no-op when projectName is not a string", () => {
       const instance = launch(defaultConfig({ projectName: 123 as unknown as string }));
 
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       expect(widget).toBeNull();
       instance.destroy();
     });

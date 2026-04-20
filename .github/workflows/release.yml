@@ -105,7 +105,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @siteping/widget
+      - name: Publish @ccm-feedback/widget
         run: npm publish --access public --provenance
         working-directory: packages/widget
         env:
@@ -141,7 +141,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @siteping/adapter-prisma
+      - name: Publish @ccm-feedback/adapter-prisma
         run: npm publish --access public --provenance
         working-directory: packages/adapter-prisma
         env:
@@ -177,7 +177,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @siteping/cli
+      - name: Publish @ccm-feedback/cli
         run: npm publish --access public --provenance
         working-directory: packages/cli
         env:
@@ -213,7 +213,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @siteping/adapter-memory
+      - name: Publish @ccm-feedback/adapter-memory
         run: npm publish --access public --provenance
         working-directory: packages/adapter-memory
         env:
@@ -249,7 +249,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @siteping/adapter-localstorage
+      - name: Publish @ccm-feedback/adapter-localstorage
         run: npm publish --access public --provenance
         working-directory: packages/adapter-localstorage
         env:

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FeedbackResponse, SitepingConfig } from "@siteping/core";
+import type { CcmFeedbackConfig, FeedbackResponse } from "@ccm-feedback/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockMatchMedia } from "../helpers.js";
 
@@ -87,9 +87,9 @@ import { launch } from "../../src/launcher.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function defaultConfig(overrides: Partial<SitepingConfig> = {}): SitepingConfig {
+function defaultConfig(overrides: Partial<CcmFeedbackConfig> = {}): CcmFeedbackConfig {
   return {
-    endpoint: "/api/siteping",
+    endpoint: "/api/feedback",
     projectName: "test-project",
     forceShow: true,
     ...overrides,
@@ -147,8 +147,8 @@ function makeAnnotationCompleteData() {
 
 describe("launcher — annotation:complete integration", () => {
   afterEach(() => {
-    // Clean up any siteping-widget elements left in the DOM
-    for (const el of document.querySelectorAll("siteping-widget")) {
+    // Clean up any ccm-feedback-widget elements left in the DOM
+    for (const el of document.querySelectorAll("ccm-feedback-widget")) {
       el.remove();
     }
     for (const el of document.querySelectorAll('[role="status"]')) {
@@ -259,7 +259,7 @@ describe("launcher — annotation:complete integration", () => {
       });
 
       // No identity modal should appear — identity was stored
-      const widget = document.querySelector("siteping-widget");
+      const widget = document.querySelector("ccm-feedback-widget");
       const shadow = widget?.shadowRoot;
       // Check for identity modal specifically (exclude DetailView's .sp-detail dialog)
       const modal = shadow?.querySelector('[role="dialog"]:not(.sp-detail):not(.sp-shortcuts-overlay)') ?? null;
@@ -279,7 +279,7 @@ describe("launcher — annotation:complete integration", () => {
 
       // The identity modal is appended to the shadow root
       await vi.waitFor(() => {
-        const widget = document.querySelector("siteping-widget");
+        const widget = document.querySelector("ccm-feedback-widget");
         expect(widget).not.toBeNull();
         const shadow = widget!.shadowRoot;
         if (shadow) {

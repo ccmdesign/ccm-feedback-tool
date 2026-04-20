@@ -3,7 +3,7 @@ import type { Translations } from "./types.js";
 export const fr: Translations = {
   // Panel
   "panel.title": "Feedbacks",
-  "panel.ariaLabel": "Panneau de feedback Siteping",
+  "panel.ariaLabel": "Panneau de feedback",
   "panel.feedbackList": "Liste des feedbacks",
   "panel.loading": "Chargement des feedbacks",
   "panel.close": "Fermer le panneau",
@@ -37,7 +37,7 @@ export const fr: Translations = {
   "type.other": "Autre",
 
   // FAB menu
-  "fab.aria": "Siteping \u2014 Menu feedback",
+  "fab.aria": "Menu feedback",
   "fab.messages": "Messages",
   "fab.annotate": "Annoter",
   "fab.annotations": "Annotations",

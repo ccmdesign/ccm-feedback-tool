@@ -1,4 +1,9 @@
-import type { FeedbackPayload, SitepingConfig, SitepingInstance, SitepingPublicEvents } from "@siteping/core";
+import type {
+  CcmFeedbackConfig,
+  CcmFeedbackInstance,
+  CcmFeedbackPublicEvents,
+  FeedbackPayload,
+} from "@ccm-feedback/core";
 import { Annotator } from "./annotator.js";
 import { ApiClient, flushRetryQueue, type WidgetClient } from "./api-client.js";
 import { MOBILE_BREAKPOINT, PAGE_SIZE, Z_INDEX_MAX } from "./constants.js";
@@ -14,10 +19,10 @@ import { buildThemeColors } from "./styles/theme.js";
 import { Tooltip } from "./tooltip.js";
 
 /** Singleton guard — prevents duplicate widgets from overlapping */
-let instance: SitepingInstance | null = null;
+let instance: CcmFeedbackInstance | null = null;
 
-/** Build a no-op SitepingInstance for when the widget is skipped */
-function skippedInstance(): SitepingInstance {
+/** Build a no-op CcmFeedbackInstance for when the widget is skipped */
+function skippedInstance(): CcmFeedbackInstance {
   const noop = () => {};
   return {
     destroy: noop,
@@ -33,20 +38,20 @@ function skippedInstance(): SitepingInstance {
  * Main widget launcher — orchestrates all UI components.
  *
  * Architecture:
- * - Creates a <siteping-widget> custom element in the document
+ * - Creates a <ccm-feedback-widget> custom element in the document
  * - Attaches a closed Shadow DOM for CSS isolation
  * - FAB + Panel live inside the Shadow DOM
  * - Overlay, markers, tooltips live outside (appended to document.body)
  */
-export function launch(config: SitepingConfig): SitepingInstance {
+export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   // Debug helper — only logs when config.debug is true
   const log: (...args: unknown[]) => void = config.debug
-    ? (...args: unknown[]) => console.debug("[siteping]", ...args)
+    ? (...args: unknown[]) => console.debug("[ccm-feedback]", ...args)
     : () => {};
 
-  // Guard: prevent duplicate initSiteping() calls
+  // Guard: prevent duplicate initCcmFeedback() calls
   if (instance) {
-    log("initSiteping() called more than once — returning existing instance");
+    log("initCcmFeedback() called more than once — returning existing instance");
     return instance;
   }
 
@@ -57,7 +62,7 @@ export function launch(config: SitepingConfig): SitepingInstance {
       // which causes "Critical dependency" warnings in Next.js webpack builds
       if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
         const reason = "production";
-        console.info("[siteping] Widget not loaded: production mode detected. Use forceShow: true to override.");
+        console.info("[ccm-feedback] Widget not loaded: production mode detected. Use forceShow: true to override.");
         config.onSkip?.(reason);
         return skippedInstance();
       }
@@ -69,7 +74,7 @@ export function launch(config: SitepingConfig): SitepingInstance {
   // Guard: desktop only (< MOBILE_BREAKPOINT = hidden)
   if (window.innerWidth < MOBILE_BREAKPOINT) {
     const reason = "mobile";
-    console.info(`[siteping] Widget not loaded: viewport width < ${MOBILE_BREAKPOINT}px (mobile not supported).`);
+    console.info(`[ccm-feedback] Widget not loaded: viewport width < ${MOBILE_BREAKPOINT}px (mobile not supported).`);
     config.onSkip?.(reason);
     return skippedInstance();
   }
@@ -77,12 +82,12 @@ export function launch(config: SitepingConfig): SitepingInstance {
   // Guard: validate required config fields
   if (!config.store && (!config.endpoint || typeof config.endpoint !== "string")) {
     console.error(
-      "[siteping] Missing 'endpoint' or 'store' in config. Provide an endpoint like '/api/siteping' or a SitepingStore instance.",
+      "[ccm-feedback] Missing 'endpoint' or 'store' in config. Provide an endpoint like '/api/feedback' or a CcmFeedbackStore instance.",
     );
     return skippedInstance();
   }
   if (!config.projectName || typeof config.projectName !== "string") {
-    console.error("[siteping] Missing or invalid 'projectName' in config. Expected a non-empty string.");
+    console.error("[ccm-feedback] Missing or invalid 'projectName' in config. Expected a non-empty string.");
     return skippedInstance();
   }
 
@@ -123,7 +128,7 @@ export function launch(config: SitepingConfig): SitepingInstance {
   bus.on("annotation:end", () => log("Annotation ended"));
 
   // Create host element + Shadow DOM
-  const host = document.createElement("siteping-widget");
+  const host = document.createElement("ccm-feedback-widget");
   host.style.cssText = `position:fixed;z-index:${Z_INDEX_MAX};`;
   // Use open mode only for testing — closed in production for CSS isolation.
   // Shadow DOM mode is determined by environment, never by public config.
@@ -278,13 +283,19 @@ export function launch(config: SitepingConfig): SitepingInstance {
     refresh: () => {
       panel.refresh();
     },
-    on: <K extends keyof SitepingPublicEvents>(event: K, listener: (...args: SitepingPublicEvents[K]) => void) => {
-      // Safe cast: SitepingPublicEvents and PublicWidgetEvents have identical keys and value types
+    on: <K extends keyof CcmFeedbackPublicEvents>(
+      event: K,
+      listener: (...args: CcmFeedbackPublicEvents[K]) => void,
+    ) => {
+      // Safe cast: CcmFeedbackPublicEvents and PublicWidgetEvents have identical keys and value types
       type TargetKey = K & keyof PublicWidgetEvents;
       return publicBus.on(event as TargetKey, listener as unknown as (...args: PublicWidgetEvents[TargetKey]) => void);
     },
-    off: <K extends keyof SitepingPublicEvents>(event: K, listener: (...args: SitepingPublicEvents[K]) => void) => {
-      // Safe cast: SitepingPublicEvents and PublicWidgetEvents have identical keys and value types
+    off: <K extends keyof CcmFeedbackPublicEvents>(
+      event: K,
+      listener: (...args: CcmFeedbackPublicEvents[K]) => void,
+    ) => {
+      // Safe cast: CcmFeedbackPublicEvents and PublicWidgetEvents have identical keys and value types
       type TargetKey = K & keyof PublicWidgetEvents;
       publicBus.off(event as TargetKey, listener as unknown as (...args: PublicWidgetEvents[TargetKey]) => void);
     },

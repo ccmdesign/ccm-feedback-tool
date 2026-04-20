@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Fixes .d.ts files that reference the unpublished @siteping/core package.
+// Fixes .d.ts files that reference the unpublished @ccm-feedback/core package.
 // Rewrites imports to relative paths and copies core's type declarations.
 // Cross-platform replacement for fix-dts.sh (no sed/cp).
 
@@ -27,7 +27,7 @@ if (!existsSync(coreDist)) {
   process.exit(1);
 }
 
-// 1. Rewrite '@siteping/core' imports to relative './siteping-core.js'
+// 1. Rewrite '@ccm-feedback/core' imports to relative './ccm-feedback-core.js'
 const dtsFiles = readdirSync(targetDir).filter((f) => f.endsWith(".d.ts") || f.endsWith(".d.cts"));
 
 for (const file of dtsFiles) {
@@ -35,8 +35,8 @@ for (const file of dtsFiles) {
   let content = readFileSync(filePath, "utf8");
   const original = content;
 
-  content = content.replaceAll("'@siteping/core'", "'./siteping-core.js'");
-  content = content.replaceAll('"@siteping/core"', '"./siteping-core.js"');
+  content = content.replaceAll("'@ccm-feedback/core'", "'./ccm-feedback-core.js'");
+  content = content.replaceAll('"@ccm-feedback/core"', '"./ccm-feedback-core.js"');
 
   if (content !== original) {
     writeFileSync(filePath, content, "utf8");
@@ -44,9 +44,9 @@ for (const file of dtsFiles) {
   }
 }
 
-// 2. Copy core's .d.ts files, renaming index.d.ts to siteping-core.d.ts
+// 2. Copy core's .d.ts files, renaming index.d.ts to ccm-feedback-core.d.ts
 const copies = [
-  { src: "index.d.ts", dest: "siteping-core.d.ts" },
+  { src: "index.d.ts", dest: "ccm-feedback-core.d.ts" },
   { src: "types.d.ts", dest: "types.d.ts" },
   { src: "schema.d.ts", dest: "schema.d.ts" },
 ];

@@ -19,7 +19,7 @@ generator client {
 }
 `;
 
-/** A schema that already has the SitepingFeedback model (but incomplete). */
+/** A schema that already has the FeedbackItem model (but incomplete). */
 const SCHEMA_WITH_PARTIAL_MODEL = `
 datasource db {
   provider = "postgresql"
@@ -30,7 +30,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model SitepingFeedback {
+model FeedbackItem {
   id          String   @id @default(cuid())
   projectName String
   type        String
@@ -66,7 +66,7 @@ describe("syncPrismaModels", () => {
   let schemaPath: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "siteping-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "ccm-feedback-test-"));
     schemaPath = join(tmpDir, "schema.prisma");
   });
 
@@ -86,19 +86,19 @@ describe("syncPrismaModels", () => {
   // Adding models to an empty schema
   // -----------------------------------------------------------------------
 
-  it("adds both SitepingFeedback and SitepingAnnotation to an empty schema", () => {
+  it("adds both FeedbackItem and FeedbackAnnotation to an empty schema", () => {
     writeFileSync(schemaPath, MINIMAL_SCHEMA);
 
     const result = syncPrismaModels(schemaPath);
 
-    expect(result.addedModels).toContain("SitepingFeedback");
-    expect(result.addedModels).toContain("SitepingAnnotation");
+    expect(result.addedModels).toContain("FeedbackItem");
+    expect(result.addedModels).toContain("FeedbackAnnotation");
     expect(result.changes).toHaveLength(0); // No field-level changes, models were created fresh
 
     // Verify the output file contains the models
     const output = readFileSync(schemaPath, "utf-8");
-    expect(output).toContain("model SitepingFeedback");
-    expect(output).toContain("model SitepingAnnotation");
+    expect(output).toContain("model FeedbackItem");
+    expect(output).toContain("model FeedbackAnnotation");
     expect(output).toContain("projectName");
     expect(output).toContain("cssSelector");
   });
@@ -118,19 +118,19 @@ describe("syncPrismaModels", () => {
   // Adding models alongside existing models
   // -----------------------------------------------------------------------
 
-  it("adds Siteping models alongside an existing User model", () => {
+  it("adds CCM Feedback models alongside an existing User model", () => {
     writeFileSync(schemaPath, SCHEMA_WITH_USER_MODEL);
 
     const result = syncPrismaModels(schemaPath);
 
-    expect(result.addedModels).toContain("SitepingFeedback");
-    expect(result.addedModels).toContain("SitepingAnnotation");
+    expect(result.addedModels).toContain("FeedbackItem");
+    expect(result.addedModels).toContain("FeedbackAnnotation");
 
     const output = readFileSync(schemaPath, "utf-8");
     // User model should still be there
     expect(output).toContain("model User");
-    expect(output).toContain("model SitepingFeedback");
-    expect(output).toContain("model SitepingAnnotation");
+    expect(output).toContain("model FeedbackItem");
+    expect(output).toContain("model FeedbackAnnotation");
   });
 
   // -----------------------------------------------------------------------
@@ -142,18 +142,18 @@ describe("syncPrismaModels", () => {
 
     const result = syncPrismaModels(schemaPath);
 
-    // SitepingFeedback already existed, so it shouldn't be in addedModels
-    expect(result.addedModels).not.toContain("SitepingFeedback");
-    // But SitepingAnnotation is new
-    expect(result.addedModels).toContain("SitepingAnnotation");
+    // FeedbackItem already existed, so it shouldn't be in addedModels
+    expect(result.addedModels).not.toContain("FeedbackItem");
+    // But FeedbackAnnotation is new
+    expect(result.addedModels).toContain("FeedbackAnnotation");
 
     // Should have field-level changes for the missing fields
     expect(result.changes.length).toBeGreaterThan(0);
     const addedFieldNames = result.changes
-      .filter((c) => c.action === "added" && c.model === "SitepingFeedback")
+      .filter((c) => c.action === "added" && c.model === "FeedbackItem")
       .map((c) => c.field);
 
-    // These fields exist in SITEPING_MODELS but not in the partial schema
+    // These fields exist in CCM_FEEDBACK_MODELS but not in the partial schema
     expect(addedFieldNames).toContain("status");
     expect(addedFieldNames).toContain("url");
     expect(addedFieldNames).toContain("viewport");
@@ -239,9 +239,9 @@ describe("syncPrismaModels", () => {
 
     const output = readFileSync(schemaPath, "utf-8");
 
-    // SitepingFeedback.message should have @db.Text
+    // FeedbackItem.message should have @db.Text
     expect(output).toMatch(/message\s+String\s+@db\.Text/);
-    // SitepingAnnotation fields with nativeType: "Text"
+    // FeedbackAnnotation fields with nativeType: "Text"
     expect(output).toMatch(/cssSelector\s+String\s+@db\.Text/);
     expect(output).toMatch(/xpath\s+String\s+@db\.Text/);
     expect(output).toMatch(/textSnippet\s+String\s+@db\.Text/);
@@ -261,7 +261,7 @@ describe("syncPrismaModels", () => {
     const output = readFileSync(schemaPath, "utf-8");
 
     // message existed but without @db.Text — should be updated
-    const messageChange = result.changes.find((c) => c.model === "SitepingFeedback" && c.field === "message");
+    const messageChange = result.changes.find((c) => c.model === "FeedbackItem" && c.field === "message");
     expect(messageChange).toBeDefined();
     expect(messageChange!.action).toBe("updated");
     expect(messageChange!.detail).toContain("+@db.Text");
@@ -277,10 +277,10 @@ describe("syncPrismaModels", () => {
 
     const output = readFileSync(schemaPath, "utf-8");
 
-    // SitepingFeedback has a 1-to-many relation to annotations
-    expect(output).toMatch(/annotations\s+SitepingAnnotation\[\]/);
+    // FeedbackItem has a 1-to-many relation to annotations
+    expect(output).toMatch(/annotations\s+FeedbackAnnotation\[\]/);
 
-    // SitepingAnnotation has feedback relation with references
+    // FeedbackAnnotation has feedback relation with references
     expect(output).toContain("@relation");
     expect(output).toContain("onDelete: Cascade");
   });

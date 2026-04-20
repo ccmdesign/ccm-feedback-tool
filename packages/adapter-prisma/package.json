@@ -1,7 +1,7 @@
 {
-  "name": "@siteping/adapter-prisma",
+  "name": "@ccm-feedback/adapter-prisma",
   "version": "0.4.3",
-  "description": "Prisma adapter for Siteping — server-side request handlers",
+  "description": "Prisma adapter for CCM Feedback — server-side request handlers",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -23,7 +23,7 @@
     "clean": "rm -rf dist"
   },
   "keywords": [
-    "siteping",
+    "ccm-feedback",
     "prisma",
     "adapter",
     "feedback",
@@ -33,16 +33,16 @@
     "self-hosted",
     "typescript"
   ],
-  "author": "neosianexus",
+  "author": "ccmdesign",
   "license": "MIT",
-  "homepage": "https://siteping.dev",
+  "homepage": "https://feedback.ccmdesign.ca",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NeosiaNexus/SitePing.git",
+    "url": "git+https://github.com/ccmdesign/ccm-feedback-tool.git",
     "directory": "packages/adapter-prisma"
   },
   "bugs": {
-    "url": "https://github.com/NeosiaNexus/SitePing/issues"
+    "url": "https://github.com/ccmdesign/ccm-feedback-tool/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -54,7 +54,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@siteping/core": "workspace:*"
+    "@ccm-feedback/core": "workspace:*"
   },
   "peerDependencies": {
     "@prisma/client": "^5.0.0 || ^6.0.0"

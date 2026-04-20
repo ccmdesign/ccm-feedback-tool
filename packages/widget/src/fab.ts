@@ -1,4 +1,4 @@
-import type { SitepingConfig } from "@siteping/core";
+import type { CcmFeedbackConfig } from "@ccm-feedback/core";
 import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n/index.js";
@@ -30,7 +30,7 @@ export class Fab {
 
   constructor(
     shadowRoot: ShadowRoot,
-    config: SitepingConfig,
+    config: CcmFeedbackConfig,
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
   ) {

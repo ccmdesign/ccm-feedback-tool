@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { testSitepingStore } from "@siteping/core/testing";
+import { testCcmFeedbackStore } from "@ccm-feedback/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalStorageStore } from "../src/index.js";
 
-// Run the full SitepingStore conformance suite
-testSitepingStore(() => {
+// Run the full CcmFeedbackStore conformance suite
+testCcmFeedbackStore(() => {
   localStorage.clear();
   return new LocalStorageStore({ key: "test_conformance" });
 });
@@ -110,8 +110,8 @@ describe("LocalStorageStore specific", () => {
     it("uses default key when no options provided", async () => {
       const defaultStore = new LocalStorageStore();
       await defaultStore.createFeedback({ ...input, clientId: "default-key" });
-      expect(localStorage.getItem("siteping_feedbacks")).toBeTruthy();
-      localStorage.removeItem("siteping_feedbacks");
+      expect(localStorage.getItem("ccm_feedback_items")).toBeTruthy();
+      localStorage.removeItem("ccm_feedback_items");
     });
 
     it("handles corrupted localStorage gracefully", async () => {

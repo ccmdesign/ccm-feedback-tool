@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import {
+  type CcmFeedbackStore,
   type FeedbackCreateInput,
   type FeedbackQuery,
   type FeedbackRecord,
@@ -7,8 +8,7 @@ import {
   flattenAnnotation,
   isStoreDuplicate,
   isStoreNotFound,
-  type SitepingStore,
-} from "@siteping/core";
+} from "@ccm-feedback/core";
 import {
   feedbackCreateSchema,
   feedbackDeleteSchema,
@@ -17,8 +17,8 @@ import {
   getQuerySchema,
 } from "./validation.js";
 
-export type { SitepingStore } from "@siteping/core";
-export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@siteping/core";
+export type { CcmFeedbackStore } from "@ccm-feedback/core";
+export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
 export type {
   FeedbackCreateInput as FeedbackCreateSchemaInput,
   FeedbackDeleteInput,
@@ -36,8 +36,8 @@ export type {
  * defines the subset of methods the adapter actually uses, so it can be
  * referenced in handler option types without importing `@prisma/client`.
  */
-export interface SitepingPrismaClient {
-  sitepingFeedback: {
+export interface CcmFeedbackPrismaClient {
+  feedbackItem: {
     create: (args: unknown) => Promise<unknown>;
     findMany: (args: unknown) => Promise<unknown[]>;
     findUnique: (args: unknown) => Promise<unknown | null>;
@@ -49,26 +49,26 @@ export interface SitepingPrismaClient {
 }
 
 // ---------------------------------------------------------------------------
-// PrismaStore — SitepingStore implementation backed by Prisma
+// PrismaStore — CcmFeedbackStore implementation backed by Prisma
 // ---------------------------------------------------------------------------
 
 const INCLUDE_ANNOTATIONS = { annotations: true };
 
 /**
- * Prisma-backed implementation of `SitepingStore`.
+ * Prisma-backed implementation of `CcmFeedbackStore`.
  *
  * Wraps a PrismaClient to satisfy the abstract store interface.
  */
-export class PrismaStore implements SitepingStore {
+export class PrismaStore implements CcmFeedbackStore {
   /** @internal */
-  private prisma: SitepingPrismaClient;
+  private prisma: CcmFeedbackPrismaClient;
 
-  constructor(prisma: SitepingPrismaClient) {
+  constructor(prisma: CcmFeedbackPrismaClient) {
     this.prisma = prisma;
   }
 
   async createFeedback(data: FeedbackCreateInput): Promise<FeedbackRecord> {
-    return (await this.prisma.sitepingFeedback.create({
+    return (await this.prisma.feedbackItem.create({
       data: {
         projectName: data.projectName,
         type: data.type,
@@ -108,7 +108,7 @@ export class PrismaStore implements SitepingStore {
   }
 
   async findByClientId(clientId: string): Promise<FeedbackRecord | null> {
-    return (await this.prisma.sitepingFeedback.findUnique({
+    return (await this.prisma.feedbackItem.findUnique({
       where: { clientId },
       include: INCLUDE_ANNOTATIONS,
     })) as FeedbackRecord | null;
@@ -123,21 +123,21 @@ export class PrismaStore implements SitepingStore {
     if (search) where.message = { contains: search, mode: "insensitive" as const };
 
     const [feedbacks, total] = await Promise.all([
-      this.prisma.sitepingFeedback.findMany({
+      this.prisma.feedbackItem.findMany({
         where,
         include: INCLUDE_ANNOTATIONS,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.sitepingFeedback.count({ where }),
+      this.prisma.feedbackItem.count({ where }),
     ]);
 
     return { feedbacks: feedbacks as FeedbackRecord[], total };
   }
 
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
-    return (await this.prisma.sitepingFeedback.update({
+    return (await this.prisma.feedbackItem.update({
       where: { id },
       data: {
         status: data.status,
@@ -148,11 +148,11 @@ export class PrismaStore implements SitepingStore {
   }
 
   async deleteFeedback(id: string): Promise<void> {
-    await this.prisma.sitepingFeedback.delete({ where: { id } });
+    await this.prisma.feedbackItem.delete({ where: { id } });
   }
 
   async deleteAllFeedbacks(projectName: string): Promise<void> {
-    await this.prisma.sitepingFeedback.deleteMany({ where: { projectName } });
+    await this.prisma.feedbackItem.deleteMany({ where: { projectName } });
   }
 
   /**
@@ -160,7 +160,7 @@ export class PrismaStore implements SitepingStore {
    * Returns `true` when the record exists and matches, `false` otherwise.
    */
   async verifyProjectOwnership(id: string, projectName: string): Promise<boolean> {
-    const record = (await this.prisma.sitepingFeedback.findUnique({
+    const record = (await this.prisma.feedbackItem.findUnique({
       where: { id },
       // Only need projectName for the check — skip annotations
     })) as { projectName: string } | null;
@@ -174,9 +174,9 @@ export class PrismaStore implements SitepingStore {
 
 export interface HandlerOptions {
   /** Prisma client — used when `store` is not provided. Wrapped in a `PrismaStore` internally. */
-  prisma?: SitepingPrismaClient;
+  prisma?: CcmFeedbackPrismaClient;
   /** Abstract store — when provided, takes precedence over `prisma`. */
-  store?: SitepingStore;
+  store?: CcmFeedbackStore;
   /**
    * Optional API key for bearer-token authentication.
    *
@@ -199,9 +199,9 @@ export interface HandlerOptions {
 }
 
 /**
- * Object returned by `createSitepingHandler` — one handler per HTTP method.
+ * Object returned by `createCcmFeedbackHandler` — one handler per HTTP method.
  */
-export interface SitepingHandler {
+export interface CcmFeedbackHandler {
   OPTIONS: (request: Request) => Response;
   POST: (request: Request) => Promise<Response>;
   GET: (request: Request) => Promise<Response>;
@@ -261,7 +261,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 /**
- * Create request handlers for the Siteping API endpoint.
+ * Create request handlers for the CCM Feedback API endpoint.
  *
  * Accepts either a `store` (abstract) or a `prisma` client (backwards compatible).
  * When `prisma` is provided without `store`, it is wrapped in a `PrismaStore`.
@@ -271,36 +271,36 @@ function safeCompare(a: string, b: string): boolean {
  * The POST endpoint in particular should be rate-limited to prevent abuse, since
  * the widget typically calls it from unauthenticated browser contexts.
  *
- * @example Next.js App Router — `app/api/siteping/route.ts`
+ * @example Next.js App Router — `app/api/feedback/route.ts`
  * ```ts
- * import { createSitepingHandler } from '@siteping/adapter-prisma'
+ * import { createCcmFeedbackHandler } from '@ccm-feedback/adapter-prisma'
  * import { prisma } from '@/lib/prisma'
  *
- * export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({ prisma })
+ * export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({ prisma })
  * ```
  *
  * @example With abstract store
  * ```ts
- * import { createSitepingHandler, PrismaStore } from '@siteping/adapter-prisma'
+ * import { createCcmFeedbackHandler, PrismaStore } from '@ccm-feedback/adapter-prisma'
  * import { prisma } from '@/lib/prisma'
  *
  * const store = new PrismaStore(prisma)
- * export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({ store })
+ * export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({ store })
  * ```
  */
-export function createSitepingHandler({
+export function createCcmFeedbackHandler({
   prisma,
   store: providedStore,
   apiKey,
   publicEndpoints = apiKey ? ["POST", "OPTIONS"] : undefined,
   allowedOrigins,
-}: HandlerOptions): SitepingHandler {
+}: HandlerOptions): CcmFeedbackHandler {
   if (!providedStore && !prisma) {
-    throw new Error("[siteping] createSitepingHandler requires either `store` or `prisma`.");
+    throw new Error("[ccm-feedback] createCcmFeedbackHandler requires either `store` or `prisma`.");
   }
 
   // Safe: the throw above guarantees at least one is defined
-  const store: SitepingStore = providedStore ?? new PrismaStore(prisma as NonNullable<typeof prisma>);
+  const store: CcmFeedbackStore = providedStore ?? new PrismaStore(prisma as NonNullable<typeof prisma>);
 
   const publicMethods = publicEndpoints ? new Set(publicEndpoints) : null;
 
@@ -371,7 +371,7 @@ export function createSitepingHandler({
         }
 
         const message = actionableErrorMessage(error);
-        console.error("[siteping] Failed to create feedback:", error);
+        console.error("[ccm-feedback] Failed to create feedback:", error);
         return withCors(Response.json({ error: message }, { status: 500 }), corsHeaders);
       }
     },
@@ -398,7 +398,7 @@ export function createSitepingHandler({
         return withCors(Response.json(result, { headers: { "Cache-Control": "private, max-age=5" } }), corsHeaders);
       } catch (error) {
         const message = actionableErrorMessage(error);
-        console.error("[siteping] Failed to fetch feedbacks:", error);
+        console.error("[ccm-feedback] Failed to fetch feedbacks:", error);
         return withCors(Response.json({ error: message }, { status: 500 }), corsHeaders);
       }
     },
@@ -441,7 +441,7 @@ export function createSitepingHandler({
           return withCors(Response.json({ error: "Feedback not found" }, { status: 404 }), corsHeaders);
         }
         const message = actionableErrorMessage(error);
-        console.error("[siteping] Failed to update feedback:", error);
+        console.error("[ccm-feedback] Failed to update feedback:", error);
         return withCors(Response.json({ error: message }, { status: 500 }), corsHeaders);
       }
     },
@@ -485,7 +485,7 @@ export function createSitepingHandler({
           return withCors(Response.json({ error: "Feedback not found" }, { status: 404 }), corsHeaders);
         }
         const message = actionableErrorMessage(error);
-        console.error("[siteping] Failed to delete feedback:", error);
+        console.error("[ccm-feedback] Failed to delete feedback:", error);
         return withCors(Response.json({ error: message }, { status: 500 }), corsHeaders);
       }
     },
@@ -502,7 +502,7 @@ function isTableNotFoundError(error: unknown): boolean {
  */
 function actionableErrorMessage(error: unknown): string {
   if (isTableNotFoundError(error)) {
-    return "Table 'SitepingFeedback' not found. Run 'npx prisma db push' to create it.";
+    return "Table 'FeedbackItem' not found. Run 'npx prisma db push' to create it.";
   }
   return "Internal server error";
 }

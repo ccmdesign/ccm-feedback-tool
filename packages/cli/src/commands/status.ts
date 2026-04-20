@@ -1,17 +1,17 @@
 import { type Dirent, existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { CCM_FEEDBACK_MODELS } from "@ccm-feedback/core";
 import * as p from "@clack/prompts";
 import type { Field, Model } from "@mrleebo/prisma-ast";
 import { getSchema } from "@mrleebo/prisma-ast";
-import { SITEPING_MODELS } from "@siteping/core";
 import { findPrismaSchema } from "../utils/find-schema.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
 function findApiRoute(cwd: string): string | null {
   const candidates = [
-    join(cwd, "app", "api", "siteping", "route.ts"),
-    join(cwd, "src", "app", "api", "siteping", "route.ts"),
+    join(cwd, "app", "api", "feedback", "route.ts"),
+    join(cwd, "src", "app", "api", "feedback", "route.ts"),
   ];
   return candidates.find((c) => existsSync(c)) ?? null;
 }
@@ -30,7 +30,7 @@ function readPackageJson(cwd: string): Record<string, unknown> | null {
 function findWidgetUsage(cwd: string): string | null {
   const searchDirs = [join(cwd, "src"), join(cwd, "app"), join(cwd, "pages")];
   const extensions = [".ts", ".tsx", ".js", ".jsx"];
-  const patterns = ["initSiteping", "@siteping/widget"];
+  const patterns = ["initCcmFeedback", "@ccm-feedback/widget"];
 
   for (const dir of searchDirs) {
     if (!existsSync(dir)) continue;
@@ -97,7 +97,7 @@ function checkSchema(schemaPath: string | null): SchemaCheckResult {
   const missingFields: string[] = [];
   const outdatedFields: string[] = [];
 
-  for (const [modelName, modelDef] of Object.entries(SITEPING_MODELS)) {
+  for (const [modelName, modelDef] of Object.entries(CCM_FEEDBACK_MODELS)) {
     const model = existingModels.get(modelName);
 
     if (!model) {
@@ -149,7 +149,7 @@ function pad(label: string, width: number): string {
 export function statusCommand(options: { schema?: string }): void {
   const cwd = process.cwd();
 
-  p.intro("siteping — Status");
+  p.intro("ccm-feedback — Status");
 
   // 1. Prisma schema
   const schemaPath = options.schema ?? findPrismaSchema(cwd);
@@ -191,12 +191,12 @@ export function statusCommand(options: { schema?: string }): void {
   if (pkg) {
     const deps = (pkg.dependencies ?? {}) as Record<string, string>;
     const devDeps = (pkg.devDependencies ?? {}) as Record<string, string>;
-    const version = deps["@siteping/widget"] ?? devDeps["@siteping/widget"];
+    const version = deps["@ccm-feedback/widget"] ?? devDeps["@ccm-feedback/widget"];
 
     if (version) {
-      p.log.success(`${pad("Package", 25)}@siteping/widget@${version}`);
+      p.log.success(`${pad("Package", 25)}@ccm-feedback/widget@${version}`);
     } else {
-      p.log.error(`${pad("Package", 25)}@siteping/widget not found in package.json`);
+      p.log.error(`${pad("Package", 25)}@ccm-feedback/widget not found in package.json`);
     }
   } else {
     p.log.error(`${pad("Package", 25)}package.json not found`);
@@ -208,7 +208,7 @@ export function statusCommand(options: { schema?: string }): void {
   if (widgetFile) {
     p.log.success(`${pad("Widget integration", 25)}found in ${relative(cwd, widgetFile)}`);
   } else {
-    p.log.warn(`${pad("Widget integration", 25)}initSiteping not found in source files`);
+    p.log.warn(`${pad("Widget integration", 25)}initCcmFeedback not found in source files`);
   }
 
   // Outro
@@ -218,8 +218,8 @@ export function statusCommand(options: { schema?: string }): void {
     !pkg ||
     (pkg &&
       !(
-        (pkg.dependencies as Record<string, string> | undefined)?.["@siteping/widget"] ??
-        (pkg.devDependencies as Record<string, string> | undefined)?.["@siteping/widget"]
+        (pkg.dependencies as Record<string, string> | undefined)?.["@ccm-feedback/widget"] ??
+        (pkg.devDependencies as Record<string, string> | undefined)?.["@ccm-feedback/widget"]
       ));
   const hasWarning =
     schemaResult.missingModels.length > 0 ||
@@ -228,10 +228,10 @@ export function statusCommand(options: { schema?: string }): void {
     !widgetFile;
 
   if (hasError) {
-    p.outro("Some items are missing — run `siteping init` to set up.");
+    p.outro("Some items are missing — run `ccm-feedback init` to set up.");
     process.exit(1);
   } else if (hasWarning) {
-    p.outro("Some adjustments needed — run `siteping sync` to update.");
+    p.outro("Some adjustments needed — run `ccm-feedback sync` to update.");
   } else {
     p.outro("Everything is set up!");
   }

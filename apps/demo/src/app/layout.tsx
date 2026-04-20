@@ -5,26 +5,26 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://siteping.dev"),
+  metadataBase: new URL("https://feedback.ccmdesign.ca"),
   title: {
-    default: "SitePing — Client feedback, pinned to the pixel",
-    template: "%s — SitePing",
+    default: "CCM Feedback — Client feedback, pinned to the pixel",
+    template: "%s — CCM Feedback",
   },
   description:
-    "Open-source feedback widget for freelancers and agencies. DOM-anchored annotations, self-hosted, zero SaaS fees.",
+    "Self-hosted feedback widget for ccmdesign clients. DOM-anchored annotations, Supabase-backed, deployable on Netlify.",
   openGraph: {
-    title: "SitePing — Client feedback, pinned to the pixel",
+    title: "CCM Feedback — Client feedback, pinned to the pixel",
     description:
-      "Open-source feedback widget for freelancers and agencies. DOM-anchored annotations, self-hosted, zero SaaS fees.",
-    url: "https://siteping.dev",
-    siteName: "SitePing",
+      "Self-hosted feedback widget for ccmdesign clients. DOM-anchored annotations, Supabase-backed, deployable on Netlify.",
+    url: "https://feedback.ccmdesign.ca",
+    siteName: "CCM Feedback",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SitePing — Client feedback, pinned to the pixel",
-    description: "Open-source feedback widget. Self-hosted, DOM-anchored, npm install and go.",
+    title: "CCM Feedback — Client feedback, pinned to the pixel",
+    description: "Self-hosted feedback widget for ccmdesign clients. DOM-anchored, Supabase-backed, Netlify-deployed.",
   },
   other: {
     "theme-color": "#030712",

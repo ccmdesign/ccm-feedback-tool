@@ -30,7 +30,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model SitepingFeedback {
+model FeedbackItem {
   id          String   @id @default(cuid())
   projectName String
   type        String
@@ -51,7 +51,7 @@ describe("syncCommand", () => {
   let logSuccessSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "siteping-sync-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "ccm-feedback-sync-test-"));
     exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
     logErrorSpy = vi.spyOn(p.log, "error").mockImplementation(() => {});
     logInfoSpy = vi.spyOn(p.log, "info").mockImplementation(() => {});
@@ -84,7 +84,7 @@ describe("syncCommand", () => {
     // Should succeed without exit(1)
     expect(exitSpy).not.toHaveBeenCalled();
     // Models should have been created
-    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("SitepingFeedback"));
+    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("FeedbackItem"));
   });
 
   it("adds both models to an empty schema", () => {
@@ -93,14 +93,14 @@ describe("syncCommand", () => {
 
     syncCommand({ schema: schemaPath });
 
-    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("SitepingFeedback"));
-    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("SitepingAnnotation"));
+    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("FeedbackItem"));
+    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("FeedbackAnnotation"));
     expect(exitSpy).not.toHaveBeenCalled();
 
     // Verify file was actually modified
     const output = readFileSync(schemaPath, "utf-8");
-    expect(output).toContain("model SitepingFeedback");
-    expect(output).toContain("model SitepingAnnotation");
+    expect(output).toContain("model FeedbackItem");
+    expect(output).toContain("model FeedbackAnnotation");
   });
 
   it("reports field-level changes on a partial schema", () => {
@@ -109,8 +109,8 @@ describe("syncCommand", () => {
 
     syncCommand({ schema: schemaPath });
 
-    // SitepingAnnotation is new, should appear in model creation log
-    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("SitepingAnnotation"));
+    // FeedbackAnnotation is new, should appear in model creation log
+    expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("FeedbackAnnotation"));
     // Field additions should be logged (e.g. status, url, etc.)
     expect(logSuccessSpy).toHaveBeenCalledWith(expect.stringContaining("status"));
     expect(exitSpy).not.toHaveBeenCalled();
@@ -171,8 +171,8 @@ model User {
 
     const output = readFileSync(schemaPath, "utf-8");
     expect(output).toContain("model User");
-    expect(output).toContain("model SitepingFeedback");
-    expect(output).toContain("model SitepingAnnotation");
+    expect(output).toContain("model FeedbackItem");
+    expect(output).toContain("model FeedbackAnnotation");
     expect(exitSpy).not.toHaveBeenCalled();
   });
 

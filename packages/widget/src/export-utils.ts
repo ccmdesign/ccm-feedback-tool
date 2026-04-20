@@ -1,4 +1,4 @@
-import type { FeedbackResponse } from "@siteping/core";
+import type { FeedbackResponse } from "@ccm-feedback/core";
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { ThemeColors } from "./styles/theme.js";
 

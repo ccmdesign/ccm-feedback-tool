@@ -1,4 +1,4 @@
-import type { FeedbackResponse, FeedbackStatus, FeedbackType } from "@siteping/core";
+import type { FeedbackResponse, FeedbackStatus, FeedbackType } from "@ccm-feedback/core";
 import type { WidgetClient } from "./api-client.js";
 import { PAGE_SIZE } from "./constants.js";
 import { el, formatRelativeDate, parseSvg, setText } from "./dom-utils.js";

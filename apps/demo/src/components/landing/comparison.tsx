@@ -40,21 +40,21 @@ function Partial({ label }: { label: string }) {
 const rows = [
   {
     feature: "Self-hosted",
-    siteping: <Check />,
+    ccmFeedback: <Check />,
     markerio: <Cross />,
     bugherd: <Cross />,
     userback: <Cross />,
   },
   {
     feature: "npm package",
-    siteping: <Check />,
+    ccmFeedback: <Check />,
     markerio: <Partial label="SDK only" />,
     bugherd: <Cross />,
     userback: <Cross />,
   },
   {
     feature: "Open source",
-    siteping: (
+    ccmFeedback: (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400">
         MIT
       </span>
@@ -65,7 +65,7 @@ const rows = [
   },
   {
     feature: "Pricing",
-    siteping: (
+    ccmFeedback: (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-bold text-green-400">
         Free
       </span>
@@ -76,21 +76,21 @@ const rows = [
   },
   {
     feature: "DOM-anchored",
-    siteping: <Check />,
+    ccmFeedback: <Check />,
     markerio: <Partial label="Screenshot" />,
     bugherd: <Partial label="Pin only" />,
     userback: <Partial label="Screenshot" />,
   },
   {
     feature: "Survives layout changes",
-    siteping: <Check />,
+    ccmFeedback: <Check />,
     markerio: <Cross />,
     bugherd: <Partial label="Partial" />,
     userback: <Cross />,
   },
   {
     feature: "Customizable",
-    siteping: (
+    ccmFeedback: (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400">
         Full control
       </span>
@@ -113,7 +113,9 @@ export function Comparison() {
       <div className="mx-auto max-w-5xl">
         <div data-gsap="section-title" className="text-center">
           <div className="mx-auto mb-4 h-px w-8 bg-accent/50" />
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">SitePing vs. the alternatives</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            CCM Feedback vs. the alternatives
+          </h2>
           <p className="mt-4 text-lg text-gray-400">Why pay $39-79/mo for features you can self-host for free?</p>
         </div>
 
@@ -122,10 +124,10 @@ export function Comparison() {
             <thead>
               <tr>
                 <th className="w-[180px] px-5 py-4 text-left text-xs font-medium tracking-wider text-gray-600 uppercase" />
-                {/* SitePing header — highlighted */}
+                {/* CCM Feedback header — highlighted */}
                 <th className="rounded-t-xl border-x border-t border-accent/20 bg-accent/[0.06] px-5 py-4 text-center">
                   <div className="flex flex-col items-center gap-1">
-                    <span className="text-sm font-bold text-accent">SitePing</span>
+                    <span className="text-sm font-bold text-accent">CCM Feedback</span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent-light">
                       Recommended
                     </span>
@@ -146,11 +148,11 @@ export function Comparison() {
                     <td className="border-b border-gray-800/40 px-5 py-4 text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
                       {row.feature}
                     </td>
-                    {/* SitePing column — highlighted */}
+                    {/* CCM Feedback column — highlighted */}
                     <td
                       className={`border-x border-b border-accent/20 bg-accent/[0.06] px-5 py-4 text-center ${isLast ? "rounded-b-xl" : ""}`}
                     >
-                      {row.siteping}
+                      {row.ccmFeedback}
                     </td>
                     {competitors.map((c) => (
                       <td key={c.key} className="border-b border-gray-800/40 px-5 py-4 text-center">

@@ -1,7 +1,7 @@
 import { p } from "../prompts.js";
 
 export async function doctorCommand(options: { url?: string; endpoint?: string }): Promise<void> {
-  p.intro("siteping — Network diagnostics");
+  p.intro("ccm-feedback — Network diagnostics");
 
   const url =
     options.url ??
@@ -25,8 +25,8 @@ export async function doctorCommand(options: { url?: string; endpoint?: string }
     options.endpoint ??
     (await p.text({
       message: "API endpoint path",
-      placeholder: "/api/siteping",
-      defaultValue: "/api/siteping",
+      placeholder: "/api/feedback",
+      defaultValue: "/api/feedback",
     }));
 
   if (p.isCancel(endpoint)) {
@@ -34,7 +34,7 @@ export async function doctorCommand(options: { url?: string; endpoint?: string }
     process.exit(0);
   }
 
-  const projectName = "__siteping_health_check__";
+  const projectName = "__ccm_feedback_health_check__";
   const fullUrl = new URL(`${endpoint}?projectName=${encodeURIComponent(projectName)}`, url).toString();
 
   const spinner = p.spinner();
@@ -57,7 +57,7 @@ export async function doctorCommand(options: { url?: string; endpoint?: string }
       if (data && typeof data.total === "number") {
         p.log.success(`API is working — ${data.total} feedback(s) found`);
       } else {
-        p.log.warn("Unexpected response — make sure the endpoint uses createSitepingHandler()");
+        p.log.warn("Unexpected response — make sure the endpoint uses createCcmFeedbackHandler()");
       }
     } else {
       spinner.stop(`HTTP error ${response.status} (${elapsed}ms)`);

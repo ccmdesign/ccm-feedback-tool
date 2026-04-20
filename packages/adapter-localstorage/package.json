@@ -1,7 +1,7 @@
 {
-  "name": "@siteping/adapter-localstorage",
+  "name": "@ccm-feedback/adapter-localstorage",
   "version": "0.4.3",
-  "description": "localStorage adapter for Siteping — client-side feedback persistence without a server",
+  "description": "localStorage adapter for CCM Feedback — client-side feedback persistence without a server",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -23,7 +23,7 @@
     "clean": "rm -rf dist"
   },
   "keywords": [
-    "siteping",
+    "ccm-feedback",
     "localstorage",
     "adapter",
     "feedback",
@@ -32,21 +32,21 @@
     "demo",
     "typescript"
   ],
-  "author": "neosianexus",
+  "author": "ccmdesign",
   "license": "MIT",
-  "homepage": "https://siteping.dev",
+  "homepage": "https://feedback.ccmdesign.ca",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NeosiaNexus/SitePing.git",
+    "url": "git+https://github.com/ccmdesign/ccm-feedback-tool.git",
     "directory": "packages/adapter-localstorage"
   },
   "bugs": {
-    "url": "https://github.com/NeosiaNexus/SitePing/issues"
+    "url": "https://github.com/ccmdesign/ccm-feedback-tool/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "devDependencies": {
-    "@siteping/core": "workspace:*"
+    "@ccm-feedback/core": "workspace:*"
   }
 }

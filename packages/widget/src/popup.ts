@@ -1,4 +1,4 @@
-import type { FeedbackType } from "@siteping/core";
+import type { FeedbackType } from "@ccm-feedback/core";
 import { Z_INDEX_MAX } from "./constants.js";
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { TFunction } from "./i18n/index.js";

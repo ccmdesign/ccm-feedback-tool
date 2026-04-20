@@ -10,7 +10,7 @@
  * smooth micro-interactions.
  */
 
-import type { FeedbackResponse, FeedbackType } from "@siteping/core";
+import type { FeedbackResponse, FeedbackType } from "@ccm-feedback/core";
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { ThemeColors } from "./styles/theme.js";
 

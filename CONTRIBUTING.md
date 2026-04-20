@@ -1,18 +1,18 @@
-# Contributing to SitePing
+# Contributing to CCM Feedback
 
 Thanks for your interest in contributing! This guide covers everything you need to get started.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) (latest) — used as the package manager (workspaces, scripts, lockfile)
+- [Bun](https://bun.sh/) (>= 1.3.11) — used as the package manager (workspaces, scripts, lockfile)
 - Node.js >= 18 — required for development and post-build scripts (cross-platform compatible)
 - A Chromium-based browser (for Playwright E2E tests)
 
 ## Setup
 
 ```bash
-git clone https://github.com/NeosiaNexus/SitePing.git
-cd SitePing
+git clone https://github.com/ccmdesign/ccm-feedback-tool.git
+cd ccm-feedback-tool
 bun install
 ```
 
@@ -37,14 +37,14 @@ Monorepo with bun workspaces + Turborepo. All packages live in `packages/`:
 
 | Package | npm | Target | Description |
 |---------|-----|--------|-------------|
-| `@siteping/core` | private | — | Shared types, schema, store errors, helpers, conformance tests |
-| `@siteping/widget` | published | Browser | Feedback widget (Shadow DOM, closed). Accepts `store` for client-side mode |
-| `@siteping/adapter-prisma` | published | Node | Prisma database adapter |
-| `@siteping/adapter-memory` | published | Any | In-memory adapter (testing, demos, serverless) |
-| `@siteping/adapter-localstorage` | published | Browser | localStorage adapter (demos, prototyping) |
-| `@siteping/cli` | published | Node | CLI tool (`siteping init/sync/status/doctor`) |
+| `@ccm-feedback/core` | private | — | Shared types, schema, store errors, helpers, conformance tests |
+| `@ccm-feedback/widget` | published | Browser | Feedback widget (Shadow DOM, closed). Accepts `store` for client-side mode |
+| `@ccm-feedback/adapter-prisma` | published | Node | Prisma database adapter |
+| `@ccm-feedback/adapter-memory` | published | Any | In-memory adapter (testing, demos, serverless) |
+| `@ccm-feedback/adapter-localstorage` | published | Browser | localStorage adapter (demos, prototyping) |
+| `@ccm-feedback/cli` | published | Node | CLI tool (`ccm-feedback init/sync/status/doctor`) |
 
-- **Core** is an Internal Package — it exports raw TypeScript (no build step). Consumers bundle it via `noExternal: ["@siteping/core"]` in their tsup config.
+- **Core** is an Internal Package — it exports raw TypeScript (no build step). Consumers bundle it via `noExternal: ["@ccm-feedback/core"]` in their tsup config.
 - **Turborepo** handles build orchestration, dependency ordering, and local caching.
 - Each published package is built independently with tsup.
 
@@ -52,7 +52,7 @@ Monorepo with bun workspaces + Turborepo. All packages live in `packages/`:
 
 ## Adding a New Package
 
-To add a new package to the monorepo (e.g. `@siteping/adapter-drizzle`):
+To add a new package to the monorepo (e.g. `@ccm-feedback/adapter-drizzle`):
 
 ### 1. Create the package directory
 
@@ -69,7 +69,7 @@ packages/adapter-drizzle/
 
 ```jsonc
 {
-  "name": "@siteping/adapter-drizzle",
+  "name": "@ccm-feedback/adapter-drizzle",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -88,21 +88,21 @@ packages/adapter-drizzle/
     "check": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "author": "neosianexus",
+  "author": "ccmdesign",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NeosiaNexus/SitePing.git",
+    "url": "git+https://github.com/ccmdesign/ccm-feedback-tool.git",
     "directory": "packages/adapter-drizzle"
   },
-  // If you import from @siteping/core:
+  // If you import from @ccm-feedback/core:
   "devDependencies": {
-    "@siteping/core": "workspace:*"
+    "@ccm-feedback/core": "workspace:*"
   }
 }
 ```
 
-> **Important:** `@siteping/core` must be a `devDependency`, never a `dependency` — it is bundled at build time and not published to npm.
+> **Important:** `@ccm-feedback/core` must be a `devDependency`, never a `dependency` — it is bundled at build time and not published to npm.
 
 ### 3. `tsconfig.json`
 
@@ -130,7 +130,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  noExternal: ["@siteping/core"],  // bundle core (not published)
+  noExternal: ["@ccm-feedback/core"],  // bundle core (not published)
 });
 ```
 
@@ -150,42 +150,12 @@ export default defineConfig({
 "packages/<name>": "0.1.0"
 ```
 
-### 6. Add publish job in `.github/workflows/release.yml`
-
-Add an output in the `release-please` job:
-```yaml
-<name>-release_created: ${{ steps.release.outputs['packages/<name>--release_created'] }}
-```
-
-Add a publish job (copy an existing one and update the name, condition, and working-directory):
-```yaml
-publish-<name>:
-  needs: release-please
-  if: |
-    always() &&
-    (needs.release-please.outputs.<name>-release_created == 'true' ||
-     (github.event_name == 'workflow_dispatch' && inputs.publish))
-  # ... same steps as other publish jobs, with:
-  #   working-directory: packages/<name>
-```
-
-### 7. Verify
-
-```bash
-bun install              # resolve the new workspace package
-bun run build            # Turborepo picks it up automatically
-bun run check            # type-check
-bun run lint             # lint
-```
-
-No changes needed in `turbo.json` or root `package.json` — Turborepo discovers new packages via the `workspaces` glob.
-
 ## Creating a New Adapter
 
-Adapters implement the `SitepingStore` interface from `@siteping/core`. To create a new one (e.g. `adapter-drizzle`):
+Adapters implement the `CcmFeedbackStore` interface from `@ccm-feedback/core`. To create a new one (e.g. `adapter-drizzle`):
 
 1. Copy `packages/adapter-memory/` as a starting point (simplest adapter)
-2. Implement the 6 methods of `SitepingStore`:
+2. Implement the 6 methods of `CcmFeedbackStore`:
    - `createFeedback` — idempotent on `clientId` (return existing or throw `StoreDuplicateError`)
    - `getFeedbacks` — paginated query with filters (type, status, search)
    - `findByClientId` — return `null` when not found (no error)
@@ -196,28 +166,25 @@ Adapters implement the `SitepingStore` interface from `@siteping/core`. To creat
 
 ```ts
 // __tests__/my-store.test.ts
-import { testSitepingStore } from '@siteping/core/testing'
+import { testCcmFeedbackStore } from '@ccm-feedback/core/testing'
 import { MyStore } from '../src/index.js'
 
-// Runs 22 conformance tests covering the full SitepingStore contract
-testSitepingStore(() => new MyStore(testConfig))
-
-// Add adapter-specific tests below (connection handling, serialization, etc.)
+// Runs 22 conformance tests covering the full CcmFeedbackStore contract
+testCcmFeedbackStore(() => new MyStore(testConfig))
 ```
 
 4. Re-export error types from your package for consumer convenience:
 ```ts
-export { StoreNotFoundError, StoreDuplicateError } from '@siteping/core'
+export { StoreNotFoundError, StoreDuplicateError } from '@ccm-feedback/core'
 ```
 
-5. Use `flattenAnnotation()` from `@siteping/core` if your adapter handles HTTP payloads.
+5. Use `flattenAnnotation()` from `@ccm-feedback/core` if your adapter handles HTTP payloads.
 
 ## Code Style
 
 - **TypeScript strict mode** with `exactOptionalPropertyTypes` enabled.
 - **Conventional Commits** for all commit messages: `type(scope): description`.
-  - Examples: `feat(widget): add color picker`, `fix(cli): handle missing config`.
-- **i18n** — English (default) and French locales. Target audience is French-speaking freelance clients.
+- **i18n** — English (default) and French locales.
 - Keep functions small and focused. Prefer composition over inheritance.
 
 ## Testing
@@ -225,36 +192,6 @@ export { StoreNotFoundError, StoreDuplicateError } from '@siteping/core'
 - **Unit tests** — Vitest. Place in `packages/<name>/__tests__/`.
 - **E2E tests** — Playwright. Place in the `e2e/` directory at the root.
 - Cover new features with unit tests. Cover user-facing flows with E2E tests when relevant.
-
-## Releases & Versioning
-
-Releases are **fully automated** via [Release Please](https://github.com/googleapis/release-please) + Turborepo.
-
-**How it works:**
-
-1. Write code using [Conventional Commits](https://www.conventionalcommits.org/)
-2. Push to `main` (via squash-merged PR)
-3. Release Please detects which packages changed (by file paths) and opens a release PR
-4. Merge the release PR → GitHub Release + npm publish happen automatically
-
-**Version bumps are determined by your commit messages:**
-
-| Commit prefix | Version bump (1.0+) | Pre-1.0 bump | Example |
-|--------------|---------------------|-------------|---------|
-| `fix(scope):` | Patch | Patch | `fix(widget): prevent double submit` |
-| `feat(scope):` | Minor | Patch | `feat(panel): add dark mode` |
-| `feat(scope)!:` | Major | Minor | `feat(api)!: redesign payload format` |
-| `docs:` / `test:` / `chore:` | — (included in next release) | — | `docs(widget): clarify config` |
-
-> **Note:** The commit scope (`widget`, `cli`) is cosmetic. Release-please routes commits to packages based on which **files** the commit touches, not the scope name.
-
-> **Pre-1.0 behavior** (all current packages): `feat` bumps **patch** instead of minor, breaking changes (`!`) bump **minor** instead of major. `docs` / `test` / `chore` commits don't trigger releases on their own — they're included in the next release triggered by `feat` or `fix`.
-
-**What you don't need to do:**
-- Edit `package.json` version — Release Please does it
-- Write `CHANGELOG.md` — auto-generated from commits
-- Create git tags — auto-created on release
-- Run `npm publish` — CI handles it
 
 ## Pull Request Guidelines
 
@@ -264,10 +201,6 @@ Releases are **fully automated** via [Release Please](https://github.com/googlea
 4. **Use Conventional Commits** for your PR title and individual commits.
 5. **Describe what and why** in your PR description, not just what changed.
 
-## Reporting Issues
-
-Use the GitHub issue templates for [bug reports](.github/ISSUE_TEMPLATE/bug_report.yml) and [feature requests](.github/ISSUE_TEMPLATE/feature_request.yml).
-
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE). CCM Feedback is based on [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus; see [`NOTICE`](./NOTICE) for attribution.

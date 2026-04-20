@@ -1,5 +1,5 @@
-import type { FeedbackStatus, FeedbackType } from "@siteping/core";
-import { FEEDBACK_STATUSES, FEEDBACK_TYPES } from "@siteping/core";
+import type { FeedbackStatus, FeedbackType } from "@ccm-feedback/core";
+import { FEEDBACK_STATUSES, FEEDBACK_TYPES } from "@ccm-feedback/core";
 import * as zod from "zod";
 
 // Namespace import required: Zod publishes dual CJS/ESM, and bundlers (tsup, vitest) may

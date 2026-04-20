@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSitepingHandler } from "../src/index.js";
+import { createCcmFeedbackHandler } from "../src/index.js";
 import { validAnnotation, validPayloadNoAnnotations } from "./fixtures.js";
 
 function mockPrisma() {
   return {
-    sitepingFeedback: {
+    feedbackItem: {
       create: vi.fn().mockResolvedValue({
         id: "fb-1",
         ...validPayloadNoAnnotations,
@@ -25,28 +25,28 @@ function mockPrisma() {
   };
 }
 
-describe("createSitepingHandler", () => {
+describe("createCcmFeedbackHandler", () => {
   let prisma: ReturnType<typeof mockPrisma>;
-  let handler: ReturnType<typeof createSitepingHandler>;
+  let handler: ReturnType<typeof createCcmFeedbackHandler>;
 
   beforeEach(() => {
     prisma = mockPrisma();
-    handler = createSitepingHandler({ prisma });
+    handler = createCcmFeedbackHandler({ prisma });
   });
 
   describe("POST", () => {
     it("creates a feedback with valid payload", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify(validPayloadNoAnnotations),
       });
       const res = await handler.POST(req);
       expect(res.status).toBe(201);
-      expect(prisma.sitepingFeedback.create).toHaveBeenCalledOnce();
+      expect(prisma.feedbackItem.create).toHaveBeenCalledOnce();
     });
 
     it("returns 400 for invalid JSON", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: "not json",
       });
@@ -55,7 +55,7 @@ describe("createSitepingHandler", () => {
     });
 
     it("returns 400 for missing required fields", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify({ type: "bug" }),
       });
@@ -67,7 +67,7 @@ describe("createSitepingHandler", () => {
     });
 
     it("returns 400 for invalid email", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify({ ...validPayloadNoAnnotations, authorEmail: "not-email" }),
       });
@@ -76,9 +76,9 @@ describe("createSitepingHandler", () => {
     });
 
     it("handles duplicate clientId gracefully", async () => {
-      prisma.sitepingFeedback.create.mockRejectedValue({ code: "P2002" });
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", ...validPayloadNoAnnotations });
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.create.mockRejectedValue({ code: "P2002" });
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", ...validPayloadNoAnnotations });
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify(validPayloadNoAnnotations),
       });
@@ -88,8 +88,8 @@ describe("createSitepingHandler", () => {
 
     it("returns 500 on unexpected DB error", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      prisma.sitepingFeedback.create.mockRejectedValue(new Error("DB down"));
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.create.mockRejectedValue(new Error("DB down"));
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify(validPayloadNoAnnotations),
       });
@@ -104,15 +104,15 @@ describe("createSitepingHandler", () => {
         annotations: [validAnnotation],
       };
 
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "POST",
         body: JSON.stringify(payloadWithAnnotation),
       });
 
       await handler.POST(req);
 
-      expect(prisma.sitepingFeedback.create).toHaveBeenCalledOnce();
-      const createArg = prisma.sitepingFeedback.create.mock.calls[0][0] as {
+      expect(prisma.feedbackItem.create).toHaveBeenCalledOnce();
+      const createArg = prisma.feedbackItem.create.mock.calls[0][0] as {
         data: { annotations: { create: Array<Record<string, unknown>> } };
       };
       const flatAnnotation = createArg.data.annotations.create[0];
@@ -140,9 +140,9 @@ describe("createSitepingHandler", () => {
 
   describe("GET", () => {
     it("returns feedbacks for a project", async () => {
-      prisma.sitepingFeedback.findMany.mockResolvedValue([]);
-      prisma.sitepingFeedback.count.mockResolvedValue(0);
-      const req = new Request("http://localhost/api/siteping?projectName=test");
+      prisma.feedbackItem.findMany.mockResolvedValue([]);
+      prisma.feedbackItem.count.mockResolvedValue(0);
+      const req = new Request("http://localhost/api/feedback?projectName=test");
       const res = await handler.GET(req);
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -151,23 +151,23 @@ describe("createSitepingHandler", () => {
     });
 
     it("returns 400 without projectName", async () => {
-      const req = new Request("http://localhost/api/siteping");
+      const req = new Request("http://localhost/api/feedback");
       const res = await handler.GET(req);
       expect(res.status).toBe(400);
     });
 
     it("rejects limit > 100 via Zod validation", async () => {
-      const req = new Request("http://localhost/api/siteping?projectName=test&limit=999");
+      const req = new Request("http://localhost/api/feedback?projectName=test&limit=999");
       const res = await handler.GET(req);
       expect(res.status).toBe(400);
     });
 
     it("applies type and status filters", async () => {
-      prisma.sitepingFeedback.findMany.mockResolvedValue([]);
-      prisma.sitepingFeedback.count.mockResolvedValue(0);
-      const req = new Request("http://localhost/api/siteping?projectName=test&type=bug&status=open");
+      prisma.feedbackItem.findMany.mockResolvedValue([]);
+      prisma.feedbackItem.count.mockResolvedValue(0);
+      const req = new Request("http://localhost/api/feedback?projectName=test&type=bug&status=open");
       await handler.GET(req);
-      const callArgs = prisma.sitepingFeedback.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+      const callArgs = prisma.feedbackItem.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
       expect(callArgs.where.type).toBe("bug");
       expect(callArgs.where.status).toBe("open");
     });
@@ -175,67 +175,67 @@ describe("createSitepingHandler", () => {
 
   describe("PATCH", () => {
     it("resolves a feedback", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
-      prisma.sitepingFeedback.update.mockResolvedValue({
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
+      prisma.feedbackItem.update.mockResolvedValue({
         id: "fb-1",
         projectName: "test-project",
         status: "resolved",
         resolvedAt: new Date().toISOString(),
         annotations: [],
       });
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "PATCH",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project", status: "resolved" }),
       });
       const res = await handler.PATCH(req);
       expect(res.status).toBe(200);
-      const updateArgs = prisma.sitepingFeedback.update.mock.calls[0][0] as { data: Record<string, unknown> };
+      const updateArgs = prisma.feedbackItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
       expect(updateArgs.data.status).toBe("resolved");
       expect(updateArgs.data.resolvedAt).toBeInstanceOf(Date);
     });
 
     it("unresolves a feedback (clears resolvedAt)", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
-      prisma.sitepingFeedback.update.mockResolvedValue({
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
+      prisma.feedbackItem.update.mockResolvedValue({
         id: "fb-1",
         projectName: "test-project",
         status: "open",
         resolvedAt: null,
         annotations: [],
       });
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "PATCH",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project", status: "open" }),
       });
       await handler.PATCH(req);
-      const updateArgs = prisma.sitepingFeedback.update.mock.calls[0][0] as { data: Record<string, unknown> };
+      const updateArgs = prisma.feedbackItem.update.mock.calls[0][0] as { data: Record<string, unknown> };
       expect(updateArgs.data.resolvedAt).toBeNull();
     });
 
     it("returns 404 when feedback belongs to a different project", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", projectName: "other-project" });
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", projectName: "other-project" });
+      const req = new Request("http://localhost/api/feedback", {
         method: "PATCH",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project", status: "resolved" }),
       });
       const res = await handler.PATCH(req);
       expect(res.status).toBe(404);
-      expect(prisma.sitepingFeedback.update).not.toHaveBeenCalled();
+      expect(prisma.feedbackItem.update).not.toHaveBeenCalled();
     });
 
     it("returns 404 when feedback does not exist", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue(null);
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.findUnique.mockResolvedValue(null);
+      const req = new Request("http://localhost/api/feedback", {
         method: "PATCH",
         body: JSON.stringify({ id: "nonexistent", projectName: "test-project", status: "resolved" }),
       });
       const res = await handler.PATCH(req);
       expect(res.status).toBe(404);
-      expect(prisma.sitepingFeedback.update).not.toHaveBeenCalled();
+      expect(prisma.feedbackItem.update).not.toHaveBeenCalled();
     });
 
     it("returns 400 for invalid status", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "PATCH",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project", status: "pending" }),
       });
@@ -246,28 +246,28 @@ describe("createSitepingHandler", () => {
 
   describe("DELETE", () => {
     it("deletes a single feedback by id", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project" }),
       });
       const res = await handler.DELETE(req);
       expect(res.status).toBe(200);
-      expect(prisma.sitepingFeedback.delete).toHaveBeenCalledWith({ where: { id: "fb-1" } });
+      expect(prisma.feedbackItem.delete).toHaveBeenCalledWith({ where: { id: "fb-1" } });
     });
 
     it("deletes all feedbacks for a project", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: JSON.stringify({ projectName: "test", deleteAll: true }),
       });
       const res = await handler.DELETE(req);
       expect(res.status).toBe(200);
-      expect(prisma.sitepingFeedback.deleteMany).toHaveBeenCalledWith({ where: { projectName: "test" } });
+      expect(prisma.feedbackItem.deleteMany).toHaveBeenCalledWith({ where: { projectName: "test" } });
     });
 
     it("returns 400 for invalid JSON", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: "not json",
       });
@@ -276,7 +276,7 @@ describe("createSitepingHandler", () => {
     });
 
     it("returns 400 for empty body", async () => {
-      const req = new Request("http://localhost/api/siteping", {
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: JSON.stringify({}),
       });
@@ -285,9 +285,9 @@ describe("createSitepingHandler", () => {
     });
 
     it("returns 404 when feedback not found (P2025)", async () => {
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "nonexistent", projectName: "test-project" });
-      prisma.sitepingFeedback.delete.mockRejectedValue({ code: "P2025" });
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "nonexistent", projectName: "test-project" });
+      prisma.feedbackItem.delete.mockRejectedValue({ code: "P2025" });
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: JSON.stringify({ id: "nonexistent", projectName: "test-project" }),
       });
@@ -297,9 +297,9 @@ describe("createSitepingHandler", () => {
 
     it("returns 500 on unexpected DB error", async () => {
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      prisma.sitepingFeedback.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
-      prisma.sitepingFeedback.delete.mockRejectedValue(new Error("DB down"));
-      const req = new Request("http://localhost/api/siteping", {
+      prisma.feedbackItem.findUnique.mockResolvedValue({ id: "fb-1", projectName: "test-project" });
+      prisma.feedbackItem.delete.mockRejectedValue(new Error("DB down"));
+      const req = new Request("http://localhost/api/feedback", {
         method: "DELETE",
         body: JSON.stringify({ id: "fb-1", projectName: "test-project" }),
       });

@@ -1,17 +1,16 @@
-[![npm version](https://img.shields.io/npm/v/@siteping/adapter-prisma)](https://www.npmjs.com/package/@siteping/adapter-prisma)
-[![Live Demo](https://img.shields.io/badge/demo-try%20it%20live-22c55e)](https://siteping.dev/demo)
+[![npm version](https://img.shields.io/npm/v/@ccm-feedback/adapter-prisma)](https://www.npmjs.com/package/@ccm-feedback/adapter-prisma)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 
-# @siteping/adapter-prisma
+# @ccm-feedback/adapter-prisma
 
-Server-side Prisma adapter for [Siteping](https://github.com/NeosiaNexus/SitePing) — handles API request validation and database persistence.
+Server-side Prisma adapter for [CCM Feedback](https://github.com/ccmdesign/ccm-feedback-tool) — handles API request validation and database persistence.
 
-Part of the [@siteping](https://github.com/NeosiaNexus/SitePing) monorepo — **[try the live demo](https://siteping.dev/demo)**.
+Part of the [@ccm-feedback](https://github.com/ccmdesign/ccm-feedback-tool) monorepo.
 
 ## Install
 
 ```bash
-npm install @siteping/adapter-prisma
+npm install @ccm-feedback/adapter-prisma
 ```
 
 **Peer dependency:** `@prisma/client` ^5.0.0 || ^6.0.0
@@ -19,11 +18,11 @@ npm install @siteping/adapter-prisma
 ## Quick Start
 
 ```ts
-// app/api/siteping/route.ts (Next.js App Router)
-import { createSitepingHandler } from '@siteping/adapter-prisma'
+// app/api/feedback/route.ts (Next.js App Router)
+import { createCcmFeedbackHandler } from '@ccm-feedback/adapter-prisma'
 import { prisma } from '@/lib/prisma'
 
-export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({ prisma })
+export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({ prisma })
 ```
 
 ## API Endpoints
@@ -83,7 +82,7 @@ Either provide `{ id }` to delete a single feedback, or `{ projectName, deleteAl
 Use the CLI to set up models automatically:
 
 ```bash
-npx @siteping/cli init
+npx @ccm-feedback/cli init
 npx prisma db push
 ```
 
@@ -92,9 +91,9 @@ npx prisma db push
 By default, all endpoints are publicly accessible. To protect read/update/delete operations, pass an `apiKey`:
 
 ```ts
-export const { GET, POST, PATCH, DELETE, OPTIONS } = createSitepingHandler({
+export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({
   prisma,
-  apiKey: process.env.SITEPING_API_KEY,
+  apiKey: process.env.CCM_FEEDBACK_API_KEY,
   allowedOrigins: ["https://your-site.com"],
 })
 ```
@@ -148,11 +147,13 @@ The widget collects and stores the following data per feedback submission:
 
 | Package | Description |
 |---------|-------------|
-| [`@siteping/widget`](https://www.npmjs.com/package/@siteping/widget) | Browser feedback widget |
-| [`@siteping/adapter-memory`](https://www.npmjs.com/package/@siteping/adapter-memory) | In-memory adapter (testing, demos) |
-| [`@siteping/adapter-localstorage`](https://www.npmjs.com/package/@siteping/adapter-localstorage) | Client-side localStorage adapter |
-| [`@siteping/cli`](https://www.npmjs.com/package/@siteping/cli) | CLI for project setup |
+| [`@ccm-feedback/widget`](https://www.npmjs.com/package/@ccm-feedback/widget) | Browser feedback widget |
+| [`@ccm-feedback/adapter-memory`](https://www.npmjs.com/package/@ccm-feedback/adapter-memory) | In-memory adapter (testing, demos) |
+| [`@ccm-feedback/adapter-localstorage`](https://www.npmjs.com/package/@ccm-feedback/adapter-localstorage) | Client-side localStorage adapter |
+| [`@ccm-feedback/cli`](https://www.npmjs.com/package/@ccm-feedback/cli) | CLI for project setup |
 
 ## License
 
-[MIT](https://github.com/NeosiaNexus/SitePing/blob/main/LICENSE)
+[MIT](https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE)
+
+Based on [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus — MIT licensed.

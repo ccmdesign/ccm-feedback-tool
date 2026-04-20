@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { CCM_FEEDBACK_MODELS, type FieldDef, type IndexDef } from "@ccm-feedback/core";
 import type { AttributeArgument, BlockAttribute, Field, Model, Property } from "@mrleebo/prisma-ast";
 import { getSchema, printSchema } from "@mrleebo/prisma-ast";
-import { type FieldDef, type IndexDef, SITEPING_MODELS } from "@siteping/core";
 
 const DEFAULT_SCHEMA_PATH = "prisma/schema.prisma";
 
@@ -19,13 +19,13 @@ export interface SyncResult {
 }
 
 /**
- * Sync Siteping models into an existing Prisma schema.
+ * Sync CCM Feedback models into an existing Prisma schema.
  *
  * Uses prisma-ast for AST-level manipulation (no regex/string concat).
  * - Missing models are created
  * - Missing fields are added
  * - Fields with wrong type/optional/attributes are updated
- * - User-added fields outside Siteping's definition are left untouched
+ * - User-added fields outside CCM Feedback's definition are left untouched
  */
 export function syncPrismaModels(schemaPath: string = DEFAULT_SCHEMA_PATH): SyncResult {
   if (!existsSync(schemaPath)) {
@@ -45,7 +45,7 @@ export function syncPrismaModels(schemaPath: string = DEFAULT_SCHEMA_PATH): Sync
   const addedModels: string[] = [];
   const changes: FieldChange[] = [];
 
-  for (const [modelName, modelDef] of Object.entries(SITEPING_MODELS)) {
+  for (const [modelName, modelDef] of Object.entries(CCM_FEEDBACK_MODELS)) {
     const existingModel = existingModelsMap.get(modelName);
 
     if (!existingModel) {

@@ -7,7 +7,7 @@
 | latest  | :white_check_mark: |
 | < latest | :x:               |
 
-Only the latest published version of each `@siteping/*` package receives security updates.
+Only the latest published version of each `@ccm-feedback/*` package receives security updates.
 
 ## Reporting a Vulnerability
 
@@ -15,8 +15,10 @@ Only the latest published version of each `@siteping/*` package receives securit
 
 Instead, please report vulnerabilities through one of these channels:
 
-1. **GitHub Security Advisories** (preferred) -- [Report a vulnerability](https://github.com/NeosiaNexus/SitePing/security/advisories/new)
+1. **GitHub Security Advisories** (preferred) -- [Report a vulnerability](https://github.com/ccmdesign/ccm-feedback-tool/security/advisories/new)
 2. **Email** -- Send details to **security@neosianexus.dev**
+
+> **Note:** The email contact is inherited from the upstream project. CCM will replace it in a follow-up ticket.
 
 ### What to include
 
@@ -41,10 +43,10 @@ Instead, please report vulnerabilities through one of these channels:
 
 ## Scope
 
-This policy applies to all packages in the `@siteping/*` scope:
+This policy applies to all packages in the `@ccm-feedback/*` scope:
 
-- `@siteping/widget`
-- `@siteping/adapter-prisma`
-- `@siteping/adapter-memory`
-- `@siteping/adapter-localstorage`
-- `@siteping/cli`
+- `@ccm-feedback/widget`
+- `@ccm-feedback/adapter-prisma`
+- `@ccm-feedback/adapter-memory`
+- `@ccm-feedback/adapter-localstorage`
+- `@ccm-feedback/cli`
