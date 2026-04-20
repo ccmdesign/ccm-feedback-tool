@@ -1,6 +1,6 @@
 import { createCcmFeedbackHandler } from "@ccm-feedback/adapter-prisma";
-import { memoryStore } from "@/lib/memory-store";
+import { resolveStore } from "@/lib/store";
 
-export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({
-  store: memoryStore,
-});
+const store = await resolveStore();
+
+export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({ store });
