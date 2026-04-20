@@ -12,10 +12,23 @@ export const dynamic = "force-dynamic";
  * Applies the allowlist here (not just in middleware) so a non-allowlisted
  * email never gets a session cookie written to their browser.
  */
+/**
+ * Restrict `?next=` to same-origin admin paths so a phishing link cannot
+ * bounce a just-authenticated admin to an attacker-controlled URL.
+ * Rejects protocol-relative (`//evil.com`), absolute, and non-admin paths.
+ */
+function sanitizeNext(next: string | null): string {
+  if (!next) return "/admin/projects";
+  if (!next.startsWith("/")) return "/admin/projects";
+  if (next.startsWith("//")) return "/admin/projects";
+  if (!next.startsWith("/admin/")) return "/admin/projects";
+  return next;
+}
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/admin/projects";
+  const next = sanitizeNext(url.searchParams.get("next"));
 
   if (!code) {
     return NextResponse.redirect(new URL("/admin/login?error=missing_code", request.url));
