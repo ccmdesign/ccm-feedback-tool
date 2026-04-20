@@ -24,9 +24,11 @@ const VALID_PRISMA_TYPES = new Set([
 // ---------------------------------------------------------------------------
 
 describe("CCM_FEEDBACK_MODELS structure", () => {
-  it("contains exactly 2 models: FeedbackItem and FeedbackAnnotation", () => {
+  it("contains the 4 CCM-279 models (Project, ReviewBatch, FeedbackItem, FeedbackAnnotation)", () => {
     const modelNames = Object.keys(CCM_FEEDBACK_MODELS);
-    expect(modelNames).toHaveLength(2);
+    expect(modelNames).toHaveLength(4);
+    expect(modelNames).toContain("Project");
+    expect(modelNames).toContain("ReviewBatch");
     expect(modelNames).toContain("FeedbackItem");
     expect(modelNames).toContain("FeedbackAnnotation");
   });

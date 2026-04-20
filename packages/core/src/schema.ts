@@ -28,6 +28,8 @@ export interface FieldDef {
   nativeType?: string;
   /** Prisma @updatedAt attribute */
   isUpdatedAt?: boolean;
+  /** Prisma list type (String[], etc.) */
+  isList?: boolean;
 }
 
 /** Definition of a composite index on a CCM Feedback database model. */
@@ -42,10 +44,67 @@ export interface ModelDef {
 }
 
 const _CCM_FEEDBACK_MODELS = {
+  Project: {
+    fields: {
+      id: { type: "String", isId: true, default: "cuid()" },
+      name: { type: "String", isUnique: true },
+      stagingUrl: { type: "String", default: '""' },
+      implementationWebhookUrl: { type: "String", optional: true, nativeType: "Text" },
+      implementationWebhookSecretHash: { type: "String", optional: true, nativeType: "Text" },
+      createdAt: { type: "DateTime", default: "now()" },
+      feedbacks: {
+        type: "FeedbackItem",
+        relation: { kind: "1-to-many", model: "FeedbackItem" },
+      },
+      reviewBatches: {
+        type: "ReviewBatch",
+        relation: { kind: "1-to-many", model: "ReviewBatch" },
+      },
+    },
+    indexes: [{ fields: ["name"] }],
+  },
+  ReviewBatch: {
+    fields: {
+      id: { type: "String", isId: true, default: "cuid()" },
+      projectId: { type: "String" },
+      project: {
+        type: "Project",
+        relation: {
+          kind: "many-to-1",
+          model: "Project",
+          fields: ["projectId"],
+          references: ["id"],
+          onDelete: "Cascade",
+        },
+      },
+      reviewerName: { type: "String" },
+      reviewerEmail: { type: "String", optional: true },
+      submittedAt: { type: "DateTime", default: "now()" },
+      dispatchStatus: { type: "String", default: '"pending"' },
+      dispatchAttempts: { type: "Int", default: "0" },
+      dispatchedAt: { type: "DateTime", optional: true },
+      nextAttemptAt: { type: "DateTime", optional: true },
+      dispatchLastError: { type: "String", optional: true, nativeType: "Text" },
+      canonicalBody: { type: "String", optional: true, nativeType: "Text" },
+      annotationIds: { type: "String", isList: true },
+    },
+    indexes: [{ fields: ["projectId"] }, { fields: ["dispatchStatus"] }, { fields: ["dispatchStatus", "nextAttemptAt"] }],
+  },
   FeedbackItem: {
     fields: {
       id: { type: "String", isId: true, default: "cuid()" },
       projectName: { type: "String" },
+      projectId: { type: "String", optional: true },
+      project: {
+        type: "Project",
+        relation: {
+          kind: "many-to-1",
+          model: "Project",
+          fields: ["projectId"],
+          references: ["id"],
+          onDelete: "SetNull",
+        },
+      },
       type: { type: "String" },
       message: { type: "String", nativeType: "Text" },
       status: { type: "String", default: '"open"' },
@@ -63,7 +122,11 @@ const _CCM_FEEDBACK_MODELS = {
         relation: { kind: "1-to-many", model: "FeedbackAnnotation" },
       },
     },
-    indexes: [{ fields: ["projectName"] }, { fields: ["projectName", "status", "createdAt"] }],
+    indexes: [
+      { fields: ["projectName"] },
+      { fields: ["projectName", "status", "createdAt"] },
+      { fields: ["projectId"] },
+    ],
   },
   FeedbackAnnotation: {
     fields: {
@@ -98,8 +161,11 @@ const _CCM_FEEDBACK_MODELS = {
       viewportH: { type: "Int" },
       devicePixelRatio: { type: "Float", default: "1" },
       createdAt: { type: "DateTime", default: "now()" },
+      status: { type: "String", default: '"submitted"' },
+      implementationResult: { type: "Json", optional: true },
+      implementationUpdatedAt: { type: "DateTime", optional: true },
     },
-    indexes: [{ fields: ["feedbackId"] }],
+    indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }],
   },
 } as const satisfies Record<string, ModelDef>;
 
