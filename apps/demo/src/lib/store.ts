@@ -12,8 +12,9 @@ type GlobalRefs = typeof globalThis & {
  * Resolve the demo's backing store.
  *
  * - When `DATABASE_URL` is set, instantiate a `PrismaStore` wrapping the shared
- *   Prisma client (dynamic import keeps `@prisma/client` out of the
- *   memory-only code path).
+ *   Prisma client. The Prisma singleton module (`./prisma`) is loaded lazily
+ *   via `await import()` below, so memory-only deploys never evaluate its
+ *   top-level `import { PrismaClient } from "@prisma/client"`.
  * - Otherwise, fall back to a singleton `MemoryStore` that auto-clears every
  *   10 minutes — the current demo behavior.
  *
