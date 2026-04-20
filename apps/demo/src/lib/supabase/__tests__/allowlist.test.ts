@@ -15,10 +15,7 @@ describe("parseAllowlist", () => {
   });
 
   it("splits and normalizes a comma-separated env", () => {
-    expect(parseAllowlist(" DEV@ccmdesign.ca , other@example.com ")).toEqual([
-      "dev@ccmdesign.ca",
-      "other@example.com",
-    ]);
+    expect(parseAllowlist(" DEV@ccmdesign.ca , other@example.com ")).toEqual(["dev@ccmdesign.ca", "other@example.com"]);
   });
 });
 

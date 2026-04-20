@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectStore } from "../src/project-store.js";
 import { ReviewBatchStore } from "../src/review-batch-store.js";
-import {
-  createAnnotationStatusHandler,
-  createReviewsHandler,
-} from "../src/review-handler.js";
-import { registerSigningSecret, forgetSigningSecret } from "../src/review-dispatch.js";
+import { forgetSigningSecret, registerSigningSecret } from "../src/review-dispatch.js";
+import { createAnnotationStatusHandler, createReviewsHandler } from "../src/review-handler.js";
 
 function makePrisma() {
   const projects = new Map<string, Record<string, unknown>>();
@@ -78,7 +75,9 @@ function makePrisma() {
         return ids.map((id) => annotations.get(id)).filter(Boolean);
       }),
       updateMany: vi.fn(async ({ where, data }) => {
-        const row = annotations.get(where.id) as (Record<string, unknown> & { implementationUpdatedAt: Date | null }) | undefined;
+        const row = annotations.get(where.id) as
+          | (Record<string, unknown> & { implementationUpdatedAt: Date | null })
+          | undefined;
         if (!row) return { count: 0 };
         const existing = row.implementationUpdatedAt;
         const incoming = data.implementationUpdatedAt as Date;
@@ -93,12 +92,7 @@ function makePrisma() {
   };
 }
 
-function seedAnnotation(
-  prisma: ReturnType<typeof makePrisma>,
-  id: string,
-  projectId: string,
-  projectName: string,
-) {
+function seedAnnotation(prisma: ReturnType<typeof makePrisma>, id: string, projectId: string, projectName: string) {
   prisma._annotations.set(id, {
     id,
     feedbackId: `fb_${id}`,

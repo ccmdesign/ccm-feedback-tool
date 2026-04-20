@@ -16,7 +16,7 @@ function makeMockPrisma(initialFeedbacks) {
     _projects: projects,
     feedbackItem: {
       async findMany({ distinct }) {
-        if (distinct && distinct.includes("projectName")) {
+        if (distinct?.includes("projectName")) {
           const seen = new Set();
           const out = [];
           for (const f of feedbacks) {

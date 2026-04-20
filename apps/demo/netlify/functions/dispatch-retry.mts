@@ -4,18 +4,14 @@
  * Picks up ReviewBatch rows in `retrying` state whose `nextAttemptAt`
  * has elapsed and re-dispatches them via the shared adapter helper.
  *
- * Configured in netlify.toml under `[functions."dispatch-retry"]` with a
- * `schedule = "*/5 * * * *"` cron expression. Netlify runs this in the
+ * Configured in netlify.toml under the [functions] block with a cron
+ * expression equivalent to "every 5 minutes". Netlify runs this in the
  * same Lambda runtime as the Next.js routes.
  */
 
+import { ProjectStore, processPendingReviewBatches, ReviewBatchStore } from "@ccm-feedback/adapter-prisma";
 import type { Config, Context } from "@netlify/functions";
 import { PrismaClient } from "@prisma/client";
-import {
-  ProjectStore,
-  ReviewBatchStore,
-  processPendingReviewBatches,
-} from "@ccm-feedback/adapter-prisma";
 
 export default async (_req: Request, _ctx: Context): Promise<Response> => {
   if (!process.env.DATABASE_URL) {
@@ -35,10 +31,9 @@ export default async (_req: Request, _ctx: Context): Promise<Response> => {
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("[dispatch-retry] failed:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-      { status: 500 },
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
+      status: 500,
+    });
   } finally {
     await prisma.$disconnect();
   }

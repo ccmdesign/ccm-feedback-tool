@@ -22,10 +22,7 @@ export const projectUpdateSchema = z
     stagingUrl: trimmedUrl.optional(),
     implementationWebhookUrl: trimmedUrl.optional().nullable(),
   })
-  .refine(
-    (val) => Object.keys(val).length > 0,
-    { message: "At least one field must be provided" },
-  );
+  .refine((val) => Object.keys(val).length > 0, { message: "At least one field must be provided" });
 
 export const projectIdSchema = z.object({ id: z.string().min(1) });
 

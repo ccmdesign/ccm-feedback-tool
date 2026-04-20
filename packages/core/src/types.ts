@@ -322,11 +322,7 @@ export interface FeedbackPayload {
  * projects are persistent configuration, not ephemeral widget state.
  */
 export interface CcmProjectStore {
-  createProject(input: {
-    name: string;
-    stagingUrl: string;
-    implementationWebhookUrl?: string | null;
-  }): Promise<{
+  createProject(input: { name: string; stagingUrl: string; implementationWebhookUrl?: string | null }): Promise<{
     id: string;
     name: string;
     stagingUrl: string;
@@ -335,14 +331,16 @@ export interface CcmProjectStore {
     /** Plaintext secret — shown exactly once. */
     secret: string;
   }>;
-  listProjects(): Promise<Array<{
-    id: string;
-    name: string;
-    stagingUrl: string;
-    implementationWebhookUrl: string | null;
-    hasSecret: boolean;
-    createdAt: Date;
-  }>>;
+  listProjects(): Promise<
+    Array<{
+      id: string;
+      name: string;
+      stagingUrl: string;
+      implementationWebhookUrl: string | null;
+      hasSecret: boolean;
+      createdAt: Date;
+    }>
+  >;
   getProject(id: string): Promise<{
     id: string;
     name: string;
@@ -360,11 +358,14 @@ export interface CcmProjectStore {
     implementationWebhookSecretHash: string | null;
     createdAt: Date;
   } | null>;
-  updateProject(id: string, patch: {
-    name?: string;
-    stagingUrl?: string;
-    implementationWebhookUrl?: string | null;
-  }): Promise<void>;
+  updateProject(
+    id: string,
+    patch: {
+      name?: string;
+      stagingUrl?: string;
+      implementationWebhookUrl?: string | null;
+    },
+  ): Promise<void>;
   rotateProjectSecret(id: string): Promise<{ secret: string }>;
   verifyProjectSecret(id: string, plaintext: string): Promise<boolean>;
   deleteProject(id: string): Promise<void>;
@@ -403,21 +404,26 @@ export interface CcmReviewBatchStore {
     canonicalBody: string | null;
     annotationIds: string[];
   } | null>;
-  listRetryingReviewBatches(limit: number): Promise<Array<{
-    id: string;
-    projectId: string;
-    submittedAt: Date;
-    dispatchAttempts: number;
-    nextAttemptAt: Date | null;
-  }>>;
-  updateReviewBatchDispatch(id: string, patch: {
-    dispatchStatus?: string;
-    dispatchAttempts?: number;
-    dispatchedAt?: Date | null;
-    nextAttemptAt?: Date | null;
-    dispatchLastError?: string | null;
-    canonicalBody?: string | null;
-  }): Promise<void>;
+  listRetryingReviewBatches(limit: number): Promise<
+    Array<{
+      id: string;
+      projectId: string;
+      submittedAt: Date;
+      dispatchAttempts: number;
+      nextAttemptAt: Date | null;
+    }>
+  >;
+  updateReviewBatchDispatch(
+    id: string,
+    patch: {
+      dispatchStatus?: string;
+      dispatchAttempts?: number;
+      dispatchedAt?: Date | null;
+      nextAttemptAt?: Date | null;
+      dispatchLastError?: string | null;
+      canonicalBody?: string | null;
+    },
+  ): Promise<void>;
   /** Update the per-annotation status record; "newer updated_at wins" semantics. */
   applyAnnotationStatus(input: {
     annotationId: string;
@@ -426,34 +432,36 @@ export interface CcmReviewBatchStore {
     updatedAt: Date;
   }): Promise<{ applied: boolean }>;
   /** Load annotations by id with the parent feedback for payload assembly. */
-  getAnnotationsForDispatch(ids: string[]): Promise<Array<{
-    id: string;
-    feedbackId: string;
-    feedbackProjectId: string | null;
-    feedbackProjectName: string;
-    feedbackType: string;
-    feedbackMessage: string;
-    feedbackUrl: string;
-    cssSelector: string;
-    xpath: string;
-    textSnippet: string;
-    elementTag: string;
-    elementId: string | null;
-    textPrefix: string;
-    textSuffix: string;
-    fingerprint: string;
-    neighborText: string;
-    xPct: number;
-    yPct: number;
-    wPct: number;
-    hPct: number;
-    scrollX: number;
-    scrollY: number;
-    viewportW: number;
-    viewportH: number;
-    devicePixelRatio: number;
-    createdAt: Date;
-  }>>;
+  getAnnotationsForDispatch(ids: string[]): Promise<
+    Array<{
+      id: string;
+      feedbackId: string;
+      feedbackProjectId: string | null;
+      feedbackProjectName: string;
+      feedbackType: string;
+      feedbackMessage: string;
+      feedbackUrl: string;
+      cssSelector: string;
+      xpath: string;
+      textSnippet: string;
+      elementTag: string;
+      elementId: string | null;
+      textPrefix: string;
+      textSuffix: string;
+      fingerprint: string;
+      neighborText: string;
+      xPct: number;
+      yPct: number;
+      wPct: number;
+      hPct: number;
+      scrollX: number;
+      scrollY: number;
+      viewportW: number;
+      viewportH: number;
+      devicePixelRatio: number;
+      createdAt: Date;
+    }>
+  >;
 }
 
 // ---------------------------------------------------------------------------

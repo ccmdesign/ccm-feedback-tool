@@ -6,13 +6,7 @@
  */
 
 /** Known annotation statuses — implementation agents may send custom strings. */
-export const KNOWN_ANNOTATION_STATUSES = [
-  "submitted",
-  "acknowledged",
-  "applied",
-  "escalated",
-  "rejected",
-] as const;
+export const KNOWN_ANNOTATION_STATUSES = ["submitted", "acknowledged", "applied", "escalated", "rejected"] as const;
 
 export type KnownAnnotationStatus = (typeof KNOWN_ANNOTATION_STATUSES)[number];
 

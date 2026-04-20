@@ -1,11 +1,7 @@
-import {
-  forgetSigningSecret,
-  projectUpdateSchema,
-  StoreNotFoundError,
-} from "@ccm-feedback/adapter-prisma";
+import { forgetSigningSecret, projectUpdateSchema, StoreNotFoundError } from "@ccm-feedback/adapter-prisma";
 import { resolveProjectStores } from "@/lib/ccm-stores";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/supabase/allowlist";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +45,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     } = {};
     if (parsed.data.name !== undefined) patch.name = parsed.data.name;
     if (parsed.data.stagingUrl !== undefined) patch.stagingUrl = parsed.data.stagingUrl;
-    if (parsed.data.implementationWebhookUrl !== undefined) patch.implementationWebhookUrl = parsed.data.implementationWebhookUrl;
+    if (parsed.data.implementationWebhookUrl !== undefined)
+      patch.implementationWebhookUrl = parsed.data.implementationWebhookUrl;
     await projectStore.updateProject(id, patch);
     return Response.json({ ok: true });
   } catch (error) {

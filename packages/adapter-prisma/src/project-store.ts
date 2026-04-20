@@ -73,11 +73,7 @@ export class ProjectStore {
     this.prisma = prisma;
   }
 
-  async createProject(input: {
-    name: string;
-    stagingUrl: string;
-    implementationWebhookUrl?: string | null;
-  }): Promise<{
+  async createProject(input: { name: string; stagingUrl: string; implementationWebhookUrl?: string | null }): Promise<{
     id: string;
     name: string;
     stagingUrl: string;
@@ -135,11 +131,14 @@ export class ProjectStore {
     return (await this.prisma.project.findUnique({ where: { id } })) as RawProject | null;
   }
 
-  async updateProject(id: string, patch: {
-    name?: string;
-    stagingUrl?: string;
-    implementationWebhookUrl?: string | null;
-  }): Promise<void> {
+  async updateProject(
+    id: string,
+    patch: {
+      name?: string;
+      stagingUrl?: string;
+      implementationWebhookUrl?: string | null;
+    },
+  ): Promise<void> {
     const data: Record<string, unknown> = {};
     if (patch.name !== undefined) data.name = patch.name;
     if (patch.stagingUrl !== undefined) data.stagingUrl = patch.stagingUrl;
@@ -166,7 +165,7 @@ export class ProjectStore {
 
   async verifyProjectSecret(id: string, plaintext: string): Promise<boolean> {
     const row = await this.getProjectWithSecret(id);
-    if (!row || !row.implementationWebhookSecretHash) return false;
+    if (!row?.implementationWebhookSecretHash) return false;
     return verifySecret(plaintext, row.implementationWebhookSecretHash);
   }
 

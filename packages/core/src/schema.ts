@@ -88,7 +88,11 @@ const _CCM_FEEDBACK_MODELS = {
       canonicalBody: { type: "String", optional: true, nativeType: "Text" },
       annotationIds: { type: "String", isList: true },
     },
-    indexes: [{ fields: ["projectId"] }, { fields: ["dispatchStatus"] }, { fields: ["dispatchStatus", "nextAttemptAt"] }],
+    indexes: [
+      { fields: ["projectId"] },
+      { fields: ["dispatchStatus"] },
+      { fields: ["dispatchStatus", "nextAttemptAt"] },
+    ],
   },
   FeedbackItem: {
     fields: {

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyWebhook } from "@ccm-feedback/core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectStore } from "../src/project-store.js";
 import { ReviewBatchStore } from "../src/review-batch-store.js";
 import {
@@ -10,28 +10,34 @@ import {
 } from "../src/review-dispatch.js";
 
 function makePrisma() {
-  const projects = new Map<string, {
-    id: string;
-    name: string;
-    stagingUrl: string;
-    implementationWebhookUrl: string | null;
-    implementationWebhookSecretHash: string | null;
-    createdAt: Date;
-  }>();
-  const batches = new Map<string, {
-    id: string;
-    projectId: string;
-    reviewerName: string;
-    reviewerEmail: string | null;
-    submittedAt: Date;
-    dispatchStatus: string;
-    dispatchAttempts: number;
-    dispatchedAt: Date | null;
-    nextAttemptAt: Date | null;
-    dispatchLastError: string | null;
-    canonicalBody: string | null;
-    annotationIds: string[];
-  }>();
+  const projects = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      stagingUrl: string;
+      implementationWebhookUrl: string | null;
+      implementationWebhookSecretHash: string | null;
+      createdAt: Date;
+    }
+  >();
+  const batches = new Map<
+    string,
+    {
+      id: string;
+      projectId: string;
+      reviewerName: string;
+      reviewerEmail: string | null;
+      submittedAt: Date;
+      dispatchStatus: string;
+      dispatchAttempts: number;
+      dispatchedAt: Date | null;
+      nextAttemptAt: Date | null;
+      dispatchLastError: string | null;
+      canonicalBody: string | null;
+      annotationIds: string[];
+    }
+  >();
   const annotations = new Map<string, unknown>();
 
   let pSeq = 0;
@@ -312,9 +318,11 @@ describe("dispatchReviewBatch", () => {
       { projectStore, reviewBatchStore, deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 } },
       batch.id,
     );
-    await processPendingReviewBatches(
-      { projectStore, reviewBatchStore, deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 } },
-    );
+    await processPendingReviewBatches({
+      projectStore,
+      reviewBatchStore,
+      deps: { fetch: fetchFn as unknown as typeof fetch, rng: () => 0.5 },
+    });
     expect(firstBody).toBeDefined();
     expect(secondBody).toBeDefined();
     expect(firstBody).toBe(secondBody);

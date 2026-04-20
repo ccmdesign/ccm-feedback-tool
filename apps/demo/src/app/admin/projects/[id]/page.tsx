@@ -102,9 +102,7 @@ export default function ProjectEditPage({ params }: { params: Promise<{ id: stri
 
       {newSecret && (
         <div style={{ margin: "1rem 0", padding: "0.75rem", background: "#fffbe6", borderRadius: 6 }}>
-          <p style={{ fontSize: 14, margin: 0 }}>
-            New webhook secret — save it now, it will not be shown again.
-          </p>
+          <p style={{ fontSize: 14, margin: 0 }}>New webhook secret — save it now, it will not be shown again.</p>
           <pre
             style={{
               padding: "0.75rem",
@@ -120,14 +118,27 @@ export default function ProjectEditPage({ params }: { params: Promise<{ id: stri
           <button
             type="button"
             onClick={() => navigator.clipboard?.writeText(newSecret)}
-            style={{ padding: "0.35rem 0.75rem", background: "#0066ff", color: "#fff", border: "none", borderRadius: 4 }}
+            style={{
+              padding: "0.35rem 0.75rem",
+              background: "#0066ff",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+            }}
           >
             Copy
           </button>
           <button
             type="button"
             onClick={() => setNewSecret(null)}
-            style={{ marginLeft: "0.5rem", padding: "0.35rem 0.75rem", background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 4 }}
+            style={{
+              marginLeft: "0.5rem",
+              padding: "0.35rem 0.75rem",
+              background: "#fff",
+              color: "#333",
+              border: "1px solid #ccc",
+              borderRadius: 4,
+            }}
           >
             Dismiss
           </button>
@@ -172,7 +183,13 @@ export default function ProjectEditPage({ params }: { params: Promise<{ id: stri
             type="button"
             onClick={rotate}
             disabled={status === "rotating"}
-            style={{ padding: "0.5rem 0.75rem", background: "#fff", color: "#333", border: "1px solid #ccc", borderRadius: 4 }}
+            style={{
+              padding: "0.5rem 0.75rem",
+              background: "#fff",
+              color: "#333",
+              border: "1px solid #ccc",
+              borderRadius: 4,
+            }}
           >
             {status === "rotating" ? "Rotating…" : "Rotate secret"}
           </button>
@@ -180,7 +197,13 @@ export default function ProjectEditPage({ params }: { params: Promise<{ id: stri
             type="button"
             onClick={remove}
             disabled={status === "deleting"}
-            style={{ padding: "0.5rem 0.75rem", background: "#fff", color: "#b00020", border: "1px solid #b00020", borderRadius: 4 }}
+            style={{
+              padding: "0.5rem 0.75rem",
+              background: "#fff",
+              color: "#b00020",
+              border: "1px solid #b00020",
+              borderRadius: 4,
+            }}
           >
             {status === "deleting" ? "Deleting…" : "Delete"}
           </button>

@@ -1,11 +1,7 @@
-import {
-  forgetSigningSecret,
-  registerSigningSecret,
-  StoreNotFoundError,
-} from "@ccm-feedback/adapter-prisma";
+import { forgetSigningSecret, registerSigningSecret, StoreNotFoundError } from "@ccm-feedback/adapter-prisma";
 import { resolveProjectStores } from "@/lib/ccm-stores";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/supabase/allowlist";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

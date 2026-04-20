@@ -17,7 +17,7 @@ import { canonicalize, verifyWebhook } from "../packages/core/src/index.ts";
 
 function usage() {
   console.error(
-    "Usage: bun scripts/verify-webhook-signature.mjs <payload-file-or--> <secret> --header \"t=<ts>,v1=<hex>\"",
+    'Usage: bun scripts/verify-webhook-signature.mjs <payload-file-or--> <secret> --header "t=<ts>,v1=<hex>"',
   );
 }
 
@@ -32,16 +32,13 @@ if (!payloadArg || !secret || !header) {
   process.exit(1);
 }
 
-const raw =
-  payloadArg === "-"
-    ? await new Response(process.stdin).text()
-    : readFileSync(payloadArg, "utf8");
+const raw = payloadArg === "-" ? await new Response(process.stdin).text() : readFileSync(payloadArg, "utf8");
 
 let canonical;
 try {
   const parsed = JSON.parse(raw);
   canonical = canonicalize(parsed);
-} catch (error) {
+} catch {
   // Assume raw is already canonical JSON (e.g. captured from a webhook log).
   canonical = raw;
 }

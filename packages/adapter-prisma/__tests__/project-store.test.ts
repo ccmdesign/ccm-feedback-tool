@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ProjectStore } from "../src/project-store.js";
 import { StoreNotFoundError } from "../src/index.js";
+import { ProjectStore } from "../src/project-store.js";
 import { verifySecret } from "../src/secret.js";
 
 function makePrismaMock() {
-  const projects = new Map<string, {
-    id: string;
-    name: string;
-    stagingUrl: string;
-    implementationWebhookUrl: string | null;
-    implementationWebhookSecretHash: string | null;
-    createdAt: Date;
-  }>();
+  const projects = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      stagingUrl: string;
+      implementationWebhookUrl: string | null;
+      implementationWebhookSecretHash: string | null;
+      createdAt: Date;
+    }
+  >();
   let idSeq = 0;
 
   return {
@@ -110,14 +113,18 @@ describe("ProjectStore", () => {
     const rows = await store.listProjects();
     expect(rows.length).toBe(1);
     expect(rows[0].hasSecret).toBe(true);
-    expect((rows[0] as unknown as { implementationWebhookSecretHash?: string }).implementationWebhookSecretHash).toBeUndefined();
+    expect(
+      (rows[0] as unknown as { implementationWebhookSecretHash?: string }).implementationWebhookSecretHash,
+    ).toBeUndefined();
   });
 
   it("getProject never exposes the hash", async () => {
     const { id } = await store.createProject({ name: "g", stagingUrl: "" });
     const row = await store.getProject(id);
     expect(row).toBeDefined();
-    expect((row as unknown as { implementationWebhookSecretHash?: string }).implementationWebhookSecretHash).toBeUndefined();
+    expect(
+      (row as unknown as { implementationWebhookSecretHash?: string }).implementationWebhookSecretHash,
+    ).toBeUndefined();
     expect(row?.hasSecret).toBe(true);
   });
 

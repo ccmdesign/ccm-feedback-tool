@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { isAllowedAdminEmail } from "./lib/supabase/allowlist";
 
 /**
@@ -14,11 +14,7 @@ export async function middleware(request: NextRequest) {
 
   // Bypass for the login page and auth callback — both must be reachable while
   // signed out.
-  if (
-    pathname === "/admin/login" ||
-    pathname.startsWith("/admin/auth/") ||
-    pathname.startsWith("/admin/_next")
-  ) {
+  if (pathname === "/admin/login" || pathname.startsWith("/admin/auth/") || pathname.startsWith("/admin/_next")) {
     return NextResponse.next();
   }
 

@@ -108,13 +108,15 @@ export class ReviewBatchStore {
     return (await this.prisma.reviewBatch.findUnique({ where: { id } })) as RawReviewBatchRow | null;
   }
 
-  async listRetryingReviewBatches(limit: number): Promise<Array<{
-    id: string;
-    projectId: string;
-    submittedAt: Date;
-    dispatchAttempts: number;
-    nextAttemptAt: Date | null;
-  }>> {
+  async listRetryingReviewBatches(limit: number): Promise<
+    Array<{
+      id: string;
+      projectId: string;
+      submittedAt: Date;
+      dispatchAttempts: number;
+      nextAttemptAt: Date | null;
+    }>
+  > {
     const rows = (await this.prisma.reviewBatch.findMany({
       where: {
         dispatchStatus: "retrying",
@@ -132,14 +134,17 @@ export class ReviewBatchStore {
     }));
   }
 
-  async updateReviewBatchDispatch(id: string, patch: {
-    dispatchStatus?: string;
-    dispatchAttempts?: number;
-    dispatchedAt?: Date | null;
-    nextAttemptAt?: Date | null;
-    dispatchLastError?: string | null;
-    canonicalBody?: string | null;
-  }): Promise<void> {
+  async updateReviewBatchDispatch(
+    id: string,
+    patch: {
+      dispatchStatus?: string;
+      dispatchAttempts?: number;
+      dispatchedAt?: Date | null;
+      nextAttemptAt?: Date | null;
+      dispatchLastError?: string | null;
+      canonicalBody?: string | null;
+    },
+  ): Promise<void> {
     try {
       await this.prisma.reviewBatch.update({ where: { id }, data: patch });
     } catch (error) {
@@ -170,34 +175,36 @@ export class ReviewBatchStore {
     return { applied: count > 0 };
   }
 
-  async getAnnotationsForDispatch(ids: string[]): Promise<Array<{
-    id: string;
-    feedbackId: string;
-    feedbackProjectId: string | null;
-    feedbackProjectName: string;
-    feedbackType: string;
-    feedbackMessage: string;
-    feedbackUrl: string;
-    cssSelector: string;
-    xpath: string;
-    textSnippet: string;
-    elementTag: string;
-    elementId: string | null;
-    textPrefix: string;
-    textSuffix: string;
-    fingerprint: string;
-    neighborText: string;
-    xPct: number;
-    yPct: number;
-    wPct: number;
-    hPct: number;
-    scrollX: number;
-    scrollY: number;
-    viewportW: number;
-    viewportH: number;
-    devicePixelRatio: number;
-    createdAt: Date;
-  }>> {
+  async getAnnotationsForDispatch(ids: string[]): Promise<
+    Array<{
+      id: string;
+      feedbackId: string;
+      feedbackProjectId: string | null;
+      feedbackProjectName: string;
+      feedbackType: string;
+      feedbackMessage: string;
+      feedbackUrl: string;
+      cssSelector: string;
+      xpath: string;
+      textSnippet: string;
+      elementTag: string;
+      elementId: string | null;
+      textPrefix: string;
+      textSuffix: string;
+      fingerprint: string;
+      neighborText: string;
+      xPct: number;
+      yPct: number;
+      wPct: number;
+      hPct: number;
+      scrollX: number;
+      scrollY: number;
+      viewportW: number;
+      viewportH: number;
+      devicePixelRatio: number;
+      createdAt: Date;
+    }>
+  > {
     const rows = (await this.prisma.feedbackAnnotation.findMany({
       where: { id: { in: ids } },
       include: { feedback: true },

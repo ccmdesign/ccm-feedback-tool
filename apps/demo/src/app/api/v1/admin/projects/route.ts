@@ -1,7 +1,7 @@
 import { projectCreateSchema, registerSigningSecret } from "@ccm-feedback/adapter-prisma";
 import { resolveProjectStores } from "@/lib/ccm-stores";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isAllowedAdminEmail } from "@/lib/supabase/allowlist";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,14 +40,17 @@ export async function POST(request: Request): Promise<Response> {
     implementationWebhookUrl: parsed.data.implementationWebhookUrl ?? null,
   });
   registerSigningSecret(created.id, created.secret);
-  return Response.json({
-    project: {
-      id: created.id,
-      name: created.name,
-      stagingUrl: created.stagingUrl,
-      implementationWebhookUrl: created.implementationWebhookUrl,
-      createdAt: created.createdAt,
+  return Response.json(
+    {
+      project: {
+        id: created.id,
+        name: created.name,
+        stagingUrl: created.stagingUrl,
+        implementationWebhookUrl: created.implementationWebhookUrl,
+        createdAt: created.createdAt,
+      },
+      secret: created.secret,
     },
-    secret: created.secret,
-  }, { status: 201 });
+    { status: 201 },
+  );
 }

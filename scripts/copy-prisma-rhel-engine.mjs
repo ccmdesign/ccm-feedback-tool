@@ -6,8 +6,8 @@
 //
 // Run from the repo root as a post-build step.
 
-import { readdirSync, existsSync, copyFileSync, statSync } from "node:fs";
-import { join, basename } from "node:path";
+import { copyFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 
 const ENGINE_FILE = "libquery_engine-rhel-openssl-3.0.x.so.node";
 
@@ -48,7 +48,7 @@ function walkDirs(dir, predicate, hits = []) {
 const sources = walk("node_modules", (_, name) => name === ENGINE_FILE);
 if (sources.length === 0) {
   console.error(`[copy-prisma-rhel-engine] ${ENGINE_FILE} not found under node_modules/.`);
-  console.error("Did `prisma generate` run with binaryTargets = [\"native\", \"rhel-openssl-3.0.x\"]?");
+  console.error('Did `prisma generate` run with binaryTargets = ["native", "rhel-openssl-3.0.x"]?');
   process.exit(1);
 }
 const src = sources[0];

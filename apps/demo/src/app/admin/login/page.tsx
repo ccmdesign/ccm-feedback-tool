@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-export default function AdminLoginPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ error?: string }>;
-}) {
+export default function AdminLoginPage({ searchParams }: { searchParams?: Promise<{ error?: string }> }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -85,9 +81,7 @@ export default function AdminLoginPage({
         >
           {status === "sending" ? "Sending…" : "Send magic link"}
         </button>
-        {message && (
-          <p style={{ fontSize: 14, color: status === "error" ? "#b00020" : "#006600" }}>{message}</p>
-        )}
+        {message && <p style={{ fontSize: 14, color: status === "error" ? "#b00020" : "#006600" }}>{message}</p>}
       </form>
     </div>
   );

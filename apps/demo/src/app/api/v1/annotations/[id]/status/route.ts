@@ -8,9 +8,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { reviewBatchStore } = await resolveProjectStores();
   const handler = createAnnotationStatusHandler({
     reviewBatchStore,
-    ...(process.env.CCM_CALLBACK_BEARER_TOKEN
-      ? { callbackBearerToken: process.env.CCM_CALLBACK_BEARER_TOKEN }
-      : {}),
+    ...(process.env.CCM_CALLBACK_BEARER_TOKEN ? { callbackBearerToken: process.env.CCM_CALLBACK_BEARER_TOKEN } : {}),
   });
   const { id } = await context.params;
   return handler(request, { id });

@@ -63,7 +63,9 @@ export async function backfillProjectIds(prisma, opts = {}) {
     feedbacksUpdated += count;
   }
 
-  log(`[backfill] projectsCreated=${projectsCreated} projectsTotal=${projectNames.length} feedbacksUpdated=${feedbacksUpdated}`);
+  log(
+    `[backfill] projectsCreated=${projectsCreated} projectsTotal=${projectNames.length} feedbacksUpdated=${feedbacksUpdated}`,
+  );
   return {
     projectsCreated,
     projectsTotal: projectNames.length,

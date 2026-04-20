@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsIndexPage() {
-  let projects: Awaited<ReturnType<Awaited<ReturnType<typeof resolveProjectStores>>["projectStore"]["listProjects"]>> = [];
+  let projects: Awaited<ReturnType<Awaited<ReturnType<typeof resolveProjectStores>>["projectStore"]["listProjects"]>> =
+    [];
   let error: string | null = null;
   try {
     const { projectStore } = await resolveProjectStores();

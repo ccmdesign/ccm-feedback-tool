@@ -14,12 +14,12 @@ import {
   backoffDelay,
   buildWebhookPayload,
   canonicalize,
+  StoreNotFoundError,
   shouldStopRetry,
   signWebhook,
-  StoreNotFoundError,
 } from "@ccm-feedback/core";
-import { ReviewBatchStore, type ReviewBatchPrismaClient } from "./review-batch-store.js";
-import { ProjectStore } from "./project-store.js";
+import type { ProjectStore } from "./project-store.js";
+import type { ReviewBatchPrismaClient, ReviewBatchStore } from "./review-batch-store.js";
 
 /** Outcome of a single dispatch attempt. */
 export interface DispatchOutcome {
@@ -56,10 +56,7 @@ function safeErrorMessage(error: unknown): string {
 /**
  * Dispatch a single ReviewBatch by id. Updates the row to reflect the outcome.
  */
-export async function dispatchReviewBatch(
-  ctx: DispatchContext,
-  batchId: string,
-): Promise<DispatchOutcome> {
+export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string): Promise<DispatchOutcome> {
   const batch = await ctx.reviewBatchStore.getReviewBatch(batchId);
   if (!batch) throw new StoreNotFoundError("ReviewBatch not found");
 
@@ -221,9 +218,7 @@ async function handleFailure(
     });
     return { batchId, dispatchStatus: "failed", dispatchAttempts: attempts, error: errorText };
   }
-  const delay = ctx.deps?.rng
-    ? backoffDelay(attempts, { rng: ctx.deps.rng })
-    : backoffDelay(attempts);
+  const delay = ctx.deps?.rng ? backoffDelay(attempts, { rng: ctx.deps.rng }) : backoffDelay(attempts);
   const next = new Date(now.getTime() + delay * 1000);
   await ctx.reviewBatchStore.updateReviewBatchDispatch(batchId, {
     dispatchStatus: "retrying",
