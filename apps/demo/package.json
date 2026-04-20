@@ -15,6 +15,7 @@
     "@ccm-feedback/adapter-memory": "workspace:*",
     "@ccm-feedback/adapter-prisma": "workspace:*",
     "@ccm-feedback/widget": "workspace:*",
+    "@netlify/functions": "^2.8.0",
     "@prisma/client": "^6.0.0",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.49.0",

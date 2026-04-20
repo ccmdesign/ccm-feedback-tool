@@ -11,6 +11,7 @@ export default defineConfig({
       "prisma/__tests__/**/*.test.mjs",
       "apps/**/__tests__/**/*.test.ts",
       "apps/**/src/**/__tests__/**/*.test.ts",
+      "apps/**/netlify/functions/__tests__/**/*.test.ts",
       "scripts/__tests__/**/*.test.mjs",
     ],
     coverage: {
