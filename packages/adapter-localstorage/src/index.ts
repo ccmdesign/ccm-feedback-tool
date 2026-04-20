@@ -5,40 +5,40 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
-  type SitepingStore,
+  type CcmFeedbackStore,
   StoreNotFoundError,
-} from "@siteping/core";
+} from "@ccm-feedback/core";
 
-export type { SitepingStore } from "@siteping/core";
-export { StoreDuplicateError, StoreNotFoundError } from "@siteping/core";
+export type { CcmFeedbackStore } from "@ccm-feedback/core";
+export { StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
 
-const DEFAULT_KEY = "siteping_feedbacks";
+const DEFAULT_KEY = "ccm_feedback_items";
 
 export interface LocalStorageStoreOptions {
-  /** localStorage key prefix — defaults to `'siteping_feedbacks'` */
+  /** localStorage key prefix — defaults to `'ccm_feedback_items'` */
   key?: string;
 }
 
 /**
- * Client-side `SitepingStore` implementation backed by `localStorage`.
+ * Client-side `CcmFeedbackStore` implementation backed by `localStorage`.
  *
  * Designed for demos, prototyping, and static sites that don't need a server.
  * Data persists across page reloads but is scoped to the current origin.
  *
  * @example
  * ```ts
- * import { initSiteping } from '@siteping/widget'
- * import { LocalStorageStore } from '@siteping/adapter-localstorage'
+ * import { initCcmFeedback } from '@ccm-feedback/widget'
+ * import { LocalStorageStore } from '@ccm-feedback/adapter-localstorage'
  *
  * const store = new LocalStorageStore()
  *
- * initSiteping({
+ * initCcmFeedback({
  *   store,
  *   projectName: 'my-demo',
  * })
  * ```
  */
-export class LocalStorageStore implements SitepingStore {
+export class LocalStorageStore implements CcmFeedbackStore {
   private readonly key: string;
 
   constructor(options?: LocalStorageStoreOptions) {
@@ -77,7 +77,7 @@ export class LocalStorageStore implements SitepingStore {
   }
 
   // ---------------------------------------------------------------------------
-  // SitepingStore implementation
+  // CcmFeedbackStore implementation
   // ---------------------------------------------------------------------------
 
   async createFeedback(data: FeedbackCreateInput): Promise<FeedbackRecord> {

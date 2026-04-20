@@ -1,9 +1,9 @@
-import { testSitepingStore } from "@siteping/core/testing";
+import { testCcmFeedbackStore } from "@ccm-feedback/core/testing";
 import { describe, expect, it } from "vitest";
 import { MemoryStore } from "../src/index.js";
 
-// Run the full SitepingStore conformance suite
-testSitepingStore(() => new MemoryStore());
+// Run the full CcmFeedbackStore conformance suite
+testCcmFeedbackStore(() => new MemoryStore());
 
 // ---------------------------------------------------------------------------
 // MemoryStore-specific tests

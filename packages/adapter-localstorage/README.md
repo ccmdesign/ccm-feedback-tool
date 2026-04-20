@@ -1,16 +1,16 @@
-[![npm version](https://img.shields.io/npm/v/@siteping/adapter-localstorage)](https://www.npmjs.com/package/@siteping/adapter-localstorage)
+[![npm version](https://img.shields.io/npm/v/@ccm-feedback/adapter-localstorage)](https://www.npmjs.com/package/@ccm-feedback/adapter-localstorage)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
 
-# @siteping/adapter-localstorage
+# @ccm-feedback/adapter-localstorage
 
-Client-side localStorage adapter for [Siteping](https://github.com/NeosiaNexus/SitePing) — feedback persistence without a server.
+Client-side localStorage adapter for [CCM Feedback](https://github.com/ccmdesign/ccm-feedback-tool) — feedback persistence without a server.
 
-Part of the [@siteping](https://github.com/NeosiaNexus/SitePing) monorepo.
+Part of the [@ccm-feedback](https://github.com/ccmdesign/ccm-feedback-tool) monorepo.
 
 ## Install
 
 ```bash
-npm install @siteping/adapter-localstorage
+npm install @ccm-feedback/adapter-localstorage
 ```
 
 ## Usage
@@ -18,12 +18,12 @@ npm install @siteping/adapter-localstorage
 Pass the store directly to the widget — no server needed:
 
 ```ts
-import { initSiteping } from '@siteping/widget'
-import { LocalStorageStore } from '@siteping/adapter-localstorage'
+import { initCcmFeedback } from '@ccm-feedback/widget'
+import { LocalStorageStore } from '@ccm-feedback/adapter-localstorage'
 
 const store = new LocalStorageStore()
 
-initSiteping({
+initCcmFeedback({
   store,
   projectName: 'my-project',
 })
@@ -37,7 +37,7 @@ Feedback persists across page reloads via `localStorage`. Data is scoped to the 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `key` | `string` | `'siteping_feedbacks'` | localStorage key for data persistence |
+| `key` | `string` | `'ccm_feedback_items'` | localStorage key for data persistence |
 
 ### `store.clear()`
 
@@ -59,11 +59,13 @@ Remove all data from localStorage for this store key.
 
 | Package | Description |
 |---------|-------------|
-| [`@siteping/widget`](https://www.npmjs.com/package/@siteping/widget) | Browser feedback widget |
-| [`@siteping/adapter-prisma`](https://www.npmjs.com/package/@siteping/adapter-prisma) | Server-side Prisma adapter |
-| [`@siteping/adapter-memory`](https://www.npmjs.com/package/@siteping/adapter-memory) | In-memory adapter (testing, demos) |
-| [`@siteping/cli`](https://www.npmjs.com/package/@siteping/cli) | CLI for project setup |
+| [`@ccm-feedback/widget`](https://www.npmjs.com/package/@ccm-feedback/widget) | Browser feedback widget |
+| [`@ccm-feedback/adapter-prisma`](https://www.npmjs.com/package/@ccm-feedback/adapter-prisma) | Server-side Prisma adapter |
+| [`@ccm-feedback/adapter-memory`](https://www.npmjs.com/package/@ccm-feedback/adapter-memory) | In-memory adapter (testing, demos) |
+| [`@ccm-feedback/cli`](https://www.npmjs.com/package/@ccm-feedback/cli) | CLI for project setup |
 
 ## License
 
-[MIT](https://github.com/NeosiaNexus/SitePing/blob/main/LICENSE)
+[MIT](https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE)
+
+Based on [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus — MIT licensed.

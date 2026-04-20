@@ -5,15 +5,15 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
-  type SitepingStore,
+  type CcmFeedbackStore,
   StoreNotFoundError,
-} from "@siteping/core";
+} from "@ccm-feedback/core";
 
-export type { SitepingStore } from "@siteping/core";
-export { StoreDuplicateError, StoreNotFoundError } from "@siteping/core";
+export type { CcmFeedbackStore } from "@ccm-feedback/core";
+export { StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
 
 /**
- * In-memory `SitepingStore` implementation.
+ * In-memory `CcmFeedbackStore` implementation.
  *
  * Zero dependencies, works in any JS environment (Node, Bun, Deno, browser,
  * Cloudflare Workers). Data lives in a plain array — lost on process restart.
@@ -25,13 +25,13 @@ export { StoreDuplicateError, StoreNotFoundError } from "@siteping/core";
  *
  * @example
  * ```ts
- * import { MemoryStore } from '@siteping/adapter-memory'
+ * import { MemoryStore } from '@ccm-feedback/adapter-memory'
  *
  * const store = new MemoryStore()
- * // Pass to createSitepingHandler({ store }) or initSiteping({ store })
+ * // Pass to createCcmFeedbackHandler({ store }) or initCcmFeedback({ store })
  * ```
  */
-export class MemoryStore implements SitepingStore {
+export class MemoryStore implements CcmFeedbackStore {
   private feedbacks: FeedbackRecord[] = [];
   private idCounter = 1;
 
