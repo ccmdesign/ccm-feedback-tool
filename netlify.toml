@@ -6,10 +6,18 @@
 # `prisma generate` runs every build (not just once) — without it the Prisma
 # client ships default stubs and the first Prisma-mode request crashes with
 # "@prisma/client did not initialize yet".
+#
+# After the Next.js build, we copy the Prisma Linux query-engine binary into
+# `.next/standalone`. Next.js's file tracer resolves Prisma's native addon
+# relative to `process.platform` at build time (darwin on the CI builder) and
+# leaves the rhel `.so.node` out of the serverless payload. Without this copy,
+# the deployed function crashes with "Query Engine for rhel-openssl-3.0.x could
+# not be located" even though `binaryTargets` generated both binaries. See
+# `CCM-277` Netlify logs for the original failure trace.
 
 [build]
 base    = "apps/demo"
-command = "cd ../.. && bun install --frozen-lockfile && bunx prisma generate --schema=prisma/schema.prisma && bun run build --filter=@ccm-feedback/demo"
+command = "cd ../.. && bun install --frozen-lockfile && bunx prisma generate --schema=prisma/schema.prisma && bun run build --filter=@ccm-feedback/demo && node scripts/copy-prisma-rhel-engine.mjs"
 publish = ".next"
 
 # `@netlify/plugin-nextjs` is pinned via a root-level devDependency on
