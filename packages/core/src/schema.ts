@@ -97,6 +97,7 @@ const _CCM_FEEDBACK_MODELS = {
       projectId: { type: "String", optional: true },
       project: {
         type: "Project",
+        optional: true,
         relation: {
           kind: "many-to-1",
           model: "Project",
