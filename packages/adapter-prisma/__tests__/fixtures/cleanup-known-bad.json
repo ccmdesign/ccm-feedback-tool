@@ -1,0 +1,26 @@
+[
+  {
+    "name": "filler words and missing punctuation",
+    "raw": "um so like the button doesn't really work you know",
+    "projectName": "demo",
+    "selector": "button.submit",
+    "surroundingText": "Submit your review",
+    "expected": "The button doesn't really work."
+  },
+  {
+    "name": "obvious misrecognition corrected by selector context",
+    "raw": "uh the butan is too small",
+    "projectName": "demo",
+    "selector": "button.cta",
+    "surroundingText": "Call to action",
+    "expected": "The button is too small."
+  },
+  {
+    "name": "multi-sentence transcript with duplicated word",
+    "raw": "the the header is misaligned also the the spacing is off",
+    "projectName": "demo",
+    "selector": "header.site",
+    "surroundingText": "Site header",
+    "expected": "The header is misaligned. Also the spacing is off."
+  }
+]

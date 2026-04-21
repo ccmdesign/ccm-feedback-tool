@@ -90,6 +90,55 @@ If Playwright browsers aren't installed: `bunx playwright install`.
 
 The canonical model definitions live in `packages/core/src/schema.ts` as `CCM_FEEDBACK_MODELS`. The hand-written `prisma/schema.prisma` mirrors this file field-for-field. If you change one, update the other and run the CLI's `sync` or regenerate the root schema.
 
+## 7. Voice comment pipeline (CCM-284)
+
+The demo exposes a `POST /api/v1/transcribe` route that runs Whisper + a cleanup LLM (OpenRouter/DeepSeek). The widget's popup composer ships a mic button when the transcribe endpoint is reachable and the browser supports `MediaRecorder`.
+
+### Required env vars
+
+```bash
+# Whisper
+OPENAI_API_KEY="<openai-api-key>"
+
+# Cleanup via OpenRouter (OpenAI-compatible SDK; baseURL is rewired internally)
+OPENROUTER_API_KEY="<openrouter-api-key>"
+
+# Optional: pin a specific cleanup model slug. OpenRouter rotates DeepSeek
+# slugs periodically. Default is "deepseek/deepseek-chat-v3.1:free".
+CCM_CLEANUP_MODEL="deepseek/deepseek-chat-v3.1:free"
+```
+
+### Optional: persist raw audio to Supabase Storage
+
+Default behaviour is to skip audio persistence. Opt in per-deployment:
+
+```bash
+CCM_FEEDBACK_STORE_AUDIO="true"
+SUPABASE_AUDIO_BUCKET="audio"  # bucket must exist and be publicly readable
+```
+
+When enabled, `/api/v1/transcribe` uploads the raw blob to `audio/<project_id>/<uuid>.<ext>` via the service-role client and returns `audio_url` on the response + on the outbound `§6.1` webhook payload. When unset, `audio_url` is absent everywhere.
+
+### Live-LLM cleanup smoke test (opt-in)
+
+The cleanup prompt lives in `packages/adapter-prisma/src/transcribe-clients.ts` (`CLEANUP_SYSTEM_PROMPT`). The regression test `packages/adapter-prisma/__tests__/cleanup-prompt.test.ts` has two tiers:
+
+- **Message construction** — runs in CI by default (no network).
+- **Live OpenRouter call** — opt in via `CCM_TEST_LIVE_LLM=1 OPENROUTER_API_KEY=... bun run test:run`. Runs each fixture from `__tests__/fixtures/cleanup-known-bad.json` against the real cleanup model.
+
+Live tier is opt-in because CI should stay hermetic.
+
+### Manual smoke
+
+```bash
+curl -F audio=@fixture.webm \
+     -F projectName=demo \
+     -F selector="button.submit" \
+     -F surroundingText="Submit review" \
+     http://localhost:3000/api/v1/transcribe
+# → { "cleaned_text": "...", "raw_text": "...", "audio_url": "..." }
+```
+
 ## Troubleshooting
 
 ### Widget re-prompts for name/email after the rebrand

@@ -131,6 +131,7 @@ export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string)
         viewportW: ann.viewportW,
         viewportH: ann.viewportH,
         devicePixelRatio: ann.devicePixelRatio,
+        audioUrl: ann.audioUrl ?? null,
       })),
     });
     canonicalBody = canonicalize(payload);

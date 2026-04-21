@@ -76,4 +76,25 @@ describe("buildWebhookPayload", () => {
     const p = buildWebhookPayload({ ...BASE_INPUT, annotations: [ann] });
     expect(p.annotations[0].anchor.element_id).toBeUndefined();
   });
+
+  // CCM-284 — audio_url is absent on annotations without audioUrl
+  it("omits audio_url when audioUrl is not provided on the input", () => {
+    const p = buildWebhookPayload(BASE_INPUT);
+    expect(p.annotations[0].audio_url).toBeUndefined();
+    expect("audio_url" in p.annotations[0]).toBe(false);
+  });
+
+  // CCM-284 — audio_url is propagated when audioUrl is provided
+  it("includes audio_url when audioUrl is provided on the annotation", () => {
+    const ann = { ...BASE_INPUT.annotations[0], audioUrl: "https://storage.example.com/a/1.webm" };
+    const p = buildWebhookPayload({ ...BASE_INPUT, annotations: [ann] });
+    expect(p.annotations[0].audio_url).toBe("https://storage.example.com/a/1.webm");
+  });
+
+  // CCM-284 — null audioUrl is treated as absent (no null leaks to wire payload)
+  it("omits audio_url when audioUrl is null", () => {
+    const ann = { ...BASE_INPUT.annotations[0], audioUrl: null };
+    const p = buildWebhookPayload({ ...BASE_INPUT, annotations: [ann] });
+    expect(p.annotations[0].audio_url).toBeUndefined();
+  });
 });

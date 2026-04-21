@@ -169,6 +169,7 @@ const _CCM_FEEDBACK_MODELS = {
       status: { type: "String", default: '"submitted"' },
       implementationResult: { type: "Json", optional: true },
       implementationUpdatedAt: { type: "DateTime", optional: true },
+      audioUrl: { type: "String", optional: true, nativeType: "Text" },
     },
     indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }],
   },

@@ -103,6 +103,7 @@ model FeedbackAnnotation {
   status                  String           @default("submitted")
   implementationResult    Json?
   implementationUpdatedAt DateTime?
+  audioUrl                String?          @db.Text
 
   @@index([feedbackId])
   @@index([status])

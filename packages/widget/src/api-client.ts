@@ -24,6 +24,17 @@ export interface WidgetClient {
     annotationIds: string[];
     reviewer?: { name: string; email?: string };
   }): Promise<{ batchId: string; dispatchStatus: string; dispatchAttempts: number }>;
+  /**
+   * CCM-284: transcribe a voice recording to cleaned comment text.
+   * HTTP clients POST multipart to `/api/v1/transcribe`; store clients throw
+   * (voice dictation requires server keys).
+   */
+  transcribe?(input: {
+    audio: Blob;
+    selector: string;
+    surroundingText: string;
+    projectName: string;
+  }): Promise<{ cleaned_text: string; raw_text: string; audio_url?: string }>;
 }
 
 const MAX_RETRIES = 3;
@@ -271,5 +282,41 @@ export class ApiClient {
       throw new Error(`Failed to submit review: ${response.status} ${text}`);
     }
     return (await response.json()) as { batchId: string; dispatchStatus: string; dispatchAttempts: number };
+  }
+
+  /**
+   * CCM-284 — upload a voice recording and receive cleaned transcript.
+   *
+   * URL derivation mirrors `submitReview`: strip `/api/feedback` from the
+   * widget endpoint and append `/api/v1/transcribe`. Non-retryable: a 5xx
+   * would still be surfaced to the user as an inline error (they can press
+   * mic again), so we use a bare `fetch` rather than `resilientFetch`.
+   */
+  async transcribe(input: {
+    audio: Blob;
+    selector: string;
+    surroundingText: string;
+    projectName: string;
+  }): Promise<{ cleaned_text: string; raw_text: string; audio_url?: string }> {
+    const base = this.endpoint.replace(/\/api\/feedback\/?$/, "");
+    const url = `${base || ""}/api/v1/transcribe`;
+    const form = new FormData();
+    form.append("audio", input.audio, "voice.webm");
+    form.append("selector", input.selector);
+    form.append("surroundingText", input.surroundingText);
+    form.append("projectName", input.projectName);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { method: "POST", body: form, signal: controller.signal });
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`Failed to transcribe: ${response.status} ${text}`);
+      }
+      return (await response.json()) as { cleaned_text: string; raw_text: string; audio_url?: string };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }
