@@ -309,6 +309,60 @@ describe("Popup — CCM-284 mic button", () => {
     popup.destroy();
   });
 
+  it("disables type-selector + submit buttons while transcription is in flight and restores them on resolve", async () => {
+    // Plan R4: "while the request is in flight, a 'Transcribing...' loading
+    // state replaces the mic; other popup interactions (type select, submit)
+    // are disabled." Use a deferred promise so we can observe the
+    // `transcribing` state before it resolves.
+    let resolveTranscribe: (value: { cleaned_text: string; raw_text: string }) => void = () => {};
+    const transcribe: PopupTranscribe = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveTranscribe = resolve;
+        }),
+    );
+    const popup = new Popup(colors, t, transcribe);
+    popup.show(makeBounds(), CONTEXT);
+    await flush();
+
+    // User picks a type + types content so submit would otherwise be enabled.
+    const questionBtn = document.querySelector<HTMLButtonElement>('button[data-type="question"]')!;
+    questionBtn.click();
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "typed before recording";
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // The submit button is the last button in the popup; its initial label is
+    // "Send" in the en locale. We pick it by position (last button) to stay
+    // locale-agnostic.
+    const allButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
+    const submitBtn = allButtons[allButtons.length - 1]!;
+    expect(submitBtn.disabled).toBe(false);
+
+    const btn = micButton()!;
+    btn.click(); // start
+    await flush();
+    btn.click(); // stop + begin transcribe (will hang until we resolve)
+    await flush();
+
+    // In-flight: type buttons + submit must all be disabled.
+    expect(btn.disabled).toBe(true);
+    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>('button[data-type]')) {
+      expect(typeBtn.disabled).toBe(true);
+    }
+    expect(submitBtn.disabled).toBe(true);
+
+    // Resolve transcribe — type buttons + submit should re-enable.
+    resolveTranscribe({ cleaned_text: "cleaned", raw_text: "raw" });
+    await flush();
+    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>('button[data-type]')) {
+      expect(typeBtn.disabled).toBe(false);
+    }
+    // Submit is re-enabled because a type is selected and the textarea has content.
+    expect(submitBtn.disabled).toBe(false);
+    popup.destroy();
+  });
+
   it("cancelling the popup releases the MediaStream tracks", async () => {
     const transcribe: PopupTranscribe = vi.fn();
     const popup = new Popup(colors, t, transcribe);

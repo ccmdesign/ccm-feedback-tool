@@ -372,6 +372,10 @@ export class Popup {
     this.recorder = null;
 
     this.setMicState("transcribing");
+    // Plan R4 — while the request is in flight, the rest of the popup must
+    // not accept input. Freeze the type-selector + submit button so the user
+    // can't ship a half-formed comment or switch type mid-request.
+    this.setPopupInteractivityDuringTranscribe(false);
     const context: PopupContext = this.currentContext ?? {
       selector: "",
       surroundingText: "",
@@ -383,8 +387,33 @@ export class Popup {
       if (result.audio_url) this.pendingAudioUrl = result.audio_url;
     } catch (error) {
       console.warn("[ccm-feedback] transcribe failed:", error);
+    } finally {
+      this.setPopupInteractivityDuringTranscribe(true);
+      this.setMicState("idle");
     }
-    this.setMicState("idle");
+  }
+
+  /**
+   * Plan R4 — during `transcribing`, disable type buttons + submit button so
+   * the in-flight request can't be raced by a click. On restore, we recompute
+   * submit enablement via `updateSubmitState()` so it reflects the (possibly
+   * now-populated) textarea.
+   */
+  private setPopupInteractivityDuringTranscribe(enabled: boolean): void {
+    const typeButtons = this.typeRow.querySelectorAll<HTMLButtonElement>("button[data-type]");
+    for (const btn of typeButtons) {
+      btn.disabled = !enabled;
+      btn.style.opacity = enabled ? "1" : "0.5";
+      btn.style.pointerEvents = enabled ? "auto" : "none";
+    }
+    if (enabled) {
+      // Recompute submit state from selectedType + textarea contents.
+      this.updateSubmitState();
+    } else {
+      this.submitBtn.disabled = true;
+      this.submitBtn.style.opacity = "0.35";
+      this.submitBtn.style.pointerEvents = "none";
+    }
   }
 
   /**
