@@ -1,13 +1,37 @@
 import type { FeedbackType } from "@ccm-feedback/core";
+import { AudioRecorder, isMediaRecorderSupported, queryMicrophonePermission } from "./audio-recorder.js";
 import { Z_INDEX_MAX } from "./constants.js";
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { TFunction } from "./i18n/index.js";
-import { ICON_BUG, ICON_CHANGE, ICON_OTHER, ICON_QUESTION } from "./icons.js";
+import { ICON_BUG, ICON_CHANGE, ICON_MIC, ICON_OTHER, ICON_QUESTION, ICON_SPINNER, ICON_STOP } from "./icons.js";
 import { getTypeBgColor, getTypeColor, type ThemeColors } from "./styles/theme.js";
+
+/** Context passed through to the transcribe round-trip (CCM-284). */
+export interface PopupContext {
+  /** CSS selector for the anchor element. */
+  selector: string;
+  /** Combined neighbor + text snippet from the anchor. */
+  surroundingText: string;
+  /** Public project name. Server may resolve to internal id. */
+  projectName: string;
+}
+
+/**
+ * Transcribe client contract. The widget owns no direct knowledge of the
+ * server URL; the popup receives a function it can call. When omitted, the
+ * mic button is still rendered but recordings can't be transcribed — the
+ * Popup constructor guards this case and hides the mic.
+ */
+export type PopupTranscribe = (input: {
+  audio: Blob;
+  context: PopupContext;
+}) => Promise<{ cleaned_text: string; raw_text: string; audio_url?: string }>;
 
 interface PopupResult {
   type: FeedbackType;
   message: string;
+  /** CCM-284 — present when the comment was dictated + storage was opted-in. */
+  audioUrl?: string;
 }
 
 interface TypeOption {
@@ -31,10 +55,21 @@ export class Popup {
   private resolve: ((result: PopupResult | null) => void) | null = null;
   private previouslyFocused: HTMLElement | null = null;
   private onKeydownTrap: ((e: KeyboardEvent) => void) | null = null;
+  private typeRow: HTMLElement;
+
+  // CCM-284 — mic state
+  private micBtn: HTMLButtonElement | null = null;
+  private recorder: AudioRecorder | null = null;
+  private micState: "hidden" | "idle" | "recording" | "transcribing" = "hidden";
+  private currentContext: PopupContext | null = null;
+  private pendingAudioUrl: string | undefined;
+  /** Textarea snapshot at recorder-start, for the merge rule. */
+  private preRecordValue = "";
 
   constructor(
     private readonly colors: ThemeColors,
     private readonly t: TFunction,
+    private readonly transcribe?: PopupTranscribe,
   ) {
     this.root = el("div", {
       style: `
@@ -68,7 +103,8 @@ export class Popup {
       { type: "bug", label: this.t("type.bug"), icon: ICON_BUG },
       { type: "other", label: this.t("type.other"), icon: ICON_OTHER },
     ];
-    const typeRow = el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;" });
+    this.typeRow = el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;" });
+    const typeRow = this.typeRow;
     for (const option of typeOptions) {
       const btn = document.createElement("button");
       btn.style.cssText = `
@@ -168,8 +204,33 @@ export class Popup {
       }
     });
 
-    // Button row
-    const btnRow = el("div", { style: "display:flex;justify-content:flex-end;gap:8px;margin-top:12px;" });
+    // Button row — mic button (if supported) sits leading, submit stays trailing.
+    const btnRow = el("div", { style: "display:flex;align-items:center;gap:8px;margin-top:12px;" });
+
+    // CCM-284 — mic affordance (hidden until show() re-evaluates support/permissions).
+    if (this.transcribe && isMediaRecorderSupported()) {
+      this.micBtn = document.createElement("button");
+      this.micBtn.type = "button";
+      this.micBtn.style.cssText = `
+        height:34px;width:34px;border-radius:9999px;
+        border:1px solid ${this.colors.border};
+        background:${this.colors.glassBg};
+        color:${this.colors.textTertiary};
+        cursor:pointer;
+        display:none;
+        align-items:center;justify-content:center;
+        transition:all 0.2s ease;
+        padding:0;
+      `;
+      this.micBtn.setAttribute("aria-label", this.t("popup.mic.record"));
+      this.micBtn.setAttribute("title", this.t("popup.mic.record"));
+      this.renderMicIcon(ICON_MIC);
+      this.micBtn.addEventListener("click", () => this.onMicClick());
+      btnRow.appendChild(this.micBtn);
+    }
+
+    // Spacer pushes cancel + submit to the right.
+    btnRow.appendChild(el("div", { style: "flex:1 1 auto;" }));
 
     const cancelBtn = document.createElement("button");
     cancelBtn.style.cssText = `
@@ -207,24 +268,184 @@ export class Popup {
     btnRow.appendChild(cancelBtn);
     btnRow.appendChild(this.submitBtn);
 
-    this.root.appendChild(typeRow);
+    this.root.appendChild(this.typeRow);
     this.root.appendChild(this.textarea);
     this.root.appendChild(hint);
     this.root.appendChild(btnRow);
     document.body.appendChild(this.root);
   }
 
+  /** CCM-284 — render the mic button's SVG child (replaces existing). */
+  private renderMicIcon(svg: string): void {
+    if (!this.micBtn) return;
+    this.micBtn.textContent = "";
+    const icon = parseSvg(svg);
+    icon.setAttribute("style", "width:16px;height:16px;");
+    this.micBtn.appendChild(icon);
+  }
+
+  /** Apply the visual + ARIA state for the mic button. */
+  private setMicState(next: "hidden" | "idle" | "recording" | "transcribing"): void {
+    this.micState = next;
+    if (!this.micBtn) return;
+    switch (next) {
+      case "hidden":
+        this.micBtn.style.display = "none";
+        break;
+      case "idle":
+        this.micBtn.style.display = "inline-flex";
+        this.micBtn.disabled = false;
+        this.micBtn.style.background = this.colors.glassBg;
+        this.micBtn.style.color = this.colors.textTertiary;
+        this.micBtn.style.borderColor = this.colors.border;
+        this.micBtn.setAttribute("aria-label", this.t("popup.mic.record"));
+        this.micBtn.setAttribute("title", this.t("popup.mic.record"));
+        this.renderMicIcon(ICON_MIC);
+        break;
+      case "recording":
+        this.micBtn.style.display = "inline-flex";
+        this.micBtn.disabled = false;
+        this.micBtn.style.background = this.colors.typeBugBg;
+        this.micBtn.style.color = this.colors.typeBug;
+        this.micBtn.style.borderColor = this.colors.typeBug;
+        this.micBtn.setAttribute("aria-label", this.t("popup.mic.stop"));
+        this.micBtn.setAttribute("title", this.t("popup.mic.stop"));
+        this.renderMicIcon(ICON_STOP);
+        break;
+      case "transcribing":
+        this.micBtn.style.display = "inline-flex";
+        this.micBtn.disabled = true;
+        this.micBtn.style.background = this.colors.glassBg;
+        this.micBtn.style.color = this.colors.accent;
+        this.micBtn.style.borderColor = this.colors.accent;
+        this.micBtn.setAttribute("aria-label", this.t("popup.mic.transcribing"));
+        this.micBtn.setAttribute("title", this.t("popup.mic.transcribing"));
+        this.renderMicIcon(ICON_SPINNER);
+        break;
+    }
+  }
+
+  /** Remove the mic button permanently for this popup lifetime (permission denied). */
+  private hideMicForever(): void {
+    if (!this.micBtn) return;
+    this.micBtn.style.display = "none";
+    this.micState = "hidden";
+  }
+
+  private async onMicClick(): Promise<void> {
+    if (!this.transcribe || !this.micBtn) return;
+    if (this.micState === "recording") {
+      // Second click → stop + transcribe.
+      await this.stopAndTranscribe();
+      return;
+    }
+    if (this.micState !== "idle") return;
+
+    // Snapshot textarea so we can apply the merge rule later.
+    this.preRecordValue = this.textarea.value;
+
+    this.recorder = new AudioRecorder();
+    try {
+      await this.recorder.start();
+    } catch (error) {
+      // Classic permission denied: hide the button and leave typed comments functional.
+      const err = error instanceof Error ? error : new Error(String(error));
+      if (err.name === "NotAllowedError" || /denied/i.test(err.message)) {
+        this.hideMicForever();
+        return;
+      }
+      console.warn("[ccm-feedback] mic start failed:", err);
+      this.hideMicForever();
+      return;
+    }
+    this.setMicState("recording");
+  }
+
+  private async stopAndTranscribe(): Promise<void> {
+    if (!this.recorder || !this.transcribe) return;
+    let audio: Blob;
+    try {
+      audio = await this.recorder.stop();
+    } catch (error) {
+      console.warn("[ccm-feedback] mic stop failed:", error);
+      this.setMicState("idle");
+      return;
+    }
+    this.recorder = null;
+
+    this.setMicState("transcribing");
+    const context: PopupContext = this.currentContext ?? {
+      selector: "",
+      surroundingText: "",
+      projectName: "",
+    };
+    try {
+      const result = await this.transcribe({ audio, context });
+      this.applyTranscription(result.cleaned_text);
+      if (result.audio_url) this.pendingAudioUrl = result.audio_url;
+    } catch (error) {
+      console.warn("[ccm-feedback] transcribe failed:", error);
+    }
+    this.setMicState("idle");
+  }
+
+  /**
+   * Merge-rule insertion: if the textarea is unchanged since we started
+   * recording, replace its value. Otherwise, append with a leading space so
+   * mid-recording typing is preserved.
+   */
+  private applyTranscription(cleaned: string): void {
+    const text = (cleaned ?? "").trim();
+    if (!text) return;
+    const current = this.textarea.value;
+    let next: string;
+    if (current === this.preRecordValue) {
+      next = text;
+    } else if (current.length === 0) {
+      next = text;
+    } else {
+      const needsSpace = !/\s$/.test(current);
+      next = `${current}${needsSpace ? " " : ""}${text}`;
+    }
+    this.textarea.value = next;
+    // Move caret to end and re-run submit-state compute.
+    this.textarea.setSelectionRange(next.length, next.length);
+    this.textarea.focus();
+    this.textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   /**
    * Show the popup near a drawn rectangle and return the user's input.
    * Returns null if cancelled.
+   *
+   * CCM-284 — when `context` is provided and the browser + permissions
+   * allow it, the mic button is enabled and recordings are transcribed
+   * via the `transcribe` callback.
    */
-  show(rectBounds: DOMRect): Promise<PopupResult | null> {
+  show(rectBounds: DOMRect, context?: PopupContext): Promise<PopupResult | null> {
+    this.currentContext = context ?? null;
+    this.pendingAudioUrl = undefined;
+    this.preRecordValue = "";
     return new Promise((resolve) => {
       this.resolve = resolve;
       this.selectedType = null;
       this.textarea.value = "";
       this.updateSubmitState();
       this.resetTypeButtons();
+
+      // Evaluate mic availability per-show so permission changes between
+      // widget opens are respected.
+      if (this.micBtn && this.transcribe && context) {
+        void queryMicrophonePermission().then((state) => {
+          if (state === "denied") {
+            this.setMicState("hidden");
+          } else {
+            this.setMicState("idle");
+          }
+        });
+      } else if (this.micBtn) {
+        this.setMicState("hidden");
+      }
 
       // Save focus to restore on close
       this.previouslyFocused = document.activeElement as HTMLElement | null;
@@ -325,15 +546,31 @@ export class Popup {
 
   private submit(): void {
     if (!this.selectedType || !this.textarea.value.trim()) return;
-    this.resolve?.({ type: this.selectedType, message: this.textarea.value.trim() });
+    this.releaseRecorder();
+    const result: PopupResult = {
+      type: this.selectedType,
+      message: this.textarea.value.trim(),
+      ...(this.pendingAudioUrl ? { audioUrl: this.pendingAudioUrl } : {}),
+    };
+    this.resolve?.(result);
     this.resolve = null;
     this.hideElement();
   }
 
   private cancel(): void {
+    this.releaseRecorder();
     this.resolve?.(null);
     this.resolve = null;
     this.hideElement();
+  }
+
+  /** Release any active recorder and stream tracks. Called on every exit path. */
+  private releaseRecorder(): void {
+    if (this.recorder) {
+      this.recorder.cancel();
+      this.recorder = null;
+    }
+    if (this.micState !== "hidden") this.setMicState("idle");
   }
 
   private hideElement(): void {
@@ -353,6 +590,7 @@ export class Popup {
   }
 
   destroy(): void {
+    this.releaseRecorder();
     this.root.remove();
   }
 }

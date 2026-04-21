@@ -407,7 +407,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 6: Widget composer — mic button + MediaRecorder + permission handling**
+- [x] **Unit 6: Widget composer — mic button + MediaRecorder + permission handling**
 
 **Goal:** Ship the mic affordance inside the popup composer with clean permission-denied behavior.
 

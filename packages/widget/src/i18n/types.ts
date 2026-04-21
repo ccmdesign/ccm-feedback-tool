@@ -54,6 +54,13 @@ export interface Translations {
   "popup.cancel": string;
   "popup.submit": string;
 
+  // Popup mic (CCM-284 voice comments)
+  "popup.mic.record": string;
+  "popup.mic.stop": string;
+  "popup.mic.recording": string;
+  "popup.mic.transcribing": string;
+  "popup.mic.error": string;
+
   // Identity modal
   "identity.title": string;
   "identity.nameLabel": string;

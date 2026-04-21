@@ -55,6 +55,13 @@ export const fr: Translations = {
   "popup.cancel": "Annuler",
   "popup.submit": "Envoyer",
 
+  // Popup mic (CCM-284)
+  "popup.mic.record": "Dicter un commentaire",
+  "popup.mic.stop": "Arr\u00eater l'enregistrement",
+  "popup.mic.recording": "Enregistrement\u2026",
+  "popup.mic.transcribing": "Transcription\u2026",
+  "popup.mic.error": "Impossible de transcrire l'audio",
+
   // Identity modal
   "identity.title": "Identifiez-vous",
   "identity.nameLabel": "Nom",
