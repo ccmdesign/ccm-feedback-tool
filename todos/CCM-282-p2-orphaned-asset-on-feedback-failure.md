@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: Added structured `orphaned_asset_candidate` console.warn emission + `TODO(CCM-follow-up)` comment in `launcher.ts` for any image_swap annotation whose `sendFeedback` fails after the upload already landed. Log carries projectName, proposedAssetUrl, source, size, mime, timestamp, and reason — grep-friendly hook for a future scheduled janitor. Full janitor scoped out as called for.
 ---
 
 # CCM-282 — Orphaned Storage assets when `sendFeedback` fails after upload

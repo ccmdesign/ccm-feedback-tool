@@ -252,6 +252,38 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
         liveRegion.textContent = t("feedback.sent.confirmation");
         await panel.refresh();
       } catch (error) {
+        // CCM-282 P2: orphaned-asset reconciliation.
+        //
+        // For `image_swap` annotations, the asset has already been written to
+        // Storage (via `signUpload` PUT or `mirrorAsset`) by the time we get
+        // here. If `sendFeedback` fails, the asset sits in Storage with no
+        // referencing annotation row — a resource leak.
+        //
+        // TODO(CCM-follow-up): record the orphan in a `PendingAsset` DB table
+        // (or tag the object with a TTL metadata key) so a scheduled janitor
+        // can sweep assets with no referencing annotation older than 24 h.
+        // Full janitor is out-of-scope for CCM-282; this log is the hook a
+        // future reconciliation job can grep for.
+        if (annotation.type === "image_swap") {
+          try {
+            // Structured single-line log — easy to grep, safe to leave in prod.
+            console.warn(
+              "[ccm-feedback] orphaned_asset_candidate",
+              JSON.stringify({
+                event: "orphaned_asset_candidate",
+                projectName: config.projectName,
+                proposedAssetUrl: annotation.proposedAssetUrl,
+                proposedAssetSource: annotation.proposedAssetSource,
+                sizeBytes: annotation.assetMeta?.sizeBytes,
+                mime: annotation.assetMeta?.mime,
+                at: new Date().toISOString(),
+                reason: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          } catch {
+            // Logging must never mask the user-facing error.
+          }
+        }
         bus.emit("feedback:error", error instanceof Error ? error : new Error(String(error)));
         liveRegion.textContent = t("feedback.error.message");
       }
