@@ -451,6 +451,13 @@ export interface CcmFeedbackStore {
   getFeedbacks(query: FeedbackQuery): Promise<{ feedbacks: FeedbackRecord[]; total: number }>;
   /** Lookup by client-generated UUID. Returns `null` (not error) when not found. */
   findByClientId(clientId: string): Promise<FeedbackRecord | null>;
+  /**
+   * CCM-290 — fetch a single feedback (with annotations + replies) by id.
+   * Returns `null` when no record matches. Used by the agent handler to enforce
+   * cross-project isolation without paginating. Must bypass any pagination cap
+   * and return the full relations graph, just like `getFeedbacks` items.
+   */
+  findById(id: string): Promise<FeedbackRecord | null>;
   /** Update status/resolvedAt. Throws `StoreNotFoundError` if `id` does not exist. */
   updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord>;
   /** Delete a single record. Throws `StoreNotFoundError` if `id` does not exist. */

@@ -58,6 +58,9 @@ class FakeStore implements CcmFeedbackStore {
   async findByClientId(_clientId: string): Promise<FeedbackRecord | null> {
     return null;
   }
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return this.feedbacks.find((f) => f.id === id) ?? null;
+  }
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
     const fb = this.feedbacks.find((f) => f.id === id);
     if (!fb) throw new StoreNotFoundError();
@@ -295,6 +298,60 @@ describe("createCcmAgentFeedbackHandler", () => {
         { id: otherFb.id },
       );
       expect(res.status).toBe(404);
+    });
+  });
+
+  // CCM-290 P1 regression — ownership check must bypass the 100-row pagination
+  // cap. With >100 feedbacks seeded, the oldest (page 2+) must still be
+  // reachable via GET/PATCH/addReply.
+  describe("ownership check beyond pagination cap", () => {
+    async function seedMany(store: FakeStore, projectName: string, count: number): Promise<string[]> {
+      const ids: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const fb = await seedFeedback(store, projectName, { clientId: `c-${i}` });
+        ids.push(fb.id);
+      }
+      return ids;
+    }
+
+    it("GET succeeds for a feedback older than the first page (>100)", async () => {
+      const { store, handler } = buildHandler([{ id: "p1", name: "demo", agentToken: "SECRET" }]);
+      const ids = await seedMany(store, "demo", 101);
+      const oldestId = ids[0]!; // first seeded — oldest in createdAt order
+      const res = await handler.getFeedback(new Request(`http://t/api/v1/agent/feedback/${oldestId}?token=SECRET`), {
+        id: oldestId,
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { id: string };
+      expect(body.id).toBe(oldestId);
+    });
+
+    it("PATCH succeeds for a feedback older than the first page (>100)", async () => {
+      const { store, handler } = buildHandler([{ id: "p1", name: "demo", agentToken: "SECRET" }]);
+      const ids = await seedMany(store, "demo", 101);
+      const oldestId = ids[0]!;
+      const res = await handler.patchFeedback(
+        new Request(`http://t/api/v1/agent/feedback/${oldestId}?token=SECRET`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "resolved" }),
+        }),
+        { id: oldestId },
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("addReply succeeds for a feedback older than the first page (>100)", async () => {
+      const { store, handler } = buildHandler([{ id: "p1", name: "demo", agentToken: "SECRET" }]);
+      const ids = await seedMany(store, "demo", 101);
+      const oldestId = ids[0]!;
+      const res = await handler.addReply(
+        new Request(`http://t/api/v1/agent/feedback/${oldestId}/replies?token=SECRET`, {
+          method: "POST",
+          body: JSON.stringify({ author: "agent-alice", body: "old but reachable" }),
+        }),
+        { id: oldestId },
+      );
+      expect(res.status).toBe(201);
     });
   });
 });

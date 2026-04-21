@@ -12,7 +12,7 @@
  * Keeping the two factories independent preserves each side's threat model.
  */
 
-import { type CcmFeedbackStore, isStoreNotFound, type ReplyResponse } from "@ccm-feedback/core";
+import { type CcmFeedbackStore, type FeedbackRecord, isStoreNotFound, type ReplyResponse } from "@ccm-feedback/core";
 import type { ProjectStore } from "./project-store.js";
 import { agentPatchSchema, formatValidationErrors, getQuerySchema, replyCreateSchema } from "./validation.js";
 
@@ -89,6 +89,23 @@ export function createCcmAgentFeedbackHandler(opts: AgentFeedbackHandlerOptions)
     return withCors(Response.json({ error: "Feedback not found" }, { status: 404 }), corsHeaders);
   }
 
+  /**
+   * CCM-290 — fetch the feedback by id and confirm it belongs to `project`.
+   *
+   * Returns the record on success; returns `null` when the feedback doesn't
+   * exist OR belongs to a different project (both collapse to the same 404
+   * response to avoid leaking cross-project existence).
+   *
+   * Uses `store.findById` rather than a paginated `getFeedbacks` scan so the
+   * check works against ANY feedback in the project, not just the most recent
+   * page. Callers should translate `null` to `notFound(corsHeaders)`.
+   */
+  async function requireOwnership(params: { id: string }, project: { name: string }): Promise<FeedbackRecord | null> {
+    const record = await store.findById(params.id);
+    if (!record || record.projectName !== project.name) return null;
+    return record;
+  }
+
   return {
     OPTIONS: (request: Request): Response => {
       const corsHeaders = buildCorsHeaders(request, allowedOrigins);
@@ -127,10 +144,9 @@ export function createCcmAgentFeedbackHandler(opts: AgentFeedbackHandlerOptions)
       if (!project) return unauthorized(corsHeaders);
 
       try {
-        const { feedbacks } = await store.getFeedbacks({ projectName: project.name, limit: 100, page: 1 });
-        const match = feedbacks.find((f) => f.id === params.id);
-        if (!match) return notFound(corsHeaders);
-        return withCors(Response.json(match), corsHeaders);
+        const record = await requireOwnership(params, project);
+        if (!record) return notFound(corsHeaders);
+        return withCors(Response.json(record), corsHeaders);
       } catch (error) {
         console.error("[ccm-feedback] agent get failed:", error);
         return withCors(Response.json({ error: "Internal server error" }, { status: 500 }), corsHeaders);
@@ -152,11 +168,11 @@ export function createCcmAgentFeedbackHandler(opts: AgentFeedbackHandlerOptions)
 
       try {
         // Cross-project isolation: refuse to patch a feedback that doesn't
-        // belong to the token's project. Scan the authenticated project's
-        // list and ensure the target id is in it.
-        const { feedbacks } = await store.getFeedbacks({ projectName: project.name, limit: 100, page: 1 });
-        const owns = feedbacks.some((f) => f.id === params.id);
-        if (!owns) return notFound(corsHeaders);
+        // belong to the token's project. `findById` bypasses the 100-row
+        // pagination cap on `getFeedbacks` so older records are still
+        // reachable by their owning token.
+        const owned = await requireOwnership(params, project);
+        if (!owned) return notFound(corsHeaders);
 
         const updated = await store.updateFeedback(params.id, {
           status: parsed.data.status,
@@ -191,9 +207,8 @@ export function createCcmAgentFeedbackHandler(opts: AgentFeedbackHandlerOptions)
 
       try {
         // Cross-project isolation — same pattern as patchFeedback.
-        const { feedbacks } = await store.getFeedbacks({ projectName: project.name, limit: 100, page: 1 });
-        const owns = feedbacks.some((f) => f.id === params.id);
-        if (!owns) return notFound(corsHeaders);
+        const owned = await requireOwnership(params, project);
+        if (!owned) return notFound(corsHeaders);
 
         const reply = await store.addReply({
           feedbackId: params.id,

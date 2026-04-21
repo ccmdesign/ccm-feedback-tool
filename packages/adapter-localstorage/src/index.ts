@@ -171,6 +171,10 @@ export class LocalStorageStore implements CcmFeedbackStore {
     return this.load().find((f) => f.clientId === clientId) ?? null;
   }
 
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return this.load().find((f) => f.id === id) ?? null;
+  }
+
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
     const feedbacks = this.load();
     const fb = feedbacks.find((f) => f.id === id);

@@ -1,8 +1,9 @@
 ---
 priority: p1
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Added CcmFeedbackStore.findById across all 3 adapters; agent-handler uses requireOwnership(findById)-based check — no more 100-row cap. See P1+P2-shared commit."
 ---
 
 # CCM-290 — Agent handler ownership check paginates at 100; >100 feedbacks silently 404

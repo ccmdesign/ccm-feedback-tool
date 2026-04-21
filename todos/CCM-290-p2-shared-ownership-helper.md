@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Extracted requireOwnership closure inside createCcmAgentFeedbackHandler; all three methods call it. Landed with P1 fix."
 ---
 
 # CCM-290 — Duplicated ownership check in agent-handler (3 sites, same shape)

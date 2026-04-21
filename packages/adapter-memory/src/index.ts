@@ -127,6 +127,10 @@ export class MemoryStore implements CcmFeedbackStore {
     return this.feedbacks.find((f) => f.clientId === clientId) ?? null;
   }
 
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return this.feedbacks.find((f) => f.id === id) ?? null;
+  }
+
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
     const fb = this.feedbacks.find((f) => f.id === id);
     if (!fb) throw new StoreNotFoundError();

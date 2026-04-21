@@ -202,6 +202,13 @@ export class PrismaStore implements CcmFeedbackStore {
     })) as FeedbackRecord | null;
   }
 
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return (await this.prisma.feedbackItem.findUnique({
+      where: { id },
+      include: INCLUDE_RELATIONS,
+    })) as FeedbackRecord | null;
+  }
+
   async getFeedbacks(query: FeedbackQuery): Promise<{ feedbacks: FeedbackRecord[]; total: number }> {
     const { projectName, type, status, search, page = 1, limit = 50 } = query;
 
