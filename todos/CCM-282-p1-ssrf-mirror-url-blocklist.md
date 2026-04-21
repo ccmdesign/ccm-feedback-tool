@@ -1,8 +1,9 @@
 ---
 priority: p1
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: Added `assertSafeMirrorUrl` SSRF guard in `asset-mirror.ts` (blocks file://, non-http(s), loopback, RFC1918, link-local 169.254/16 including AWS metadata, CGNAT, multicast, IPv6 ULA + link-local) with DNS re-resolution; handler calls it before HEAD and re-validates after redirects. Returns 400 `source_url_not_allowed` / `unsupported_protocol`.
 ---
 
 # CCM-282 — SSRF: `/api/v1/assets/mirror` lacks a private-network / file:// blocklist

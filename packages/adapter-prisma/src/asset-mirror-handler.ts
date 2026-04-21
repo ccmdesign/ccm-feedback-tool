@@ -9,7 +9,16 @@
  */
 
 import { ALLOWED_IMAGE_MIMES, MAX_ASSET_SIZE_BYTES } from "@ccm-feedback/core";
-import { extensionForMime, isAllowedImageMime, isSafeSvg, normalizeContentType, sniffImage } from "./asset-mirror.js";
+import {
+  assertSafeMirrorUrl,
+  extensionForMime,
+  isAllowedImageMime,
+  isSafeSvg,
+  type MirrorDnsLookup,
+  normalizeContentType,
+  sniffImage,
+  UnsafeMirrorUrlError,
+} from "./asset-mirror.js";
 import type { ProjectStore } from "./project-store.js";
 import { assetMirrorRequestSchema } from "./validation/asset.js";
 import { formatValidationErrors } from "./validation.js";
@@ -35,6 +44,12 @@ export interface AssetMirrorHandlerOptions {
   uuid?: () => string;
   /** HEAD / GET timeout in ms. Defaults to 8_000. */
   timeoutMs?: number;
+  /**
+   * Mockable DNS lookup — defaults to `node:dns`'s `lookup`. Used by the SSRF
+   * guard to reject hostnames that resolve to private / loopback / reserved
+   * ranges.
+   */
+  dnsLookup?: MirrorDnsLookup;
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -90,6 +105,19 @@ export function createAssetMirrorHandler(opts: AssetMirrorHandlerOptions) {
       return Response.json({ proposedAssetUrl: url, assetMeta: null, alreadyMirrored: true }, { status: 200 });
     }
 
+    // CCM-282 P1: SSRF blocklist. Reject file://, non-http(s), and hostnames
+    // that literally are — or resolve to — private / loopback / link-local /
+    // reserved ranges BEFORE any `fetch()` leaves the box.
+    try {
+      await assertSafeMirrorUrl(url, opts.dnsLookup ? { dnsLookup: opts.dnsLookup } : {});
+    } catch (error) {
+      if (error instanceof UnsafeMirrorUrlError) {
+        return errorResponse(400, error.code);
+      }
+      // Unexpected failures in the guard should not silently let a URL through.
+      return errorResponse(400, "source_url_not_allowed");
+    }
+
     // HEAD validates content-type + declared size before streaming.
     const headController = new AbortController();
     const headTimer = setTimeout(() => headController.abort(), timeoutMs);
@@ -103,6 +131,17 @@ export function createAssetMirrorHandler(opts: AssetMirrorHandlerOptions) {
     }
     clearTimeout(headTimer);
     if (!headResponse.ok) return errorResponse(502, `head-non-ok-${headResponse.status}`);
+
+    // If `fetch` followed a redirect, re-validate the final hop. This mitigates
+    // DNS-rebinding and redirect-to-private-ip attacks.
+    if (headResponse.url && headResponse.url !== url) {
+      try {
+        await assertSafeMirrorUrl(headResponse.url, opts.dnsLookup ? { dnsLookup: opts.dnsLookup } : {});
+      } catch (error) {
+        if (error instanceof UnsafeMirrorUrlError) return errorResponse(400, error.code);
+        return errorResponse(400, "source_url_not_allowed");
+      }
+    }
 
     const headContentType = normalizeContentType(headResponse.headers.get("content-type"));
     if (!isAllowedImageMime(headContentType)) {
@@ -127,6 +166,18 @@ export function createAssetMirrorHandler(opts: AssetMirrorHandlerOptions) {
     }
     clearTimeout(getTimer);
     if (!getResponse.ok) return errorResponse(502, `get-non-ok-${getResponse.status}`);
+
+    // Second redirect check — GET can follow a different redirect chain than
+    // HEAD (or race DNS rebinding between the two). Reject if the final GET
+    // URL resolves to a blocked host.
+    if (getResponse.url && getResponse.url !== url) {
+      try {
+        await assertSafeMirrorUrl(getResponse.url, opts.dnsLookup ? { dnsLookup: opts.dnsLookup } : {});
+      } catch (error) {
+        if (error instanceof UnsafeMirrorUrlError) return errorResponse(400, error.code);
+        return errorResponse(400, "source_url_not_allowed");
+      }
+    }
 
     const arrayBuffer = await getResponse.arrayBuffer();
     if (arrayBuffer.byteLength > MAX_ASSET_SIZE_BYTES) {

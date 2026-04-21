@@ -4,6 +4,8 @@
  * storage client and the Next route wrapper.
  */
 
+import { promises as dnsPromises } from "node:dns";
+import { isIP } from "node:net";
 import type { AllowedImageMime } from "@ccm-feedback/core";
 import { ALLOWED_IMAGE_MIMES } from "@ccm-feedback/core";
 
@@ -212,4 +214,171 @@ export function isAllowedImageMime(value: string | null | undefined): value is A
 export function normalizeContentType(value: string | null | undefined): string | null {
   if (!value) return null;
   return (value.toLowerCase().trim().split(";")[0] ?? "").trim();
+}
+
+// ---------------------------------------------------------------------------
+// SSRF guard (CCM-282 P1)
+// ---------------------------------------------------------------------------
+//
+// The mirror endpoint `fetch()`es an attacker-controlled URL server-side. We
+// reject any URL whose host literally is — or whose DNS resolves to — a
+// private / loopback / link-local / reserved range BEFORE the HEAD request
+// leaves the box. This is defense-in-depth against:
+//
+//   - file:// and non-http(s) schemes (local filesystem reads, FTP probes)
+//   - localhost / loopback (127.0.0.0/8, ::1)
+//   - link-local / cloud metadata (169.254.0.0/16 — includes 169.254.169.254)
+//   - RFC1918 private (10/8, 172.16/12, 192.168/16)
+//   - carrier-grade NAT (100.64/10)
+//   - IPv6 ULA (fc00::/7) + link-local (fe80::/10)
+//   - multicast / reserved ranges
+//
+// DNS rebinding is partially mitigated by re-resolving after redirects; a
+// follow-up should swap undici's dispatcher for an SSRF-safe one that pins
+// the already-validated IP across the socket.
+
+/**
+ * Return true when a literal IPv4 address string belongs to a private,
+ * loopback, link-local, multicast, or otherwise-reserved range.
+ */
+export function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return false;
+  const nums = parts.map((p) => Number.parseInt(p, 10));
+  if (nums.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+  const a = nums[0] ?? 0;
+  const b = nums[1] ?? 0;
+  // 0.0.0.0/8 — current network / "this host"
+  if (a === 0) return true;
+  // 10.0.0.0/8
+  if (a === 10) return true;
+  // 127.0.0.0/8 — loopback
+  if (a === 127) return true;
+  // 169.254.0.0/16 — link-local (includes 169.254.169.254 metadata)
+  if (a === 169 && b === 254) return true;
+  // 172.16.0.0/12
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // 192.168.0.0/16
+  if (a === 192 && b === 168) return true;
+  // 100.64.0.0/10 — CGNAT
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  // 224.0.0.0/4 — multicast
+  if (a >= 224 && a <= 239) return true;
+  // 240.0.0.0/4 — reserved
+  if (a >= 240) return true;
+  return false;
+}
+
+/**
+ * Return true when a literal IPv6 address string belongs to a loopback,
+ * unique-local, link-local, multicast, or IPv4-mapped-private range.
+ */
+export function isPrivateIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase().replace(/^\[|\]$/g, "");
+  // Loopback
+  if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true;
+  // Unspecified
+  if (lower === "::" || lower === "0:0:0:0:0:0:0:0") return true;
+  // fc00::/7 — Unique Local Addresses
+  if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true;
+  // fe80::/10 — link-local
+  if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true;
+  // ff00::/8 — multicast
+  if (/^ff[0-9a-f]{2}:/i.test(lower)) return true;
+  // ::ffff:<ipv4> — IPv4-mapped: apply IPv4 rules to the embedded literal
+  const mapped = lower.match(/^::ffff:([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$/);
+  if (mapped?.[1] && isPrivateIPv4(mapped[1])) return true;
+  return false;
+}
+
+/**
+ * Return true when a hostname (either a literal IP or a DNS name) is a known
+ * SSRF-dangerous target by string shape alone — no DNS lookup.
+ */
+export function isUnsafeHostnameLiteral(hostname: string): boolean {
+  // Strip IPv6 brackets — URL.hostname returns "[::1]" on some engines.
+  const unbracketed = hostname.replace(/^\[|\]$/g, "");
+  const lower = unbracketed.toLowerCase().trim();
+  if (!lower) return true;
+  if (lower === "localhost") return true;
+  if (lower.endsWith(".localhost")) return true;
+  if (lower.endsWith(".local")) return true;
+  if (lower.endsWith(".internal")) return true;
+  const ipKind = isIP(lower);
+  if (ipKind === 4) return isPrivateIPv4(lower);
+  if (ipKind === 6) return isPrivateIPv6(lower);
+  return false;
+}
+
+/**
+ * Pluggable DNS lookup — defaults to `node:dns`'s `lookup`, can be swapped in
+ * tests. Returns every address that resolves for the hostname so we reject on
+ * any private-ranged answer (some hosts return both a public and a private A
+ * record).
+ */
+export type MirrorDnsLookup = (hostname: string) => Promise<Array<{ address: string; family: 4 | 6 }>>;
+
+const defaultDnsLookup: MirrorDnsLookup = async (hostname) => {
+  const results = await dnsPromises.lookup(hostname, { all: true, verbatim: true });
+  return results.map((r) => ({ address: r.address, family: r.family as 4 | 6 }));
+};
+
+export class UnsafeMirrorUrlError extends Error {
+  public readonly code: "source_url_not_allowed" | "unsupported_protocol";
+  constructor(code: "source_url_not_allowed" | "unsupported_protocol", message?: string) {
+    super(message ?? code);
+    this.name = "UnsafeMirrorUrlError";
+    this.code = code;
+  }
+}
+
+/**
+ * Validate a mirror source URL against the SSRF blocklist.
+ *
+ * Rejects:
+ *   - any protocol other than http: / https:
+ *   - literal IP hosts in private / loopback / link-local / reserved ranges
+ *   - hostnames like `localhost`, `*.local`, `*.internal`
+ *   - hostnames whose DNS resolution lands on any of the above
+ *
+ * Throws `UnsafeMirrorUrlError` so the handler can map to a structured 400.
+ */
+export async function assertSafeMirrorUrl(raw: string, options: { dnsLookup?: MirrorDnsLookup } = {}): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new UnsafeMirrorUrlError("source_url_not_allowed", "unparseable-url");
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new UnsafeMirrorUrlError("unsupported_protocol", `protocol ${url.protocol} not allowed`);
+  }
+
+  // URL.hostname returns "[::1]" on some engines, ":: 1" on others; normalize.
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (isUnsafeHostnameLiteral(hostname)) {
+    throw new UnsafeMirrorUrlError("source_url_not_allowed", `blocked host ${hostname}`);
+  }
+
+  // If the host is a literal IP, the shape check above already covered us.
+  if (isIP(hostname) !== 0) return;
+
+  // DNS lookup — reject if ANY resolved address is in a blocked range.
+  const lookup = options.dnsLookup ?? defaultDnsLookup;
+  let addresses: Array<{ address: string; family: 4 | 6 }>;
+  try {
+    addresses = await lookup(hostname);
+  } catch {
+    throw new UnsafeMirrorUrlError("source_url_not_allowed", "dns-lookup-failed");
+  }
+  if (addresses.length === 0) {
+    throw new UnsafeMirrorUrlError("source_url_not_allowed", "dns-empty");
+  }
+  for (const { address, family } of addresses) {
+    const unsafe = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address);
+    if (unsafe) {
+      throw new UnsafeMirrorUrlError("source_url_not_allowed", `resolves to blocked ${address}`);
+    }
+  }
 }

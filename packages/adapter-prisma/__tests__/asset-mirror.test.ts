@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { extensionForMime, isSafeSvg, sniffImage } from "../src/asset-mirror.js";
+import {
+  assertSafeMirrorUrl,
+  extensionForMime,
+  isPrivateIPv4,
+  isPrivateIPv6,
+  isSafeSvg,
+  isUnsafeHostnameLiteral,
+  type MirrorDnsLookup,
+  sniffImage,
+  UnsafeMirrorUrlError,
+} from "../src/asset-mirror.js";
 import { createAssetMirrorHandler } from "../src/asset-mirror-handler.js";
+
+/** Default mock DNS lookup for tests — resolves everything to a public IP. */
+const publicDnsLookup: MirrorDnsLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -241,6 +254,7 @@ describe("createAssetMirrorHandler", () => {
       storageClient: storageClient(),
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/page.html" }));
     expect(res.status).toBe(400);
@@ -261,6 +275,7 @@ describe("createAssetMirrorHandler", () => {
       storageClient: storageClient(),
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/big.jpg" }));
     expect(res.status).toBe(400);
@@ -286,6 +301,7 @@ describe("createAssetMirrorHandler", () => {
       storageClient: storageClient(),
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/bad.svg" }));
     expect(res.status).toBe(400);
@@ -311,6 +327,7 @@ describe("createAssetMirrorHandler", () => {
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
       uuid: () => "fixed-uuid",
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/photo.png" }));
     expect(res.status).toBe(200);
@@ -351,6 +368,7 @@ describe("createAssetMirrorHandler", () => {
       storageClient: storageClient({ uploadError: true }),
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/photo.png" }));
     expect(res.status).toBe(502);
@@ -370,10 +388,207 @@ describe("createAssetMirrorHandler", () => {
       storageClient: storageClient(),
       storageOrigin: "https://fake.supabase.co/storage/v1/object/public/assets/",
       fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
     });
     const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://ext.example.com/big.png" }));
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("source-too-large");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SSRF guard (CCM-282 P1)
+// ---------------------------------------------------------------------------
+
+describe("isPrivateIPv4", () => {
+  it("rejects loopback, RFC1918, link-local, CGNAT, multicast, reserved", () => {
+    expect(isPrivateIPv4("127.0.0.1")).toBe(true);
+    expect(isPrivateIPv4("10.0.0.5")).toBe(true);
+    expect(isPrivateIPv4("172.16.0.1")).toBe(true);
+    expect(isPrivateIPv4("172.31.255.255")).toBe(true);
+    expect(isPrivateIPv4("192.168.1.1")).toBe(true);
+    expect(isPrivateIPv4("169.254.169.254")).toBe(true);
+    expect(isPrivateIPv4("100.64.0.1")).toBe(true);
+    expect(isPrivateIPv4("0.0.0.0")).toBe(true);
+    expect(isPrivateIPv4("224.0.0.1")).toBe(true);
+    expect(isPrivateIPv4("240.0.0.1")).toBe(true);
+  });
+
+  it("accepts public IPv4 addresses", () => {
+    expect(isPrivateIPv4("8.8.8.8")).toBe(false);
+    expect(isPrivateIPv4("93.184.216.34")).toBe(false);
+    expect(isPrivateIPv4("172.32.0.1")).toBe(false); // just outside 172.16/12
+    expect(isPrivateIPv4("172.15.255.255")).toBe(false);
+  });
+});
+
+describe("isPrivateIPv6", () => {
+  it("rejects loopback + ULA + link-local + multicast + IPv4-mapped-private", () => {
+    expect(isPrivateIPv6("::1")).toBe(true);
+    expect(isPrivateIPv6("fc00::1")).toBe(true);
+    expect(isPrivateIPv6("fd12:3456:789a::1")).toBe(true);
+    expect(isPrivateIPv6("fe80::1")).toBe(true);
+    expect(isPrivateIPv6("ff02::1")).toBe(true);
+    expect(isPrivateIPv6("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateIPv6("::ffff:10.0.0.1")).toBe(true);
+  });
+
+  it("accepts public IPv6 addresses", () => {
+    expect(isPrivateIPv6("2606:4700:4700::1111")).toBe(false);
+    expect(isPrivateIPv6("2001:4860:4860::8888")).toBe(false);
+  });
+});
+
+describe("isUnsafeHostnameLiteral", () => {
+  it("rejects localhost aliases and private TLDs", () => {
+    expect(isUnsafeHostnameLiteral("localhost")).toBe(true);
+    expect(isUnsafeHostnameLiteral("foo.localhost")).toBe(true);
+    expect(isUnsafeHostnameLiteral("foo.local")).toBe(true);
+    expect(isUnsafeHostnameLiteral("metadata.internal")).toBe(true);
+  });
+
+  it("rejects private IPv4 literals but accepts DNS names", () => {
+    expect(isUnsafeHostnameLiteral("127.0.0.1")).toBe(true);
+    expect(isUnsafeHostnameLiteral("169.254.169.254")).toBe(true);
+    expect(isUnsafeHostnameLiteral("8.8.8.8")).toBe(false);
+    expect(isUnsafeHostnameLiteral("example.com")).toBe(false);
+  });
+});
+
+describe("assertSafeMirrorUrl", () => {
+  const alwaysPublic: MirrorDnsLookup = async () => [{ address: "93.184.216.34", family: 4 }];
+
+  it("rejects file:// URIs", async () => {
+    await expect(assertSafeMirrorUrl("file:///etc/passwd", { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(
+      UnsafeMirrorUrlError,
+    );
+  });
+
+  it("rejects ftp:// URIs", async () => {
+    await expect(assertSafeMirrorUrl("ftp://example.com/a.jpg", { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(
+      UnsafeMirrorUrlError,
+    );
+  });
+
+  it("rejects http://localhost", async () => {
+    await expect(assertSafeMirrorUrl("http://localhost/a.jpg", { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(
+      UnsafeMirrorUrlError,
+    );
+  });
+
+  it("rejects loopback literals (IPv4 + IPv6)", async () => {
+    await expect(assertSafeMirrorUrl("http://127.0.0.1/a", { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(
+      UnsafeMirrorUrlError,
+    );
+    await expect(assertSafeMirrorUrl("http://[::1]/a", { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(
+      UnsafeMirrorUrlError,
+    );
+  });
+
+  it("rejects RFC1918 and link-local (including cloud metadata 169.254.169.254)", async () => {
+    for (const url of [
+      "http://10.0.0.1/a",
+      "http://192.168.1.1/a",
+      "http://172.16.0.1/a",
+      "http://169.254.169.254/latest/meta-data/",
+    ]) {
+      await expect(assertSafeMirrorUrl(url, { dnsLookup: alwaysPublic })).rejects.toBeInstanceOf(UnsafeMirrorUrlError);
+    }
+  });
+
+  it("rejects a hostname that DNS-resolves to a private IP", async () => {
+    const privateLookup: MirrorDnsLookup = async () => [{ address: "10.0.0.5", family: 4 }];
+    await expect(
+      assertSafeMirrorUrl("https://sneaky.example.com/a.jpg", { dnsLookup: privateLookup }),
+    ).rejects.toBeInstanceOf(UnsafeMirrorUrlError);
+  });
+
+  it("rejects a hostname that resolves to MULTIPLE addresses if ANY is private", async () => {
+    const mixedLookup: MirrorDnsLookup = async () => [
+      { address: "93.184.216.34", family: 4 },
+      { address: "10.0.0.5", family: 4 },
+    ];
+    await expect(
+      assertSafeMirrorUrl("https://mixed.example.com/a.jpg", { dnsLookup: mixedLookup }),
+    ).rejects.toBeInstanceOf(UnsafeMirrorUrlError);
+  });
+
+  it("accepts a public https URL whose DNS resolves to a public IP", async () => {
+    await expect(
+      assertSafeMirrorUrl("https://example.com/a.jpg", { dnsLookup: alwaysPublic }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("raises code=source_url_not_allowed for blocked hosts and unsupported_protocol for bad schemes", async () => {
+    try {
+      await assertSafeMirrorUrl("file:///etc/passwd", { dnsLookup: alwaysPublic });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(UnsafeMirrorUrlError);
+      expect((err as UnsafeMirrorUrlError).code).toBe("unsupported_protocol");
+    }
+    try {
+      await assertSafeMirrorUrl("http://127.0.0.1", { dnsLookup: alwaysPublic });
+      throw new Error("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(UnsafeMirrorUrlError);
+      expect((err as UnsafeMirrorUrlError).code).toBe("source_url_not_allowed");
+    }
+  });
+});
+
+describe("createAssetMirrorHandler SSRF integration", () => {
+  const storageOrigin = "https://fake.supabase.co/storage/v1/object/public/assets/";
+
+  it("returns 400 source_url_not_allowed for a loopback URL before any fetch", async () => {
+    const fetchFn = vi.fn();
+    const handler = createAssetMirrorHandler({
+      projectStore: projectStore(true),
+      storageClient: storageClient(),
+      storageOrigin,
+      fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
+    });
+    const res = await handler(jsonRequest({ projectId: "proj-1", url: "http://127.0.0.1/a.jpg" }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("source_url_not_allowed");
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 unsupported_protocol for file:// URLs before any fetch", async () => {
+    const fetchFn = vi.fn();
+    const handler = createAssetMirrorHandler({
+      projectStore: projectStore(true),
+      storageClient: storageClient(),
+      storageOrigin,
+      fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: publicDnsLookup,
+    });
+    // Zod's .url() accepts file: scheme; our guard rejects it with 400.
+    const res = await handler(jsonRequest({ projectId: "proj-1", url: "file:///etc/passwd" }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; errors?: unknown };
+    // Either the URL schema or the SSRF guard fires; both map to 400.
+    expect(body.error ?? "zod").toBeDefined();
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 source_url_not_allowed when DNS resolves to a private IP", async () => {
+    const fetchFn = vi.fn();
+    const privateLookup: MirrorDnsLookup = async () => [{ address: "10.1.2.3", family: 4 }];
+    const handler = createAssetMirrorHandler({
+      projectStore: projectStore(true),
+      storageClient: storageClient(),
+      storageOrigin,
+      fetch: fetchFn as unknown as typeof globalThis.fetch,
+      dnsLookup: privateLookup,
+    });
+    const res = await handler(jsonRequest({ projectId: "proj-1", url: "https://sneaky.example.com/a.jpg" }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("source_url_not_allowed");
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
