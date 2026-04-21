@@ -22,6 +22,8 @@ import {
 
 export type { CcmFeedbackStore } from "@ccm-feedback/core";
 export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
+export type { AgentFeedbackHandler, AgentFeedbackHandlerOptions } from "./agent-handler.js";
+export { createCcmAgentFeedbackHandler } from "./agent-handler.js";
 export type { ImageSniffResult } from "./asset-mirror.js";
 export {
   extensionForMime,
@@ -89,7 +91,7 @@ export type {
   RectangleAnnotationInput,
   TextChangeAnnotationInput,
 } from "./validation.js";
-export { agentPatchSchema, replyCreateSchema, resolveCcmStorageOrigin } from "./validation.js";
+export { agentPatchSchema, formatValidationErrors, replyCreateSchema, resolveCcmStorageOrigin } from "./validation.js";
 
 // ---------------------------------------------------------------------------
 // Minimal PrismaClient shape expected by this adapter
