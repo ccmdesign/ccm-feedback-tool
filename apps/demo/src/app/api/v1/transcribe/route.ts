@@ -20,6 +20,22 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Parse a comma-separated list of origins from `CCM_FEEDBACK_ALLOWED_ORIGINS`.
+ * Returns undefined when unset so same-origin dev keeps the no-CORS path
+ * (omitted headers, browser allows same-origin fetch). Surface one source of
+ * truth that future widget-facing routes can reuse.
+ */
+function readAllowedOrigins(): string[] | undefined {
+  const raw = process.env.CCM_FEEDBACK_ALLOWED_ORIGINS;
+  if (!raw) return undefined;
+  const list = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
 function buildHandler() {
   const openaiKey = process.env.OPENAI_API_KEY;
   const openrouterKey = process.env.OPENROUTER_API_KEY;
@@ -61,11 +77,13 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
+  const allowedOrigins = readAllowedOrigins();
   const handler = createTranscribeHandler({
     whisper,
     cleanup,
     ...(storage ? { storage } : {}),
     ...(projectStore ? { projectStore } : {}),
+    ...(allowedOrigins ? { allowedOrigins } : {}),
   });
   return handler.POST(request);
 }
@@ -76,6 +94,11 @@ export async function OPTIONS(request: Request): Promise<Response> {
   // the same CORS policy surface without constructing network clients.
   const noopWhisper = { transcribe: async () => "" };
   const noopCleanup = { clean: async () => "" };
-  const handler = createTranscribeHandler({ whisper: noopWhisper, cleanup: noopCleanup });
+  const allowedOrigins = readAllowedOrigins();
+  const handler = createTranscribeHandler({
+    whisper: noopWhisper,
+    cleanup: noopCleanup,
+    ...(allowedOrigins ? { allowedOrigins } : {}),
+  });
   return handler.OPTIONS(request);
 }
