@@ -149,15 +149,18 @@ Guarded by an env flag (`NUXT_PUBLIC_FEEDBACK_ENABLED` or equivalent) so the wid
 
 ### 5.2 Stack
 
-- **Frontend / widget:** Nuxt 3 + Vue 3 + Pinia + Tailwind, widget mounted in **Shadow DOM** for CSS isolation from host page.
-- **Selector engine:** `@medv/finder` (stable short selectors) with xpath + text-content fallbacks.
-- **State (PoC):** Pinia + `pinia-plugin-persistedstate` → localStorage, keyed by URL.
-- **State (MVP):** Supabase (Postgres + Realtime + Auth + Storage).
-- **Server:** Nitro routes for `/transcribe`, `/submit-review`, `/triage`, plus `/w.js` bundle served from the same Nuxt deploy.
+Superseded by [ADR-001](./adr-001-fork-baseline.md): we hard-forked SitePing (MIT) and adopted its reference stack (Next.js + Prisma) instead of the originally-planned Nuxt + Nitro. The widget remains framework-agnostic on the host site — only the feedback-tool's own server changed.
+
+- **Frontend / widget:** SitePing baseline — vanilla TS + tsup, mounted in closed **Shadow DOM** for CSS isolation from the host page. Framework-agnostic; embeds on Nuxt, Next, static, or WordPress host sites via `<script>` tag.
+- **Selector engine:** `@medv/finder` (CSS) + xpath + text-snippet + 6 additional disambiguation fields (`AnchorData` in [packages/core/src/types.ts](../packages/core/src/types.ts)).
+- **State (widget-side PoC):** existing `@siteping/adapter-localstorage` — no server required.
+- **State (MVP):** Prisma pointed at **Supabase Postgres**; existing `@siteping/adapter-prisma` handlers. **Supabase Storage** added for uploaded + mirrored image assets (new integration).
+- **Server:** Next.js 15 App Router API routes (SitePing's reference implementation in `apps/demo/app/api/siteping/route.ts`). We add `/submit-review`, `/transcribe`, and the callback endpoint alongside the inherited `GET/POST/PATCH/DELETE` handlers.
+- **Monorepo:** bun + Turborepo. Packages: `@siteping/core`, `@siteping/widget`, `@siteping/adapter-prisma`, `@siteping/adapter-memory`, `@siteping/adapter-localstorage`, `@siteping/cli`. Rebrand scope deferred to P0 (see ADR-001).
 - **AI (in-scope for this service):**
   - Whisper: OpenAI API for voice transcription. Internal volume is low enough that cost is negligible.
   - Light LLM cleanup on transcribed voice comments (filler removal, punctuation). DeepSeek V3.2 via OpenRouter or similar — minor.
-- **Deploy:** Netlify (widget + Nitro server); Supabase cloud.
+- **Deploy:** Netlify (Next.js app); Supabase cloud (Postgres + Storage).
 - **Out of stack for this service:** anything related to implementing changes (Claude Code, GitHub Actions, PR automation, repo access, ClickUp task creation). That's the implementation agent's concern, in a separate repo with its own stack choices.
 
 ### 5.3 Data model (MVP, Supabase)
