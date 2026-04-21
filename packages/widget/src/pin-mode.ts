@@ -30,6 +30,9 @@ import type { ThemeColors } from "./styles/theme.js";
  * - Payload shape is identical to area mode: full-bounds rect relative to the
  *   clicked element, `type` omitted (defaults to `"rectangle"` server-side).
  */
+/** Defensive inset so the badge never renders flush against the viewport edge. */
+const BADGE_INSET = 8;
+
 export class PinMode {
   private overlay: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
@@ -38,6 +41,21 @@ export class PinMode {
   private isActive = false;
   private savedOverflow = "";
   private previouslyFocused: HTMLElement | null = null;
+  /**
+   * Snapshot of the hovered element's pre-hover inline outline styles so
+   * `clearHoverOutline` restores exactly what the host page had set rather
+   * than wiping it. See CCM-291 P2 todo "preserve-host-inline-outline".
+   */
+  private previousOutline: string | null = null;
+  private previousOutlineOffset: string | null = null;
+  private previousOutlinePriority = "";
+  private previousOutlineOffsetPriority = "";
+  /**
+   * Unsubscribe handle for the `pin:start` bus listener registered in the
+   * constructor. Called from `destroy()` so the closure doesn't outlive the
+   * mode. CCM-291 P2 todo "pinmode-bus-subscription-leak".
+   */
+  private readonly unsubPinStart: () => void;
 
   constructor(
     private readonly colors: ThemeColors,
@@ -52,7 +70,7 @@ export class PinMode {
     /** Excludes the widget host + descendants so pin doesn't outline itself. */
     private readonly shouldIgnoreElement: (element: Element) => boolean,
   ) {
-    this.bus.on("pin:start", () => this.activate());
+    this.unsubPinStart = this.bus.on("pin:start", () => this.activate());
   }
 
   private activate(): void {
@@ -216,6 +234,13 @@ export class PinMode {
   }
 
   private applyHoverOutline(target: HTMLElement): void {
+    // Snapshot any pre-existing inline outline styling so unhover restores it
+    // rather than nuking host-page outline (CCM-291 P2 preserve-host-inline-outline).
+    this.previousOutline = target.style.outline || null;
+    this.previousOutlineOffset = target.style.outlineOffset || null;
+    this.previousOutlinePriority = target.style.getPropertyPriority("outline");
+    this.previousOutlineOffsetPriority = target.style.getPropertyPriority("outline-offset");
+
     // Solid 2px outline — distinguishes from text-edit's dashed outline.
     target.style.setProperty("outline", `2px solid ${this.colors.accent}`, "important");
     target.style.setProperty("outline-offset", "2px", "important");
@@ -227,10 +252,15 @@ export class PinMode {
       const tagName = target.tagName.toLowerCase();
       this.badge.textContent = tagName;
       this.badge.setAttribute("aria-hidden", "true");
+      // Clamp both axes to a defensive inset. Without Math.max the badge
+      // renders off-screen when the target is partially off the top/left
+      // (negative bounds). CCM-291 P3 badge-position-clamp.
+      const left = Math.max(BADGE_INSET, Math.min(bounds.right - 4, window.innerWidth - 60));
+      const top = Math.max(BADGE_INSET, Math.min(bounds.bottom + 4, window.innerHeight - 24));
       this.badge.style.cssText = `
         position:fixed;
-        left:${Math.min(bounds.right - 4, window.innerWidth - 60)}px;
-        top:${Math.min(bounds.bottom + 4, window.innerHeight - 24)}px;
+        left:${left}px;
+        top:${top}px;
         transform:translateX(-100%);
         z-index:${Z_INDEX_MAX};
         padding:2px 8px;border-radius:6px;
@@ -250,9 +280,29 @@ export class PinMode {
 
   private clearHoverOutline(): void {
     if (this.hoveredElement) {
-      this.hoveredElement.style.removeProperty("outline");
-      this.hoveredElement.style.removeProperty("outline-offset");
+      // Restore the snapshot captured in applyHoverOutline. If the element had
+      // no inline outline pre-hover, the snapshot is null and we removeProperty
+      // (original behaviour). If it did, we re-apply it with its original
+      // !important priority. CCM-291 P2 preserve-host-inline-outline.
+      if (this.previousOutline !== null) {
+        this.hoveredElement.style.setProperty("outline", this.previousOutline, this.previousOutlinePriority);
+      } else {
+        this.hoveredElement.style.removeProperty("outline");
+      }
+      if (this.previousOutlineOffset !== null) {
+        this.hoveredElement.style.setProperty(
+          "outline-offset",
+          this.previousOutlineOffset,
+          this.previousOutlineOffsetPriority,
+        );
+      } else {
+        this.hoveredElement.style.removeProperty("outline-offset");
+      }
       this.hoveredElement = null;
+      this.previousOutline = null;
+      this.previousOutlineOffset = null;
+      this.previousOutlinePriority = "";
+      this.previousOutlineOffsetPriority = "";
     }
     if (this.badge) {
       this.badge.remove();
@@ -262,5 +312,8 @@ export class PinMode {
 
   destroy(): void {
     this.deactivate();
+    // Drop the pin:start listener so the mode + its closure are GC-eligible
+    // even when the shared bus outlives us. CCM-291 P2 pinmode-bus-subscription-leak.
+    this.unsubPinStart();
   }
 }

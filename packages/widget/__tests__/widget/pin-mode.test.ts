@@ -192,6 +192,101 @@ describe("PinMode (CCM-291)", () => {
       a.remove();
       b.remove();
     });
+
+    it("restores host-page inline outline styles on unhover (CCM-291 P2 preserve-host-inline-outline)", () => {
+      const target = document.createElement("button");
+      target.style.setProperty("outline", "4px dotted red", "important");
+      target.style.setProperty("outline-offset", "6px", "important");
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 50, 20));
+
+      const { bus, mode } = build();
+      bus.emit("pin:start");
+
+      const overlay = findOverlay()!;
+      const origFromPoint = document.elementFromPoint;
+      // Hover returns target, then next mousemove returns null to trigger unhover path.
+      const elementFromPoint = vi
+        .fn<[number, number], Element | null>()
+        .mockReturnValueOnce(target)
+        .mockReturnValueOnce(null);
+      document.elementFromPoint = elementFromPoint as unknown as typeof document.elementFromPoint;
+
+      overlay.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10, bubbles: true }));
+      // Sanity: our outline override took hold.
+      expect(target.style.outline).toContain("solid");
+
+      overlay.dispatchEvent(new MouseEvent("mousemove", { clientX: 999, clientY: 999, bubbles: true }));
+      // Host's original inline outline is restored exactly, priority included.
+      expect(target.style.outline).toBe("4px dotted red");
+      expect(target.style.getPropertyPriority("outline")).toBe("important");
+      expect(target.style.outlineOffset).toBe("6px");
+      expect(target.style.getPropertyPriority("outline-offset")).toBe("important");
+
+      document.elementFromPoint = origFromPoint;
+      mode.destroy();
+      target.remove();
+    });
+
+    it("unhover clears outline when the host had no inline outline (baseline)", () => {
+      const target = document.createElement("button");
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 50, 20));
+
+      const { bus, mode } = build();
+      bus.emit("pin:start");
+
+      const overlay = findOverlay()!;
+      const origFromPoint = document.elementFromPoint;
+      const elementFromPoint = vi
+        .fn<[number, number], Element | null>()
+        .mockReturnValueOnce(target)
+        .mockReturnValueOnce(null);
+      document.elementFromPoint = elementFromPoint as unknown as typeof document.elementFromPoint;
+
+      overlay.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10, bubbles: true }));
+      expect(target.style.outline).not.toBe("");
+
+      overlay.dispatchEvent(new MouseEvent("mousemove", { clientX: 999, clientY: 999, bubbles: true }));
+      expect(target.style.outline).toBe("");
+      expect(target.style.outlineOffset).toBe("");
+
+      document.elementFromPoint = origFromPoint;
+      mode.destroy();
+      target.remove();
+    });
+
+    it("badge position clamps to >= 8px inset when the target is off-screen top-left (CCM-291 P3)", () => {
+      const target = document.createElement("button");
+      document.body.appendChild(target);
+      // Fully off-screen top-left — bounds.right / bounds.bottom are negative.
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(-200, -200, 100, 50));
+
+      const { bus, mode } = build();
+      bus.emit("pin:start");
+
+      const overlay = findOverlay()!;
+      const origFromPoint = document.elementFromPoint;
+      document.elementFromPoint = vi.fn(() => target) as typeof document.elementFromPoint;
+
+      overlay.dispatchEvent(new MouseEvent("mousemove", { clientX: 10, clientY: 10, bubbles: true }));
+
+      // The badge sits outside the widget host — last-added fixed div with the
+      // tag-name text content.
+      const badges = Array.from(document.body.querySelectorAll<HTMLElement>('div[aria-hidden="true"]')).filter(
+        (d) => d.textContent === "button",
+      );
+      expect(badges.length).toBe(1);
+      const badge = badges[0]!;
+      const leftPx = Number.parseFloat(badge.style.left);
+      const topPx = Number.parseFloat(badge.style.top);
+      expect(leftPx).toBeGreaterThanOrEqual(8);
+      expect(topPx).toBeGreaterThanOrEqual(8);
+
+      document.elementFromPoint = origFromPoint;
+      mode.destroy();
+      target.remove();
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -301,6 +396,18 @@ describe("PinMode (CCM-291)", () => {
       expect(endListener).toHaveBeenCalledOnce();
 
       mode.destroy();
+    });
+
+    it("destroy() unsubscribes pin:start — subsequent emits do not activate (CCM-291 P2)", () => {
+      const { bus, mode } = build();
+      mode.destroy();
+
+      // Before the fix this would still activate because destroy() only tore
+      // down the overlay and left the constructor's bus.on listener attached.
+      bus.emit("pin:start");
+
+      expect(findOverlay()).toBeNull();
+      expect(findToolbar()).toBeNull();
     });
   });
 });
