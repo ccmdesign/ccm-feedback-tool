@@ -134,6 +134,8 @@ export class Panel {
     const chips = el("div", { class: "sp-chips" });
     const chipOptions = [
       { value: "all", label: this.t("panel.filterAll") },
+      // CCM-290 — comment filter chip lives first (matches composer default).
+      { value: "comment", label: this.t("type.comment") },
       { value: "question", label: this.t("type.question") },
       { value: "change", label: this.t("type.change") },
       { value: "bug", label: this.t("type.bug") },

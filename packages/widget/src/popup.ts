@@ -3,8 +3,8 @@ import { AudioRecorder, isMediaRecorderSupported, queryMicrophonePermission } fr
 import { Z_INDEX_MAX } from "./constants.js";
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { TFunction } from "./i18n/index.js";
-import { ICON_BUG, ICON_CHANGE, ICON_MIC, ICON_OTHER, ICON_QUESTION, ICON_SPINNER, ICON_STOP } from "./icons.js";
-import { getTypeBgColor, getTypeColor, type ThemeColors } from "./styles/theme.js";
+import { ICON_MIC, ICON_SPINNER, ICON_STOP } from "./icons.js";
+import type { ThemeColors } from "./styles/theme.js";
 
 /** Context passed through to the transcribe round-trip (CCM-284). */
 export interface PopupContext {
@@ -37,7 +37,6 @@ interface PopupResult {
 interface TypeOption {
   type: FeedbackType;
   label: string;
-  icon: string;
 }
 
 /**
@@ -49,13 +48,18 @@ interface TypeOption {
  */
 export class Popup {
   private root: HTMLElement;
-  private selectedType: FeedbackType | null = null;
+  /**
+   * CCM-290 — the composer now defaults to `"comment"` so typing immediately
+   * enables the submit button (no separate type pick required).
+   */
+  private selectedType: FeedbackType = "comment";
   private textarea: HTMLTextAreaElement;
   private submitBtn: HTMLButtonElement;
   private resolve: ((result: PopupResult | null) => void) | null = null;
   private previouslyFocused: HTMLElement | null = null;
   private onKeydownTrap: ((e: KeyboardEvent) => void) | null = null;
-  private typeRow: HTMLElement;
+  /** CCM-290 — replaces the 2x2 button grid. */
+  private typeSelect: HTMLSelectElement;
 
   // CCM-284 — mic state
   private micBtn: HTMLButtonElement | null = null;
@@ -94,57 +98,55 @@ export class Popup {
     this.root.setAttribute("aria-modal", "true");
     this.root.setAttribute("aria-label", this.t("popup.ariaLabel"));
 
-    // Type selector grid (2x2)
+    // CCM-290 — single <select> in place of the previous 2x2 button grid.
+    // Comment is the default; keyboard nav + screen reader handling come
+    // for free from the browser's native control.
     const typeOptions: TypeOption[] = [
-      { type: "question", label: this.t("type.question"), icon: ICON_QUESTION },
-      { type: "change", label: this.t("type.change"), icon: ICON_CHANGE },
-      { type: "bug", label: this.t("type.bug"), icon: ICON_BUG },
-      { type: "other", label: this.t("type.other"), icon: ICON_OTHER },
+      { type: "comment", label: this.t("type.comment") },
+      { type: "question", label: this.t("type.question") },
+      { type: "change", label: this.t("type.change") },
+      { type: "bug", label: this.t("type.bug") },
+      { type: "other", label: this.t("type.other") },
     ];
-    this.typeRow = el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;" });
-    const typeRow = this.typeRow;
+    this.typeSelect = document.createElement("select");
+    this.typeSelect.setAttribute("aria-label", this.t("popup.typeLabel"));
+    this.typeSelect.setAttribute("data-ccm-feedback", "popup-type");
+    this.typeSelect.style.cssText = `
+      width:100%;height:36px;
+      padding:0 32px 0 12px;
+      margin-bottom:10px;
+      border-radius:12px;
+      border:1px solid ${this.colors.border};
+      background:${this.colors.glassBgHeavy};
+      color:${this.colors.text};
+      font-family:"Inter",system-ui,-apple-system,sans-serif;
+      font-size:13px;font-weight:500;
+      outline:none;cursor:pointer;
+      transition:all 0.2s ease;
+      appearance:none;-webkit-appearance:none;-moz-appearance:none;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat:no-repeat;
+      background-position:right 10px center;
+      box-sizing:border-box;
+    `;
     for (const option of typeOptions) {
-      const btn = document.createElement("button");
-      btn.style.cssText = `
-        height:44px;
-        border-radius:9999px;border:1px solid ${this.colors.border};
-        background:${this.colors.glassBg};cursor:pointer;
-        display:flex;align-items:center;justify-content:center;gap:5px;
-        font-family:"Inter",system-ui,-apple-system,sans-serif;
-        font-size:13px;font-weight:500;color:${this.colors.textTertiary};
-        transition:all 0.2s ease;
-        padding:0 12px;
-      `;
-      const icon = parseSvg(option.icon);
-      icon.setAttribute("style", "width:13px;height:13px;flex-shrink:0;");
-      btn.appendChild(icon);
-      const labelSpan = document.createElement("span");
-      setText(labelSpan, option.label);
-      btn.appendChild(labelSpan);
-      btn.dataset.type = option.type;
-      btn.setAttribute("aria-pressed", "false");
-
-      btn.addEventListener("click", () => {
-        this.selectType(option.type, typeRow);
-      });
-
-      btn.addEventListener("mouseenter", () => {
-        if (btn.dataset.type !== this.selectedType) {
-          const bgColor = getTypeBgColor(btn.dataset.type ?? "", this.colors);
-          btn.style.background = bgColor;
-          btn.style.borderColor = getTypeColor(btn.dataset.type ?? "", this.colors) + "40";
-        }
-      });
-
-      btn.addEventListener("mouseleave", () => {
-        if (btn.dataset.type !== this.selectedType) {
-          btn.style.background = this.colors.glassBg;
-          btn.style.borderColor = this.colors.border;
-        }
-      });
-
-      typeRow.appendChild(btn);
+      const optionEl = document.createElement("option");
+      optionEl.value = option.type;
+      setText(optionEl, option.label);
+      if (option.type === this.selectedType) optionEl.selected = true;
+      this.typeSelect.appendChild(optionEl);
     }
+    this.typeSelect.addEventListener("change", () => {
+      this.selectedType = this.typeSelect.value as FeedbackType;
+    });
+    this.typeSelect.addEventListener("focus", () => {
+      this.typeSelect.style.borderColor = this.colors.accent;
+      this.typeSelect.style.boxShadow = `0 0 0 3px ${this.colors.accent}14`;
+    });
+    this.typeSelect.addEventListener("blur", () => {
+      this.typeSelect.style.borderColor = this.colors.border;
+      this.typeSelect.style.boxShadow = "none";
+    });
 
     // Textarea
     this.textarea = document.createElement("textarea");
@@ -269,7 +271,7 @@ export class Popup {
     btnRow.appendChild(cancelBtn);
     btnRow.appendChild(this.submitBtn);
 
-    this.root.appendChild(this.typeRow);
+    this.root.appendChild(this.typeSelect);
     this.root.appendChild(this.textarea);
     this.root.appendChild(hint);
     this.root.appendChild(btnRow);
@@ -400,14 +402,13 @@ export class Popup {
    * now-populated) textarea.
    */
   private setPopupInteractivityDuringTranscribe(enabled: boolean): void {
-    const typeButtons = this.typeRow.querySelectorAll<HTMLButtonElement>("button[data-type]");
-    for (const btn of typeButtons) {
-      btn.disabled = !enabled;
-      btn.style.opacity = enabled ? "1" : "0.5";
-      btn.style.pointerEvents = enabled ? "auto" : "none";
-    }
+    // CCM-290 — freeze the <select> (not the former grid of buttons) while
+    // transcription is in flight so the in-flight request can't be raced by
+    // a quick type-switch.
+    this.typeSelect.disabled = !enabled;
+    this.typeSelect.style.opacity = enabled ? "1" : "0.5";
     if (enabled) {
-      // Recompute submit state from selectedType + textarea contents.
+      // Recompute submit state from textarea contents.
       this.updateSubmitState();
     } else {
       this.submitBtn.disabled = true;
@@ -457,10 +458,11 @@ export class Popup {
     this.pendingAudioUrl = undefined;
     return new Promise((resolve) => {
       this.resolve = resolve;
-      this.selectedType = null;
+      // CCM-290 — reset to the default "comment" type on every open.
+      this.selectedType = "comment";
+      this.typeSelect.value = "comment";
       this.textarea.value = "";
       this.updateSubmitState();
-      this.resetTypeButtons();
 
       // Evaluate mic availability per-show so permission changes between
       // widget opens are respected.
@@ -503,7 +505,7 @@ export class Popup {
         if (e.key === "Tab") {
           const focusableEls = Array.from(
             this.root.querySelectorAll<HTMLElement>(
-              'button:not([disabled]), textarea, input, [tabindex]:not([tabindex="-1"])',
+              'button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
             ),
           );
           if (focusableEls.length === 0) return;
@@ -539,42 +541,20 @@ export class Popup {
     });
   }
 
-  private selectType(type: FeedbackType, container: HTMLElement): void {
-    this.selectedType = type;
-    const buttons = container.querySelectorAll<HTMLButtonElement>("button");
-    for (const btn of buttons) {
-      const isActive = btn.dataset.type === type;
-      const color = getTypeColor(btn.dataset.type ?? "", this.colors);
-      const bgColor = getTypeBgColor(btn.dataset.type ?? "", this.colors);
-      btn.style.background = isActive ? bgColor : this.colors.glassBg;
-      btn.style.borderColor = isActive ? color + "60" : this.colors.border;
-      btn.style.color = isActive ? color : this.colors.textTertiary;
-      btn.style.fontWeight = isActive ? "600" : "500";
-      btn.setAttribute("aria-pressed", String(isActive));
-    }
-    this.updateSubmitState();
-  }
-
-  private resetTypeButtons(): void {
-    const buttons = this.root.querySelectorAll<HTMLButtonElement>("button[data-type]");
-    for (const btn of buttons) {
-      btn.setAttribute("aria-pressed", "false");
-      btn.style.background = this.colors.glassBg;
-      btn.style.borderColor = this.colors.border;
-      btn.style.color = this.colors.textTertiary;
-      btn.style.fontWeight = "500";
-    }
-  }
-
+  /**
+   * CCM-290 — with the composer defaulting to "comment", submit enablement
+   * collapses to "does the textarea have non-whitespace content?" — the type
+   * is always populated.
+   */
   private updateSubmitState(): void {
-    const enabled = this.selectedType !== null && this.textarea.value.trim().length > 0;
+    const enabled = this.textarea.value.trim().length > 0;
     this.submitBtn.disabled = !enabled;
     this.submitBtn.style.opacity = enabled ? "1" : "0.35";
     this.submitBtn.style.pointerEvents = enabled ? "auto" : "none";
   }
 
   private submit(): void {
-    if (!this.selectedType || !this.textarea.value.trim()) return;
+    if (!this.textarea.value.trim()) return;
     this.releaseRecorder();
     const result: PopupResult = {
       type: this.selectedType,

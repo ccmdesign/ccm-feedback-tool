@@ -134,8 +134,10 @@ describe("Panel", () => {
     });
 
     it("creates filter chips with correct aria-pressed", () => {
+      // CCM-290 — type chips: all, comment, question, change, bug, other (6)
+      //          status chips: all, open, resolved (3)
       const chips = shadow.querySelectorAll<HTMLButtonElement>(".sp-chip");
-      expect(chips.length).toBe(8); // type: all, question, change, bug, other + status: all, open, resolved
+      expect(chips.length).toBe(9);
 
       // "All" chip is active by default
       const allChip = shadow.querySelector<HTMLButtonElement>('.sp-chip[data-filter="all"]')!;
@@ -144,6 +146,10 @@ describe("Panel", () => {
       // Other chips are not active
       const bugChip = shadow.querySelector<HTMLButtonElement>('.sp-chip[data-filter="bug"]')!;
       expect(bugChip.getAttribute("aria-pressed")).toBe("false");
+
+      // The new comment chip is present
+      const commentChip = shadow.querySelector<HTMLButtonElement>('.sp-chip[data-filter="comment"]');
+      expect(commentChip).not.toBeNull();
     });
 
     it("creates close and delete-all buttons", () => {
