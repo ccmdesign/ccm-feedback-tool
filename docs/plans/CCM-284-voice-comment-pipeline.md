@@ -498,7 +498,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 8: Acceptance verification**
+- [x] **Unit 8: Acceptance verification**
 
 **Goal:** Prove each ticket acceptance bullet on the demo app end-to-end.
 

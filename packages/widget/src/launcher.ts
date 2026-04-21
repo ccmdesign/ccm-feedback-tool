@@ -181,7 +181,13 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   // CCM-284 — wire the transcribe round-trip into the popup composer.
   // Only HTTP clients expose `transcribe`; store-only mode leaves the mic hidden.
   const transcribeFn = client.transcribe
-    ? async ({ audio, context }: { audio: Blob; context: { selector: string; surroundingText: string; projectName: string } }) => {
+    ? async ({
+        audio,
+        context,
+      }: {
+        audio: Blob;
+        context: { selector: string; surroundingText: string; projectName: string };
+      }) => {
         if (!client.transcribe) throw new Error("transcribe unavailable");
         return client.transcribe({
           audio,

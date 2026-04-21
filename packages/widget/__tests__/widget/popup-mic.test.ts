@@ -140,7 +140,17 @@ const CONTEXT: PopupContext = {
 };
 
 function makeBounds(): DOMRect {
-  return { x: 100, y: 100, width: 200, height: 50, top: 100, right: 300, bottom: 150, left: 100, toJSON: () => {} } as DOMRect;
+  return {
+    x: 100,
+    y: 100,
+    width: 200,
+    height: 50,
+    top: 100,
+    right: 300,
+    bottom: 150,
+    left: 100,
+    toJSON: () => {},
+  } as DOMRect;
 }
 
 function micButton(): HTMLButtonElement | null {
@@ -281,8 +291,8 @@ describe("Popup — CCM-284 mic button", () => {
     btn.click();
     await flush();
     // Cancel popup mid-recording.
-    const cancelBtn = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-      (b) => b.textContent?.toLowerCase().includes("cancel"),
+    const cancelBtn = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
+      b.textContent?.toLowerCase().includes("cancel"),
     )!;
     cancelBtn.click();
     await flush();

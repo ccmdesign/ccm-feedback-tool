@@ -113,10 +113,7 @@ export function createTranscribeHandler(opts: TranscribeHandlerOptions) {
 
     const mime = audio.type || "application/octet-stream";
     if (!mimeIsAllowed(mime, allowed)) {
-      return withCors(
-        Response.json({ error: `Unsupported audio mime '${mime}'` }, { status: 415 }),
-        corsHeaders,
-      );
+      return withCors(Response.json({ error: `Unsupported audio mime '${mime}'` }, { status: 415 }), corsHeaders);
     }
 
     // 1. Whisper — hard failure returns 502, no partial data leaks.

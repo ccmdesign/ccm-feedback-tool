@@ -77,3 +77,11 @@ bun scripts/verify-webhook-signature.mjs <payload.json> <secret> \
 ```
 
 Exits 0 when the signature is valid.
+
+## CCM-284 — Voice audio storage bucket (when opted in)
+
+When `CCM_FEEDBACK_STORE_AUDIO=true`, the `/api/v1/transcribe` handler uploads raw voice blobs to the Supabase Storage bucket named by `SUPABASE_AUDIO_BUCKET` (default `audio`). Object paths are `audio/<project_id>/<uuid>.<ext>`.
+
+- **Bucket visibility**: configured public. Public URLs are embedded in the outbound `§6.1` webhook payload as `audio_url`, so downstream agents can fetch without auth. A follow-up hardening ticket will move this to signed URLs.
+- **Lifecycle**: not automated in this ticket. Operators should manually prune old audio when volume pressure appears (e.g., a Supabase lifecycle rule or periodic delete script). See the CCM-284 plan "Deferred to Separate Tasks" for the tracked follow-up.
+- **Disabling**: unset `CCM_FEEDBACK_STORE_AUDIO` and redeploy. Existing `FeedbackAnnotation.audioUrl` rows remain; the outbound payload omits `audio_url` for new annotations.

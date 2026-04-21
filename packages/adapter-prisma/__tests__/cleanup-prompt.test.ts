@@ -13,11 +13,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  buildCleanupMessages,
-  CLEANUP_SYSTEM_PROMPT,
-  createCleanupClient,
-} from "../src/transcribe-clients.js";
+import { buildCleanupMessages, CLEANUP_SYSTEM_PROMPT, createCleanupClient } from "../src/transcribe-clients.js";
 
 interface FixturePair {
   name: string;

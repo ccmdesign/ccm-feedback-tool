@@ -22,10 +22,9 @@ describe("ApiClient.transcribe", () => {
 
   it("POSTs multipart to /api/v1/transcribe relative to the feedback endpoint", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      new Response(
-        JSON.stringify({ cleaned_text: "Hello.", raw_text: "um hello", audio_url: "https://s/a.webm" }),
-        { status: 200 },
-      ),
+      new Response(JSON.stringify({ cleaned_text: "Hello.", raw_text: "um hello", audio_url: "https://s/a.webm" }), {
+        status: 200,
+      }),
     );
 
     const client = new ApiClient("/api/feedback", "demo");

@@ -14,8 +14,8 @@ import {
   createTranscribeHandler,
   createWhisperClient,
 } from "@ccm-feedback/adapter-prisma";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { resolveProjectStores } from "@/lib/ccm-stores";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

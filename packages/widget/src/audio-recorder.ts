@@ -7,12 +7,7 @@
  */
 
 /** Mime strings the recorder prefers, in order. */
-const MIME_PREFERENCE = [
-  "audio/webm;codecs=opus",
-  "audio/webm",
-  "audio/mp4;codecs=mp4a.40.2",
-  "audio/mp4",
-] as const;
+const MIME_PREFERENCE = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4"] as const;
 
 /** Hard cap on recording duration (ms) — prevents accidental runaway sessions. */
 export const MAX_RECORD_MS = 60_000;

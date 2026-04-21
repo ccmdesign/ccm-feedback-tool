@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createTranscribeHandler } from "../src/transcribe-handler.js";
 import type { AudioStorage, CleanupClient, WhisperClient } from "../src/transcribe-clients.js";
+import { createTranscribeHandler } from "../src/transcribe-handler.js";
 
 function makeAudioFile({ size = 128, mime = "audio/webm;codecs=opus" } = {}): File {
   const bytes = new Uint8Array(size);
