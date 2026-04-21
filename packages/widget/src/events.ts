@@ -59,6 +59,14 @@ export interface WidgetEvents {
   "annotation:complete": [import("./annotator.js").AnnotationComplete];
   "annotations:toggle": [boolean];
   "panel:toggle": [boolean];
+  // CCM-282 — text-edit + image-swap modes. Payloads are defined alongside
+  // the mode classes to keep ownership local.
+  "text-edit:start": [];
+  "text-edit:end": [];
+  "text-edit:complete": [import("./text-edit-mode.js").TextEditComplete];
+  "image-swap:start": [];
+  "image-swap:end": [];
+  "image-swap:complete": [import("./image-swap-mode.js").ImageSwapComplete];
 }
 
 /** Subset of WidgetEvents exposed to consumers via CcmFeedbackInstance */

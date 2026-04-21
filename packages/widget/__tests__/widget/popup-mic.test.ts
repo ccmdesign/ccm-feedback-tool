@@ -347,7 +347,7 @@ describe("Popup — CCM-284 mic button", () => {
 
     // In-flight: type buttons + submit must all be disabled.
     expect(btn.disabled).toBe(true);
-    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>('button[data-type]')) {
+    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>("button[data-type]")) {
       expect(typeBtn.disabled).toBe(true);
     }
     expect(submitBtn.disabled).toBe(true);
@@ -355,7 +355,7 @@ describe("Popup — CCM-284 mic button", () => {
     // Resolve transcribe — type buttons + submit should re-enable.
     resolveTranscribe({ cleaned_text: "cleaned", raw_text: "raw" });
     await flush();
-    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>('button[data-type]')) {
+    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>("button[data-type]")) {
       expect(typeBtn.disabled).toBe(false);
     }
     // Submit is re-enabled because a type is selected and the textarea has content.

@@ -169,9 +169,19 @@ const _CCM_FEEDBACK_MODELS = {
       status: { type: "String", default: '"submitted"' },
       implementationResult: { type: "Json", optional: true },
       implementationUpdatedAt: { type: "DateTime", optional: true },
+      // CCM-282: annotation intent discriminator + type-specific columns.
+      type: { type: "String", default: '"rectangle"' },
+      originalText: { type: "String", optional: true, nativeType: "Text" },
+      proposedText: { type: "String", optional: true, nativeType: "Text" },
+      originalAssetUrl: { type: "String", optional: true, nativeType: "Text" },
+      proposedAssetUrl: { type: "String", optional: true, nativeType: "Text" },
+      proposedAssetSource: { type: "String", optional: true },
+      proposedAltText: { type: "String", optional: true, nativeType: "Text" },
+      assetMeta: { type: "Json", optional: true },
+      // CCM-284: optional public URL of the persisted voice audio.
       audioUrl: { type: "String", optional: true, nativeType: "Text" },
     },
-    indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }],
+    indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }, { fields: ["type"] }],
   },
 } as const satisfies Record<string, ModelDef>;
 

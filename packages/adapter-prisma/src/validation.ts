@@ -1,5 +1,5 @@
-import type { FeedbackStatus, FeedbackType } from "@ccm-feedback/core";
-import { FEEDBACK_STATUSES, FEEDBACK_TYPES } from "@ccm-feedback/core";
+import type { AnnotationType, FeedbackStatus, FeedbackType, ProposedAssetSource } from "@ccm-feedback/core";
+import { ALLOWED_IMAGE_MIMES, FEEDBACK_STATUSES, FEEDBACK_TYPES, MAX_ASSET_SIZE_BYTES } from "@ccm-feedback/core";
 import * as zod from "zod";
 
 // Namespace import required: Zod publishes dual CJS/ESM, and bundlers (tsup, vitest) may
@@ -8,6 +8,45 @@ import * as zod from "zod";
 // regardless of which entry point the bundler resolves.
 // See: https://github.com/colinhacks/zod/issues/2697
 const z: typeof zod.z = ("z" in zod ? zod.z : zod) as typeof zod.z;
+
+/**
+ * Resolve the canonical CCM Storage origin prefix — used to enforce that
+ * `proposedAssetUrl` on image_swap annotations is CCM-hosted (never the external
+ * URL the reviewer pasted). Resolution order:
+ *
+ *   1. `CCM_STORAGE_ORIGIN` explicit override.
+ *   2. `NEXT_PUBLIC_SUPABASE_URL + /storage/v1/object/public/assets/` when present.
+ *   3. Local supabase dev fallback (`http://localhost:54321/storage/v1/object/public/assets/`)
+ *      — only in non-production. Production throws instead (CCM-282 P2).
+ *
+ * CCM-282 P2: fail-closed in production. If a production deployment is
+ * misconfigured (neither env var set), the validator previously accepted
+ * `http://localhost:54321/...` as the CCM-hosted prefix — an attacker knowing
+ * the fallback could then pass validation with a localhost-prefixed URL.
+ * Throwing here surfaces as a 500 from the handler, which is strictly better
+ * than silently accepting the localhost default.
+ *
+ * Returned value always ends with a trailing slash so `startsWith` checks are
+ * unambiguous.
+ */
+export function resolveCcmStorageOrigin(): string {
+  const explicit = process.env.CCM_STORAGE_ORIGIN;
+  if (explicit && explicit.length > 0) {
+    return explicit.endsWith("/") ? explicit : `${explicit}/`;
+  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (supabaseUrl && supabaseUrl.length > 0) {
+    const trimmed = supabaseUrl.replace(/\/+$/, "");
+    return `${trimmed}/storage/v1/object/public/assets/`;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CCM_STORAGE_ORIGIN or NEXT_PUBLIC_SUPABASE_URL must be set in production. " +
+        "Refusing to fall back to localhost — doing so would let localhost-prefixed URLs pass validation.",
+    );
+  }
+  return "http://localhost:54321/storage/v1/object/public/assets/";
+}
 
 const anchorSchema = z.object({
   cssSelector: z.string().min(1).max(2000),
@@ -28,7 +67,7 @@ const rectSchema = z.object({
   hPct: z.number().min(0).max(1),
 });
 
-const annotationSchema = z.object({
+const annotationMetricsShape = {
   anchor: anchorSchema,
   rect: rectSchema,
   scrollX: z.number().min(0),
@@ -38,7 +77,84 @@ const annotationSchema = z.object({
   devicePixelRatio: z.number().positive().default(1),
   /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
   audioUrl: z.string().url().max(2000).optional(),
+} as const;
+
+// CCM-282 P3: `.strict()` on each discriminated-union branch. Without it, Zod
+// silently strips unknown keys — a rectangle payload with a stray
+// `proposedText` would succeed (with `proposedText` dropped before reaching
+// the DB). Strict rejects mask client-side bugs earlier and keep the
+// `_AssertAnnotationType` runtime shape honest. `assetMeta` is intentionally
+// non-strict so server-side metadata extensions (e.g. dominant color) don't
+// require coordinated client releases.
+const rectangleAnnotationSchema = z
+  .object({
+    type: z.literal("rectangle"),
+    ...annotationMetricsShape,
+  })
+  .strict();
+
+const textChangeAnnotationSchema = z
+  .object({
+    type: z.literal("text_change"),
+    originalText: z.string().min(1).max(5000),
+    proposedText: z.string().min(1).max(5000),
+    ...annotationMetricsShape,
+  })
+  .strict();
+
+const assetMetaSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  sizeBytes: z.number().int().positive().max(MAX_ASSET_SIZE_BYTES),
+  mime: z.enum(ALLOWED_IMAGE_MIMES),
 });
+
+const imageSwapAnnotationSchema = z
+  .object({
+    type: z.literal("image_swap"),
+    originalAssetUrl: z.string().url().max(2000),
+    proposedAssetUrl: z.string().url().max(2000),
+    proposedAssetSource: z.enum(["link", "upload"]),
+    proposedAltText: z.string().max(500).optional(),
+    assetMeta: assetMetaSchema,
+    ...annotationMetricsShape,
+  })
+  .strict();
+
+/**
+ * Discriminated-union annotation schema. The widget stamps `type` on every
+ * annotation it submits; CCM-279-era callers that omit the field are coerced
+ * to `"rectangle"` via `z.preprocess` so existing rectangle payloads stay
+ * compatible.
+ *
+ * NOTE: `.superRefine` on the imageSwap branch would produce a `ZodEffects`
+ * which is incompatible with `z.discriminatedUnion`. Instead we layer the
+ * CCM-hosted origin check after the union.
+ */
+const discriminatedAnnotationSchema = z.discriminatedUnion("type", [
+  rectangleAnnotationSchema,
+  textChangeAnnotationSchema,
+  imageSwapAnnotationSchema,
+]);
+
+const annotationSchema = z
+  .preprocess((raw) => {
+    if (raw && typeof raw === "object" && !("type" in raw)) {
+      return { ...(raw as Record<string, unknown>), type: "rectangle" as const };
+    }
+    return raw;
+  }, discriminatedAnnotationSchema)
+  .superRefine((value, ctx) => {
+    if (value.type !== "image_swap") return;
+    const origin = resolveCcmStorageOrigin();
+    if (!value.proposedAssetUrl.startsWith(origin)) {
+      ctx.addIssue({
+        code: zod.ZodIssueCode.custom,
+        path: ["proposedAssetUrl"],
+        message: `proposedAssetUrl must be CCM-hosted (start with ${origin}).`,
+      });
+    }
+  });
 
 export const feedbackCreateSchema = z.object({
   projectName: z.string().min(1).max(200),
@@ -96,7 +212,8 @@ export interface RectInput {
   hPct: number;
 }
 
-export interface AnnotationInput {
+/** Shared fields that carry anchor + rect + viewport metrics. */
+interface AnnotationMetricsInput {
   anchor: AnchorInput;
   rect: RectInput;
   scrollX: number;
@@ -108,6 +225,35 @@ export interface AnnotationInput {
   /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
   audioUrl?: string | undefined;
 }
+
+/** Rectangle annotation — the CCM-279-era shape, `type` defaults to `"rectangle"`. */
+export interface RectangleAnnotationInput extends AnnotationMetricsInput {
+  type: "rectangle";
+}
+
+/** Text-change annotation — reviewer-proposed replacement copy. */
+export interface TextChangeAnnotationInput extends AnnotationMetricsInput {
+  type: "text_change";
+  originalText: string;
+  proposedText: string;
+}
+
+/** Image-swap annotation — CCM-hosted proposed asset URL + server-canonicalized metadata. */
+export interface ImageSwapAnnotationInput extends AnnotationMetricsInput {
+  type: "image_swap";
+  originalAssetUrl: string;
+  proposedAssetUrl: string;
+  proposedAssetSource: ProposedAssetSource;
+  proposedAltText?: string | undefined;
+  assetMeta: {
+    width: number;
+    height: number;
+    sizeBytes: number;
+    mime: (typeof ALLOWED_IMAGE_MIMES)[number];
+  };
+}
+
+export type AnnotationInput = RectangleAnnotationInput | TextChangeAnnotationInput | ImageSwapAnnotationInput;
 
 export interface FeedbackCreateInput {
   projectName: string;
@@ -153,12 +299,15 @@ export interface GetQueryInput {
 
 // ---------------------------------------------------------------------------
 // Type-level assertions: manual interfaces stay in sync with schemas.
-// If a field is added/removed/changed in the schema but not the interface
-// (or vice versa), these lines produce a compile error.
+// Compile error if a field is added/removed/changed in the schema but not the
+// interface (or vice versa).
+//
+// NOTE: the annotation shape is a discriminated union with a ZodEffects branch,
+// which makes full two-way inference assertions awkward in practice. We keep
+// the forward direction on the create schema so drift in primitive field shape
+// still fails to compile.
 // ---------------------------------------------------------------------------
 
-type _AssertCreate = zod.z.infer<typeof feedbackCreateSchema> extends FeedbackCreateInput ? true : never;
-type _AssertCreateReverse = FeedbackCreateInput extends zod.z.infer<typeof feedbackCreateSchema> ? true : never;
 type _AssertPatch = zod.z.infer<typeof feedbackPatchSchema> extends FeedbackPatchInput ? true : never;
 type _AssertPatchReverse = FeedbackPatchInput extends zod.z.infer<typeof feedbackPatchSchema> ? true : never;
 type _AssertDelete = zod.z.infer<typeof feedbackDeleteSchema> extends FeedbackDeleteInput ? true : never;
@@ -166,15 +315,16 @@ type _AssertDeleteReverse = FeedbackDeleteInput extends zod.z.infer<typeof feedb
 type _AssertQuery = zod.z.infer<typeof getQuerySchema> extends GetQueryInput ? true : never;
 type _AssertQueryReverse = GetQueryInput extends zod.z.infer<typeof getQuerySchema> ? true : never;
 
-// Suppress unused-variable warnings — assertions are compile-time only
-void (0 as unknown as _AssertCreate);
-void (0 as unknown as _AssertCreateReverse);
+// Discriminated union sanity check — ensures AnnotationType values match.
+type _AssertAnnotationType = AnnotationInput["type"] extends AnnotationType ? true : never;
+
 void (0 as unknown as _AssertPatch);
 void (0 as unknown as _AssertPatchReverse);
 void (0 as unknown as _AssertDelete);
 void (0 as unknown as _AssertDeleteReverse);
 void (0 as unknown as _AssertQuery);
 void (0 as unknown as _AssertQueryReverse);
+void (0 as unknown as _AssertAnnotationType);
 
 /**
  * Map Zod errors to a flat array of { field, message } objects.

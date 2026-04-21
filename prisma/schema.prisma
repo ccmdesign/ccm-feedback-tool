@@ -98,8 +98,19 @@ model FeedbackAnnotation {
   status                  String        @default("submitted")
   implementationResult    Json?
   implementationUpdatedAt DateTime?
+  // CCM-282: annotation intent discriminator + type-specific columns.
+  type                    String        @default("rectangle")
+  originalText            String?       @db.Text
+  proposedText            String?       @db.Text
+  originalAssetUrl        String?       @db.Text
+  proposedAssetUrl        String?       @db.Text
+  proposedAssetSource     String?
+  proposedAltText         String?       @db.Text
+  assetMeta               Json?
+  // CCM-284: optional public URL of the persisted voice audio for this annotation.
   audioUrl                String?       @db.Text
 
   @@index([feedbackId])
   @@index([status])
+  @@index([type])
 }

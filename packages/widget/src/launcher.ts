@@ -1,8 +1,10 @@
 import type {
+  AnnotationPayload,
   CcmFeedbackConfig,
   CcmFeedbackInstance,
   CcmFeedbackPublicEvents,
   FeedbackPayload,
+  FeedbackType,
 } from "@ccm-feedback/core";
 import { Annotator } from "./annotator.js";
 import { ApiClient, flushRetryQueue, type WidgetClient } from "./api-client.js";
@@ -11,11 +13,13 @@ import { EventBus, type PublicWidgetEvents, type WidgetEvents } from "./events.j
 import { Fab } from "./fab.js";
 import { createT, type TFunction } from "./i18n/index.js";
 import { getIdentity, type Identity, saveIdentity } from "./identity.js";
+import { ImageSwapMode } from "./image-swap-mode.js";
 import { MarkerManager } from "./markers.js";
 import { Panel } from "./panel.js";
 import { StoreClient } from "./store-client.js";
 import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
+import { TextEditMode } from "./text-edit-mode.js";
 import { Tooltip } from "./tooltip.js";
 
 /** Singleton guard — prevents duplicate widgets from overlapping */
@@ -177,7 +181,6 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   // Components inside Shadow DOM
   const fab = new Fab(shadow, config, bus, t);
   const panel = new Panel(shadow, colors, bus, client, config.projectName, markers, t, locale);
-
   // CCM-284 — wire the transcribe round-trip into the popup composer.
   // Only HTTP clients expose `transcribe`; store-only mode leaves the mic hidden.
   const transcribeFn = client.transcribe
@@ -198,25 +201,32 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
       }
     : undefined;
   const annotator = new Annotator(colors, bus, t, config.projectName, transcribeFn);
+  // CCM-282 — `shouldIgnoreElement` self-excludes host + widget-internal nodes.
+  const shouldIgnoreElement = (element: Element) => element === host || host.contains(element);
+  const textEditMode = new TextEditMode(colors, bus, t, shouldIgnoreElement);
+  const imageSwapMode = new ImageSwapMode(colors, bus, t, shadow, client, config.projectName, shouldIgnoreElement);
 
-  // Handle annotation completion via event bus (not DOM events)
-  // Concurrency guard: prevent duplicate submissions if user draws two annotations quickly
+  // Shared submission pipeline (Unit 10) — rectangle + text_change + image_swap
+  // all flow through the same FeedbackPayload builder + sendFeedback call. A
+  // single `submitting` flag acts as a concurrency guard across all three modes.
   let submitting = false;
-  const unsubAnnotation = bus.on("annotation:complete", async (data) => {
+
+  async function submitAnnotation(
+    annotation: AnnotationPayload,
+    type: FeedbackType,
+    messageInput: string,
+  ): Promise<void> {
     if (submitting) return;
     submitting = true;
     try {
-      const { annotation, type, message } = data;
-
       // Ensure identity
       let identity = getIdentity();
       if (!identity) {
         identity = await promptIdentity(shadow, t);
-        if (!identity) return; // User cancelled
+        if (!identity) return;
         saveIdentity(identity);
       }
 
-      // Sanitize URL — strip sensitive query params before sending
       const rawUrl = new URL(window.location.href);
       for (const key of [...rawUrl.searchParams.keys()]) {
         if (/token|key|secret|auth|session|password|code/i.test(key)) {
@@ -225,7 +235,6 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
       }
       const sanitizedUrl = rawUrl.toString();
 
-      // crypto.randomUUID() throws in non-secure contexts (plain HTTP)
       const clientId = (() => {
         try {
           return crypto.randomUUID();
@@ -233,6 +242,14 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
           return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         }
       })();
+
+      const trimmed = messageInput.trim();
+      let message = trimmed;
+      if (!message) {
+        if (annotation.type === "text_change") message = "[text edit]";
+        else if (annotation.type === "image_swap") message = "[image swap]";
+        else message = "[annotation]";
+      }
 
       const payload: FeedbackPayload = {
         projectName: config.projectName,
@@ -254,12 +271,54 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
         liveRegion.textContent = t("feedback.sent.confirmation");
         await panel.refresh();
       } catch (error) {
+        // CCM-282 P2: orphaned-asset reconciliation.
+        //
+        // For `image_swap` annotations, the asset has already been written to
+        // Storage (via `signUpload` PUT or `mirrorAsset`) by the time we get
+        // here. If `sendFeedback` fails, the asset sits in Storage with no
+        // referencing annotation row — a resource leak.
+        //
+        // TODO(CCM-follow-up): record the orphan in a `PendingAsset` DB table
+        // (or tag the object with a TTL metadata key) so a scheduled janitor
+        // can sweep assets with no referencing annotation older than 24 h.
+        // Full janitor is out-of-scope for CCM-282; this log is the hook a
+        // future reconciliation job can grep for.
+        if (annotation.type === "image_swap") {
+          try {
+            // Structured single-line log — easy to grep, safe to leave in prod.
+            console.warn(
+              "[ccm-feedback] orphaned_asset_candidate",
+              JSON.stringify({
+                event: "orphaned_asset_candidate",
+                projectName: config.projectName,
+                proposedAssetUrl: annotation.proposedAssetUrl,
+                proposedAssetSource: annotation.proposedAssetSource,
+                sizeBytes: annotation.assetMeta?.sizeBytes,
+                mime: annotation.assetMeta?.mime,
+                at: new Date().toISOString(),
+                reason: error instanceof Error ? error.message : String(error),
+              }),
+            );
+          } catch {
+            // Logging must never mask the user-facing error.
+          }
+        }
         bus.emit("feedback:error", error instanceof Error ? error : new Error(String(error)));
         liveRegion.textContent = t("feedback.error.message");
       }
     } finally {
       submitting = false;
     }
+  }
+
+  const unsubAnnotation = bus.on("annotation:complete", (data) => {
+    void submitAnnotation(data.annotation, data.type, data.message);
+  });
+  const unsubTextEdit = bus.on("text-edit:complete", (data) => {
+    void submitAnnotation(data.annotation, "change", "");
+  });
+  const unsubImageSwap = bus.on("image-swap:complete", (data) => {
+    void submitAnnotation(data.annotation, "change", "");
   });
 
   // Load markers immediately on page load
@@ -283,9 +342,13 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
     destroy: () => {
       log("Destroying widget");
       unsubAnnotation();
+      unsubTextEdit();
+      unsubImageSwap();
       fab.destroy();
       panel.destroy();
       annotator.destroy();
+      textEditMode.destroy();
+      imageSwapMode.destroy();
       markers.destroy();
       tooltip.destroy();
       bus.removeAll();

@@ -41,10 +41,36 @@ export const en: Translations = {
   "fab.messages": "Messages",
   "fab.annotate": "Annotate",
   "fab.annotations": "Annotations",
+  // CCM-282
+  "fab.editText": "Edit text",
+  "fab.swapImage": "Swap image",
 
   // Annotator
   "annotator.instruction": "Draw a rectangle on the area to comment",
   "annotator.cancel": "Cancel",
+
+  // CCM-282 — Text edit mode
+  "textEdit.instruction": "Click any text block to edit it. Press Enter to save, Escape to cancel.",
+  "textEdit.cancel": "Cancel",
+  "textEdit.ariaLabel": "Edit text mode",
+
+  // CCM-282 — Image swap mode
+  "imageSwap.instruction": "Click an image to propose a replacement.",
+  "imageSwap.cancel": "Cancel",
+  "imageSwap.ariaLabel": "Swap image mode",
+  "imageSwap.urlLabel": "Image URL",
+  "imageSwap.urlPlaceholder": "https://example.com/image.jpg",
+  "imageSwap.fileLabel": "Or upload a file",
+  "imageSwap.altLabel": "Alt text (optional)",
+  "imageSwap.altPlaceholder": "Describe the image…",
+  "imageSwap.original": "Original",
+  "imageSwap.proposed": "Proposed",
+  "imageSwap.submit": "Submit swap",
+  "imageSwap.errorSize": "File exceeds 10 MB limit.",
+  "imageSwap.errorMime": "Format not supported for upload (jpg, png, webp, avif, gif). Paste an SVG URL instead.",
+  "imageSwap.errorUrl": "Invalid URL.",
+  "imageSwap.errorMirror": "Could not fetch image. Please try again.",
+  "imageSwap.errorUpload": "Upload failed. Please try again.",
 
   // Popup
   "popup.ariaLabel": "Feedback form",
