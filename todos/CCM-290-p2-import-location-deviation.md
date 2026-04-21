@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Option A applied — StoreNotFoundError imported from @ccm-feedback/core in widget replies route; Zod-bound formatValidationErrors + replyCreateSchema stay on adapter-prisma."
 ---
 
 # CCM-290 — Widget replies route imports from adapter-prisma; evaluate whether core is viable

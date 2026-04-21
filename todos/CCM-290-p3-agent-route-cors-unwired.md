@@ -1,8 +1,9 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Option B applied — all three agent routes read CCM_AGENT_ALLOWED_ORIGINS via a shared allowed-origins helper; documented in .env.example. Unset = server-to-server (status quo)."
 ---
 
 # CCM-290 — Agent routes do not wire `allowedOrigins`; CORS is silently disabled

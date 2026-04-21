@@ -1,8 +1,9 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Option 2 applied — removed the unreachable StoreNotFoundError branch from widget replies GET; POST still handles StoreNotFoundError for genuine missing-parent cases."
 ---
 
 # CCM-290 — Dead 404 branch in widget replies GET route

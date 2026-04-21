@@ -8,8 +8,8 @@
  * Rate limiting is an edge-layer concern; keep the handler minimal.
  */
 
-import { formatValidationErrors, replyCreateSchema, StoreNotFoundError } from "@ccm-feedback/adapter-prisma";
-import type { ReplyResponse } from "@ccm-feedback/core";
+import { formatValidationErrors, replyCreateSchema } from "@ccm-feedback/adapter-prisma";
+import { type ReplyResponse, StoreNotFoundError } from "@ccm-feedback/core";
 import { resolveStore } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -19,6 +19,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const store = await resolveStore();
   try {
+    // CCM-290 P3 — every CcmFeedbackStore.listReplies implementation returns
+    // [] for unknown feedback ids (Prisma's findMany, Memory/LocalStorage's
+    // explicit parent check). No StoreNotFoundError branch to handle here.
     const rows = await store.listReplies(id);
     const serialized: ReplyResponse[] = rows.map((r) => ({
       id: r.id,
@@ -31,9 +34,6 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     }));
     return Response.json(serialized);
   } catch (error) {
-    if (error instanceof StoreNotFoundError) {
-      return Response.json({ error: "Feedback not found" }, { status: 404 });
-    }
     console.error("[ccm-feedback] listReplies failed:", error);
     return Response.json({ error: "Internal server error" }, { status: 500 });
   }
