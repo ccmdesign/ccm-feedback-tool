@@ -16,9 +16,7 @@ Only the latest published version of each `@ccm-feedback/*` package receives sec
 Instead, please report vulnerabilities through one of these channels:
 
 1. **GitHub Security Advisories** (preferred) -- [Report a vulnerability](https://github.com/ccmdesign/ccm-feedback-tool/security/advisories/new)
-2. **Email** -- Send details to **security@neosianexus.dev**
-
-> **Note:** The email contact is inherited from the upstream project. CCM will replace it in a follow-up ticket.
+2. **Email** -- Send details to **dev@ccmdesign.ca**
 
 ### What to include
 
