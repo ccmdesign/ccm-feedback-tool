@@ -311,6 +311,38 @@ describe("CCM-282 discriminated-union annotation schema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects a rectangle annotation with a stray text_change field (CCM-282 P3 strict)", () => {
+    // Without `.strict()`, Zod silently strips `proposedText` and this would
+    // succeed. Strict branches surface the mismatch as a validation error.
+    const result = feedbackCreateSchema.safeParse({
+      ...validPayload,
+      annotations: [{ ...validAnnotation, type: "rectangle", proposedText: "sneaky" }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // Zod's `unrecognized_keys` issue lists the offending keys on a `keys`
+      // property rather than in `path`. Check both the message and any `keys`.
+      const issueJson = JSON.stringify(result.error.issues);
+      expect(issueJson).toContain("proposedText");
+    }
+  });
+
+  it("rejects a text_change annotation carrying image_swap-only assetMeta (CCM-282 P3 strict)", () => {
+    const result = feedbackCreateSchema.safeParse({
+      ...validPayload,
+      annotations: [
+        {
+          ...validAnnotation,
+          type: "text_change",
+          originalText: "a",
+          proposedText: "b",
+          assetMeta: { width: 10, height: 10, sizeBytes: 100, mime: "image/png" },
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("CCM-282 resolveCcmStorageOrigin", () => {
@@ -338,6 +370,32 @@ describe("CCM-282 resolveCcmStorageOrigin", () => {
     delete process.env.CCM_STORAGE_ORIGIN;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://proj.supabase.co";
     expect(resolveCcmStorageOrigin()).toBe("https://proj.supabase.co/storage/v1/object/public/assets/");
+  });
+
+  it("throws in production when neither env var is set (CCM-282 P2 fail-closed)", () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    delete process.env.CCM_STORAGE_ORIGIN;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NODE_ENV = "production";
+    try {
+      expect(() => resolveCcmStorageOrigin()).toThrow(/production/i);
+    } finally {
+      if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedNodeEnv;
+    }
+  });
+
+  it("falls back to localhost when NODE_ENV is not production (dev convenience)", () => {
+    const savedNodeEnv = process.env.NODE_ENV;
+    delete process.env.CCM_STORAGE_ORIGIN;
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NODE_ENV = "development";
+    try {
+      expect(resolveCcmStorageOrigin()).toBe("http://localhost:54321/storage/v1/object/public/assets/");
+    } finally {
+      if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedNodeEnv;
+    }
   });
 });
 

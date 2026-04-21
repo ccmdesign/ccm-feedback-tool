@@ -16,7 +16,15 @@ const z: typeof zod.z = ("z" in zod ? zod.z : zod) as typeof zod.z;
  *
  *   1. `CCM_STORAGE_ORIGIN` explicit override.
  *   2. `NEXT_PUBLIC_SUPABASE_URL + /storage/v1/object/public/assets/` when present.
- *   3. Local supabase dev fallback (`http://localhost:54321/storage/v1/object/public/assets/`).
+ *   3. Local supabase dev fallback (`http://localhost:54321/storage/v1/object/public/assets/`)
+ *      — only in non-production. Production throws instead (CCM-282 P2).
+ *
+ * CCM-282 P2: fail-closed in production. If a production deployment is
+ * misconfigured (neither env var set), the validator previously accepted
+ * `http://localhost:54321/...` as the CCM-hosted prefix — an attacker knowing
+ * the fallback could then pass validation with a localhost-prefixed URL.
+ * Throwing here surfaces as a 500 from the handler, which is strictly better
+ * than silently accepting the localhost default.
  *
  * Returned value always ends with a trailing slash so `startsWith` checks are
  * unambiguous.
@@ -30,6 +38,12 @@ export function resolveCcmStorageOrigin(): string {
   if (supabaseUrl && supabaseUrl.length > 0) {
     const trimmed = supabaseUrl.replace(/\/+$/, "");
     return `${trimmed}/storage/v1/object/public/assets/`;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CCM_STORAGE_ORIGIN or NEXT_PUBLIC_SUPABASE_URL must be set in production. " +
+        "Refusing to fall back to localhost — doing so would let localhost-prefixed URLs pass validation.",
+    );
   }
   return "http://localhost:54321/storage/v1/object/public/assets/";
 }
@@ -63,17 +77,28 @@ const annotationMetricsShape = {
   devicePixelRatio: z.number().positive().default(1),
 } as const;
 
-const rectangleAnnotationSchema = z.object({
-  type: z.literal("rectangle"),
-  ...annotationMetricsShape,
-});
+// CCM-282 P3: `.strict()` on each discriminated-union branch. Without it, Zod
+// silently strips unknown keys — a rectangle payload with a stray
+// `proposedText` would succeed (with `proposedText` dropped before reaching
+// the DB). Strict rejects mask client-side bugs earlier and keep the
+// `_AssertAnnotationType` runtime shape honest. `assetMeta` is intentionally
+// non-strict so server-side metadata extensions (e.g. dominant color) don't
+// require coordinated client releases.
+const rectangleAnnotationSchema = z
+  .object({
+    type: z.literal("rectangle"),
+    ...annotationMetricsShape,
+  })
+  .strict();
 
-const textChangeAnnotationSchema = z.object({
-  type: z.literal("text_change"),
-  originalText: z.string().min(1).max(5000),
-  proposedText: z.string().min(1).max(5000),
-  ...annotationMetricsShape,
-});
+const textChangeAnnotationSchema = z
+  .object({
+    type: z.literal("text_change"),
+    originalText: z.string().min(1).max(5000),
+    proposedText: z.string().min(1).max(5000),
+    ...annotationMetricsShape,
+  })
+  .strict();
 
 const assetMetaSchema = z.object({
   width: z.number().int().positive(),
@@ -82,15 +107,17 @@ const assetMetaSchema = z.object({
   mime: z.enum(ALLOWED_IMAGE_MIMES),
 });
 
-const imageSwapAnnotationSchema = z.object({
-  type: z.literal("image_swap"),
-  originalAssetUrl: z.string().url().max(2000),
-  proposedAssetUrl: z.string().url().max(2000),
-  proposedAssetSource: z.enum(["link", "upload"]),
-  proposedAltText: z.string().max(500).optional(),
-  assetMeta: assetMetaSchema,
-  ...annotationMetricsShape,
-});
+const imageSwapAnnotationSchema = z
+  .object({
+    type: z.literal("image_swap"),
+    originalAssetUrl: z.string().url().max(2000),
+    proposedAssetUrl: z.string().url().max(2000),
+    proposedAssetSource: z.enum(["link", "upload"]),
+    proposedAltText: z.string().max(500).optional(),
+    assetMeta: assetMetaSchema,
+    ...annotationMetricsShape,
+  })
+  .strict();
 
 /**
  * Discriminated-union annotation schema. The widget stamps `type` on every

@@ -1,8 +1,9 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: Added `.strict()` to each discriminated-union branch (rectangle / text_change / image_swap). `assetMeta` deliberately stays non-strict to allow server-side metadata extensions. Regression tests cover stray-field rejection on both directions.
 ---
 
 # CCM-282 — Annotation discriminated-union accepts stray fields from other variants

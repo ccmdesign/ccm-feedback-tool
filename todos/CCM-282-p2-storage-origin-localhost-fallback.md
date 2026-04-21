@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: `resolveCcmStorageOrigin()` now throws when `NODE_ENV === "production"` and neither `CCM_STORAGE_ORIGIN` nor `NEXT_PUBLIC_SUPABASE_URL` is set. Dev/test continues to fall back to the localhost default so existing test fixtures keep working.
 ---
 
 # CCM-282 — `resolveCcmStorageOrigin` falls back to localhost when env unset in production
