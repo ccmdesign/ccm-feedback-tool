@@ -70,6 +70,23 @@ function mimeIsAllowed(mime: string, allowed: string[]): boolean {
 }
 
 /**
+ * Normalize a string for safe use as a single storage path segment.
+ * Strips slashes, control chars, and collapses whitespace so a raw
+ * `projectName` (free-form user input) can't escape its bucket subdirectory
+ * or produce empty segments. Falls back to `"unknown-project"` when the
+ * result is empty after sanitization.
+ */
+function sanitizePathSegment(value: string): string {
+  const cleaned = value
+    .replace(/[\\/]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/[^A-Za-z0-9._-]/g, "")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 128);
+  return cleaned.length > 0 ? cleaned : "unknown-project";
+}
+
+/**
  * Build the async POST handler. Exposes an accompanying OPTIONS function for
  * CORS preflight, mirroring the shape used by `createCcmFeedbackHandler`.
  */
@@ -139,12 +156,15 @@ export function createTranscribeHandler(opts: TranscribeHandlerOptions) {
     if (opts.storage) {
       try {
         // Resolve the internal project id if a store is wired; otherwise
-        // fall back to the supplied projectName as the path segment so the
-        // upload still works in simple deployments.
-        let projectId = projectName;
+        // fall back to a sanitized projectName as the path segment so the
+        // upload still works in simple deployments without leaking path
+        // separators or other filesystem-sensitive characters.
+        let projectId: string;
         if (opts.projectStore) {
           const found = await opts.projectStore.findByName(projectName);
-          if (found) projectId = found.id;
+          projectId = found ? found.id : sanitizePathSegment(projectName);
+        } else {
+          projectId = sanitizePathSegment(projectName);
         }
         audioUrl = await opts.storage.upload({ projectId, audio, mime });
       } catch (error) {

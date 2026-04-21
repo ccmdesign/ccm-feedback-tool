@@ -63,8 +63,6 @@ export class Popup {
   private micState: "hidden" | "idle" | "recording" | "transcribing" = "hidden";
   private currentContext: PopupContext | null = null;
   private pendingAudioUrl: string | undefined;
-  /** Textarea snapshot at recorder-start, for the merge rule. */
-  private preRecordValue = "";
 
   constructor(
     private readonly colors: ThemeColors,
@@ -341,9 +339,6 @@ export class Popup {
     }
     if (this.micState !== "idle") return;
 
-    // Snapshot textarea so we can apply the merge rule later.
-    this.preRecordValue = this.textarea.value;
-
     this.recorder = new AudioRecorder();
     try {
       await this.recorder.start();
@@ -390,20 +385,23 @@ export class Popup {
   }
 
   /**
-   * Merge-rule insertion: if the textarea is unchanged since we started
-   * recording, replace its value. Otherwise, append with a leading space so
-   * mid-recording typing is preserved.
+   * Merge-rule insertion (plan §Key Technical Decisions):
+   * - If textarea was empty at record-start and is still empty → set value.
+   * - If textarea had content typed BEFORE recording → append with a space.
+   * - If the user typed DURING recording → append with a space.
+   * Never overwrite user keystrokes.
    */
   private applyTranscription(cleaned: string): void {
     const text = (cleaned ?? "").trim();
     if (!text) return;
     const current = this.textarea.value;
     let next: string;
-    if (current === this.preRecordValue) {
-      next = text;
-    } else if (current.length === 0) {
+    if (current.length === 0) {
+      // Textarea empty now — safe to set.
       next = text;
     } else {
+      // Any existing content (whether pre-existing or mid-record typed) is
+      // preserved; append with a single separating space.
       const needsSpace = !/\s$/.test(current);
       next = `${current}${needsSpace ? " " : ""}${text}`;
     }
@@ -425,7 +423,6 @@ export class Popup {
   show(rectBounds: DOMRect, context?: PopupContext): Promise<PopupResult | null> {
     this.currentContext = context ?? null;
     this.pendingAudioUrl = undefined;
-    this.preRecordValue = "";
     return new Promise((resolve) => {
       this.resolve = resolve;
       this.selectedType = null;

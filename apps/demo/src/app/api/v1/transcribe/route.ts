@@ -71,11 +71,11 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function OPTIONS(request: Request): Promise<Response> {
-  const { whisper, cleanup, storage } = buildHandler();
-  const handler = createTranscribeHandler({
-    whisper,
-    cleanup,
-    ...(storage ? { storage } : {}),
-  });
+  // Preflight must not require OPENAI/OPENROUTER keys — those are only needed
+  // for the actual transcription request. Build a noop handler just to share
+  // the same CORS policy surface without constructing network clients.
+  const noopWhisper = { transcribe: async () => "" };
+  const noopCleanup = { clean: async () => "" };
+  const handler = createTranscribeHandler({ whisper: noopWhisper, cleanup: noopCleanup });
   return handler.OPTIONS(request);
 }
