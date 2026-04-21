@@ -44,10 +44,17 @@ export const en: Translations = {
   // CCM-282
   "fab.editText": "Edit text",
   "fab.swapImage": "Swap image",
+  // CCM-291
+  "fab.pin": "Pin",
 
   // Annotator
   "annotator.instruction": "Draw a rectangle on the area to comment",
   "annotator.cancel": "Cancel",
+
+  // CCM-291 — Pin mode
+  "pin.instruction": "Comment on element",
+  "pin.cancel": "Cancel",
+  "pin.ariaLabel": "Pin mode",
 
   // CCM-282 — Text edit mode
   "textEdit.instruction": "Click any text block to edit it. Press Enter to save, Escape to cancel.",

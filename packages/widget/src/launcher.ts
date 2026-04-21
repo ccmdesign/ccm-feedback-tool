@@ -6,7 +6,7 @@ import type {
   FeedbackPayload,
   FeedbackType,
 } from "@ccm-feedback/core";
-import { Annotator } from "./annotator.js";
+import { Annotator, openCommentPopupForElement } from "./annotator.js";
 import { ApiClient, flushRetryQueue, type WidgetClient } from "./api-client.js";
 import { MOBILE_BREAKPOINT, PAGE_SIZE, Z_INDEX_MAX } from "./constants.js";
 import { EventBus, type PublicWidgetEvents, type WidgetEvents } from "./events.js";
@@ -16,6 +16,7 @@ import { getIdentity, type Identity, saveIdentity } from "./identity.js";
 import { ImageSwapMode } from "./image-swap-mode.js";
 import { MarkerManager } from "./markers.js";
 import { Panel } from "./panel.js";
+import { PinMode } from "./pin-mode.js";
 import { StoreClient } from "./store-client.js";
 import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
@@ -116,6 +117,9 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   if (config.onError) bus.on("feedback:error", config.onError);
   if (config.onAnnotationStart) bus.on("annotation:start", config.onAnnotationStart);
   if (config.onAnnotationEnd) bus.on("annotation:end", config.onAnnotationEnd);
+  // CCM-291 — pin mode lifecycle callbacks (parity with onAnnotation{Start,End}).
+  if (config.onPinStart) bus.on("pin:start", config.onPinStart);
+  if (config.onPinEnd) bus.on("pin:end", config.onPinEnd);
 
   // Bridge internal events to public bus
   bus.on("feedback:sent", (fb) => publicBus.emit("feedback:sent", fb));
@@ -130,6 +134,8 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   bus.on("feedback:error", (err) => log("Feedback failed", err.message));
   bus.on("annotation:start", () => log("Annotation started"));
   bus.on("annotation:end", () => log("Annotation ended"));
+  bus.on("pin:start", () => log("Pin mode started"));
+  bus.on("pin:end", () => log("Pin mode ended"));
 
   // Create host element + Shadow DOM
   const host = document.createElement("ccm-feedback-widget");
@@ -205,6 +211,11 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   const shouldIgnoreElement = (element: Element) => element === host || host.contains(element);
   const textEditMode = new TextEditMode(colors, bus, t, shouldIgnoreElement);
   const imageSwapMode = new ImageSwapMode(colors, bus, t, shadow, client, config.projectName, shouldIgnoreElement);
+  // CCM-291 — pin mode reuses the Annotator's popup instance so we don't
+  // stand up a second audio recorder / root node / concurrent submission.
+  const openPopupForPinnedElement = (el: HTMLElement) =>
+    openCommentPopupForElement(el, annotator.getPopup(), config.projectName, bus);
+  const pinMode = new PinMode(colors, bus, t, openPopupForPinnedElement, shouldIgnoreElement);
 
   // Shared submission pipeline (Unit 10) — rectangle + text_change + image_swap
   // all flow through the same FeedbackPayload builder + sendFeedback call. A
@@ -347,6 +358,7 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
       fab.destroy();
       panel.destroy();
       annotator.destroy();
+      pinMode.destroy();
       textEditMode.destroy();
       imageSwapMode.destroy();
       markers.destroy();

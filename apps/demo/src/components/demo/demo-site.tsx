@@ -160,7 +160,10 @@ export function DemoSite() {
         />
         <div className="relative mx-auto max-w-4xl text-center">
           <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-accent">Digital agency</p>
-          <h1 className="text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
+          <h1
+            data-ccm-pin-target="true"
+            className="text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl"
+          >
             We craft digital experiences
             <br />
             <span className="text-accent">that matter.</span>

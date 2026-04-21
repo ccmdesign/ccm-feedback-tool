@@ -106,11 +106,12 @@ test.describe("Widget injection", () => {
 });
 
 test.describe("FAB radial menu", () => {
-  test("opens on click and shows 3 items", async ({ page }) => {
+  // CCM-291: pin is added as the default first item, bringing the total to 6.
+  test("opens on click and shows 6 items (CCM-291: pin added as default)", async ({ page }) => {
     const s = shadow(page);
     await s.click(".sp-fab");
     await s.waitFor(".sp-radial-item--open");
-    expect(await s.count(".sp-radial-item--open")).toBe(3);
+    expect(await s.count(".sp-radial-item--open")).toBe(6);
   });
 
   test("closes on second click", async ({ page }) => {
@@ -242,6 +243,174 @@ test.describe("Annotation mode", () => {
     );
 
     await page.mouse.up();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CCM-291 — Pin mode
+// ---------------------------------------------------------------------------
+
+test.describe("Pin mode (CCM-291)", () => {
+  test("pin is the first radial item (default on open)", async ({ page }) => {
+    const s = shadow(page);
+    await s.click(".sp-fab");
+    await s.waitFor(".sp-radial-item--open");
+    const firstId = await page.evaluate(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      const first = host?.shadowRoot?.querySelector<HTMLElement>(".sp-radial-item");
+      return first?.dataset.itemId ?? null;
+    });
+    expect(firstId).toBe("pin");
+  });
+
+  test("activates pin overlay on click", async ({ page }) => {
+    const s = shadow(page);
+    await s.click(".sp-fab");
+    await s.waitFor('[data-item-id="pin"]');
+    await s.click('[data-item-id="pin"]');
+
+    await page.waitForFunction(() => !!document.querySelector('[data-ccm-pin-overlay="true"]'));
+    const hasOverlay = await page.evaluate(() => !!document.querySelector('[data-ccm-pin-overlay="true"]'));
+    expect(hasOverlay).toBe(true);
+  });
+
+  test("deactivates on Escape without submitting", async ({ page }) => {
+    const s = shadow(page);
+    await s.click(".sp-fab");
+    await s.waitFor('[data-item-id="pin"]');
+    await s.click('[data-item-id="pin"]');
+
+    await page.waitForFunction(() => !!document.querySelector('[data-ccm-pin-overlay="true"]'));
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector('[data-ccm-pin-overlay="true"]'));
+
+    const project = getProject(page);
+    const res = await page.request.get(`http://localhost:3999/api/feedback?projectName=${project}`);
+    const data = await res.json();
+    expect(data.total).toBe(0);
+  });
+
+  test("applies an inline outline to the hovered pin target", async ({ page }) => {
+    const s = shadow(page);
+    await s.click(".sp-fab");
+    await s.waitFor('[data-item-id="pin"]');
+    await s.click('[data-item-id="pin"]');
+    await page.waitForFunction(() => !!document.querySelector('[data-ccm-pin-overlay="true"]'));
+
+    const box = await page.locator("[data-ccm-pin-target='true']").boundingBox();
+    if (!box) throw new Error("pin target not found");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+    // Poll for the inline outline style to be applied.
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector<HTMLElement>("[data-ccm-pin-target='true']");
+        return !!el && /solid/.test(el.style.outline);
+      },
+      undefined,
+      { timeout: 3000 },
+    );
+  });
+
+  test("full pin flow: click target → popup → submit → feedback persists with element anchor", async ({ page }) => {
+    // Pre-seed identity so the post-submit identity modal doesn't block the
+    // test. The widget reads this key on every submission via `getIdentity`.
+    await page.evaluate(() => {
+      window.localStorage.setItem(
+        "ccm_feedback_identity",
+        JSON.stringify({ name: "Test User", email: "test@example.com" }),
+      );
+    });
+
+    const s = shadow(page);
+
+    // 1. Open FAB and click pin (default)
+    await s.click(".sp-fab");
+    await s.waitFor('[data-item-id="pin"]');
+    await s.click('[data-item-id="pin"]');
+    await page.waitForFunction(() => !!document.querySelector('[data-ccm-pin-overlay="true"]'));
+
+    // 2. Click the pin target element. Pin mode's overlay captures clicks and
+    // re-resolves via elementFromPoint, so a single mouse click on the target
+    // coordinates is sufficient — no drag needed.
+    const box = await page.locator("[data-ccm-pin-target='true']").boundingBox();
+    if (!box) throw new Error("pin target not found");
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.up();
+
+    // 3. Popup appears — pick Bug
+    await page.waitForSelector("button[data-type='bug']", { timeout: 10000 });
+    await page.click("button[data-type='bug']");
+
+    // 4. Type a message
+    await page.waitForSelector("textarea");
+    await page.fill("textarea", "Pinned comment on hero heading");
+
+    // 5. Submit via evaluate (same pattern as area-mode flow)
+    await page.evaluate(() => {
+      const btns = document.querySelectorAll("button");
+      for (const b of btns) {
+        if (b.textContent === "Send") {
+          b.click();
+          return;
+        }
+      }
+    });
+
+    // 6. Handle identity modal if needed
+    await page.waitForFunction(
+      () => {
+        const host = document.querySelector("ccm-feedback-widget");
+        const hasIdentity = host?.shadowRoot?.querySelector(".sp-identity-title") !== null;
+        const hasMarker =
+          (document.getElementById("ccm-feedback-markers")?.querySelectorAll("[data-feedback-id]").length ?? 0) >= 1;
+        return hasIdentity || hasMarker;
+      },
+      undefined,
+      { timeout: 5000 },
+    );
+    const identityTitle = await page.evaluate(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      return host?.shadowRoot?.querySelector(".sp-identity-title") !== null;
+    });
+    if (identityTitle) {
+      await page.evaluate(() => {
+        const host = document.querySelector("ccm-feedback-widget");
+        const sr = host?.shadowRoot;
+        const inputs = sr?.querySelectorAll(".sp-input") as NodeListOf<HTMLInputElement>;
+        if (inputs?.length >= 2) {
+          inputs[0].value = "Test User";
+          inputs[0].dispatchEvent(new Event("input", { bubbles: true }));
+          inputs[1].value = "test@example.com";
+          inputs[1].dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        (sr?.querySelector(".sp-btn-primary") as HTMLElement)?.click();
+      });
+    }
+
+    // 7. Poll for API persistence
+    const project = getProject(page);
+    await page.waitForFunction(
+      async (pn) => {
+        const r = await fetch(`http://localhost:3999/api/feedback?projectName=${pn}`);
+        const d = await r.json();
+        return d.total >= 1;
+      },
+      project,
+      { timeout: 10000 },
+    );
+    const res = await page.request.get(`http://localhost:3999/api/feedback?projectName=${project}`);
+    const data = await res.json();
+    expect(data.total).toBe(1);
+    expect(data.feedbacks[0].type).toBe("bug");
+    expect(data.feedbacks[0].message).toBe("Pinned comment on hero heading");
+    // Anchor CSS selector should match the heading
+    expect(data.feedbacks[0].annotations.length).toBeGreaterThanOrEqual(1);
+    const ann = data.feedbacks[0].annotations[0];
+    expect(ann.cssSelector).toBeTruthy();
   });
 });
 

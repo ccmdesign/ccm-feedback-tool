@@ -10,6 +10,7 @@ import {
   ICON_EYE,
   ICON_EYE_OFF,
   ICON_IMAGE_SWAP,
+  ICON_PIN,
   ICON_SITEPING,
 } from "./icons.js";
 
@@ -46,8 +47,12 @@ export class Fab {
     const position = config.position ?? "bottom-right";
     const isRight = position === "bottom-right";
 
-    // Vertical stack above the FAB
+    // Vertical stack above the FAB. Pin is first so `firstItem.focus()` in
+    // `open()` lands on it when the FAB is triggered (CCM-291 R2).
     this.items = [
+      // CCM-291 — pin is the default mode. Tooltip uses the long form
+      // ("Comment on element") so the radial menu surfaces the intent.
+      { id: "pin", icon: ICON_PIN, label: t("pin.instruction") },
       { id: "chat", icon: ICON_CHAT, label: t("fab.messages") },
       { id: "annotate", icon: ICON_ANNOTATE, label: t("fab.annotate") },
       // CCM-282 — new intent modes added after rectangle annotate.
@@ -228,6 +233,10 @@ export class Fab {
     this.close();
 
     switch (id) {
+      case "pin":
+        // CCM-291 — click-to-anchor comment mode.
+        this.bus.emit("pin:start");
+        break;
       case "chat":
         this.bus.emit("panel:toggle", true);
         break;

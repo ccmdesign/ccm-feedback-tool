@@ -44,10 +44,17 @@ export const fr: Translations = {
   // CCM-282
   "fab.editText": "\u00c9diter le texte",
   "fab.swapImage": "Changer l\u2019image",
+  // CCM-291
+  "fab.pin": "\u00c9pingler",
 
   // Annotator
   "annotator.instruction": "Tracez un rectangle sur la zone \u00e0 commenter",
   "annotator.cancel": "Annuler",
+
+  // CCM-291 — Mode \u00e9pingle
+  "pin.instruction": "Commenter un \u00e9l\u00e9ment",
+  "pin.cancel": "Annuler",
+  "pin.ariaLabel": "Mode \u00e9pingle",
 
   // CCM-282 — Mode \u00e9dition de texte
   "textEdit.instruction":

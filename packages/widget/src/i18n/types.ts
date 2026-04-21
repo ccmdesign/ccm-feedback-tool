@@ -43,10 +43,17 @@ export interface Translations {
   // CCM-282 — new intent modes.
   "fab.editText": string;
   "fab.swapImage": string;
+  // CCM-291 — pin mode.
+  "fab.pin": string;
 
   // Annotator
   "annotator.instruction": string;
   "annotator.cancel": string;
+
+  // CCM-291 — Pin mode
+  "pin.instruction": string;
+  "pin.cancel": string;
+  "pin.ariaLabel": string;
 
   // CCM-282 — Text edit mode
   "textEdit.instruction": string;

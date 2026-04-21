@@ -73,15 +73,22 @@ describe("Fab", () => {
       expect(menu).not.toBeNull();
     });
 
-    it("creates five radial menu items with role=menuitem (CCM-282 adds edit-text + swap-image)", () => {
+    it("creates six radial menu items with role=menuitem (CCM-291 adds pin as the default first item)", () => {
       const items = shadow.querySelectorAll('[role="menuitem"]');
-      expect(items.length).toBe(5);
+      expect(items.length).toBe(6);
     });
 
-    it("assigns correct data-item-id to each menu item", () => {
+    it("assigns correct data-item-id to each menu item (pin is first — CCM-291)", () => {
       const items = getRadialItems(shadow);
       const ids = items.map((btn) => btn.dataset.itemId);
-      expect(ids).toEqual(["chat", "annotate", "edit-text", "swap-image", "toggle-annotations"]);
+      expect(ids).toEqual(["pin", "chat", "annotate", "edit-text", "swap-image", "toggle-annotations"]);
+    });
+
+    it("pin item has the long-form tooltip aria-label (CCM-291)", () => {
+      const pinBtn = shadow.querySelector<HTMLButtonElement>('[data-item-id="pin"]')!;
+      expect(pinBtn).not.toBeNull();
+      // French locale is used in defaults — `pin.instruction` FR = "Commenter un élément".
+      expect(pinBtn.getAttribute("aria-label")).toBe(createT("fr")("pin.instruction"));
     });
 
     it("applies position class based on config", () => {
@@ -141,6 +148,17 @@ describe("Fab", () => {
       for (const item of items) {
         expect(item.classList.contains("sp-radial-item--open")).toBe(false);
       }
+    });
+
+    it("auto-focuses the pin item when the FAB opens (CCM-291 default)", async () => {
+      const btn = shadow.querySelector<HTMLButtonElement>(".sp-fab")!;
+      btn.click(); // open
+
+      // `open()` uses requestAnimationFrame to focus the first item — flush it.
+      await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+
+      const pinBtn = shadow.querySelector<HTMLButtonElement>('[data-item-id="pin"]')!;
+      expect(shadow.activeElement).toBe(pinBtn);
     });
 
     it("closes radial menu on Escape key press", () => {
@@ -271,6 +289,19 @@ describe("Fab", () => {
 
       const annotateBtn = shadow.querySelector<HTMLButtonElement>('[data-item-id="annotate"]')!;
       annotateBtn.click();
+
+      expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it("clicking 'pin' item emits pin:start (CCM-291)", () => {
+      const listener = vi.fn();
+      bus.on("pin:start", listener);
+
+      const fabBtn = shadow.querySelector<HTMLButtonElement>(".sp-fab")!;
+      fabBtn.click();
+
+      const pinBtn = shadow.querySelector<HTMLButtonElement>('[data-item-id="pin"]')!;
+      pinBtn.click();
 
       expect(listener).toHaveBeenCalledOnce();
     });
