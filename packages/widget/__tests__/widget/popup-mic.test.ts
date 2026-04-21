@@ -243,6 +243,31 @@ describe("Popup — CCM-284 mic button", () => {
     popup.destroy();
   });
 
+  it("appends cleaned text when the user typed BEFORE pressing the mic", async () => {
+    // Plan §Key Technical Decisions / Merge rule case 2: textarea had content
+    // typed BEFORE recording → append with a single separating space.
+    const transcribe: PopupTranscribe = vi.fn().mockResolvedValue({
+      cleaned_text: "Is it intentional?",
+      raw_text: "um is it intentional",
+    });
+    const popup = new Popup(colors, t, transcribe);
+    popup.show(makeBounds(), CONTEXT);
+    await flush();
+
+    // User types context BEFORE pressing the mic.
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    textarea.value = "Looking at this section,";
+
+    const btn = micButton()!;
+    btn.click(); // start
+    await flush();
+    btn.click(); // stop + transcribe
+    await flush();
+
+    expect(textarea.value).toBe("Looking at this section, Is it intentional?");
+    popup.destroy();
+  });
+
   it("appends cleaned text when user typed during recording", async () => {
     const transcribe: PopupTranscribe = vi.fn().mockResolvedValue({
       cleaned_text: "The button is broken.",
