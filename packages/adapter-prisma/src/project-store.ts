@@ -6,6 +6,7 @@
  * `ProjectStore`; widgets continue to use `PrismaStore` unchanged.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { StoreNotFoundError } from "@ccm-feedback/core";
 import { generateSecret, hashSecret, verifySecret } from "./secret.js";
 
@@ -41,6 +42,8 @@ interface RawProject {
   stagingUrl: string;
   implementationWebhookUrl: string | null;
   implementationWebhookSecretHash: string | null;
+  /** CCM-290 — plaintext agent token (nullable). */
+  agentToken?: string | null;
   createdAt: Date;
 }
 
@@ -180,19 +183,55 @@ export class ProjectStore {
 
   /**
    * CCM-290 — rotate (or initially generate) the plaintext `agentToken` on
-   * the project. Stubbed in P1 so the TypeScript surface matches the new
-   * `CcmProjectStore` contract; real implementation lands in P2.
+   * the project. Parallels `rotateProjectSecret` but stores plaintext rather
+   * than a hash (per user decision — see plan). Returns the token exactly
+   * once; later reads of the token must go through `findByAgentToken` or
+   * equivalent, and should only happen server-side.
    */
-  async rotateAgentToken(_id: string): Promise<{ agentToken: string }> {
-    throw new Error("CCM-290 Phase 2 pending");
+  async rotateAgentToken(id: string): Promise<{ agentToken: string }> {
+    const existing = await this.getProjectWithSecret(id);
+    if (!existing) throw new StoreNotFoundError("Project not found");
+    const agentToken = generateSecret();
+    await this.prisma.project.update({
+      where: { id },
+      data: { agentToken },
+    });
+    return { agentToken };
   }
 
   /**
-   * CCM-290 — look up a project by its agent token with a timing-safe
-   * compare. Stubbed in P1, real implementation lands in P2.
+   * CCM-290 — resolve a project by its agent token using a constant-time
+   * compare against every project with a non-null `agentToken`.
+   *
+   * Implementation deliberately avoids `findFirst({ where: { agentToken } })`
+   * because an indexed equality query leaks rough existence through response
+   * timing. The linear scan + `timingSafeEqual` keeps the compare itself
+   * timing-safe. This is acceptable at the current project scale (<100 per
+   * deployment); at scale, swap to an indexed lookup plus a dummy compare to
+   * equalize response time.
    */
-  async findByAgentToken(_token: string): Promise<{ id: string; name: string } | null> {
-    throw new Error("CCM-290 Phase 2 pending");
+  async findByAgentToken(token: string): Promise<{ id: string; name: string } | null> {
+    if (token.length === 0) return null;
+    const tokenBuf = Buffer.from(token);
+    const candidates = (await this.prisma.project.findMany({
+      where: { agentToken: { not: null } },
+      select: { id: true, name: true, agentToken: true },
+    })) as Array<{ id: string; name: string; agentToken: string | null }>;
+
+    let match: { id: string; name: string } | null = null;
+    for (const row of candidates) {
+      if (row.agentToken == null) continue;
+      const candidateBuf = Buffer.from(row.agentToken);
+      // Length mismatch → timingSafeEqual throws; short-circuit to a constant
+      // boolean so non-matching lengths don't skew the response time envelope.
+      // (The hot path is length-match + byte-level timing-safe compare.)
+      if (candidateBuf.length !== tokenBuf.length) continue;
+      if (timingSafeEqual(candidateBuf, tokenBuf)) {
+        match = { id: row.id, name: row.name };
+        // Keep iterating to avoid revealing "match found" via early-exit timing.
+      }
+    }
+    return match;
   }
 }
 

@@ -197,12 +197,30 @@ export class LocalStorageStore implements CcmFeedbackStore {
     this.save(feedbacks);
   }
 
-  async addReply(_input: ReplyCreateInput): Promise<ReplyRecord> {
-    throw new Error("CCM-290 Phase 2 pending");
+  async addReply(input: ReplyCreateInput): Promise<ReplyRecord> {
+    const feedbacks = this.load();
+    const parent = feedbacks.find((f) => f.id === input.feedbackId);
+    if (!parent) throw new StoreNotFoundError("Feedback not found");
+
+    const reply: ReplyRecord = {
+      id: this.generateId(),
+      feedbackId: input.feedbackId,
+      source: input.source,
+      author: input.author,
+      authorEmail: input.authorEmail ?? null,
+      body: input.body,
+      createdAt: new Date(),
+    };
+    parent.replies = [...(parent.replies ?? []), reply];
+    parent.updatedAt = new Date();
+    this.save(feedbacks);
+    return reply;
   }
 
-  async listReplies(_feedbackId: string): Promise<ReplyRecord[]> {
-    throw new Error("CCM-290 Phase 2 pending");
+  async listReplies(feedbackId: string): Promise<ReplyRecord[]> {
+    const parent = this.load().find((f) => f.id === feedbackId);
+    if (!parent) return [];
+    return [...(parent.replies ?? [])].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   /** Remove all data from localStorage for this store key. */

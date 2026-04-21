@@ -189,6 +189,29 @@ export const getQuerySchema = z.object({
   search: z.string().max(200).optional(),
 });
 
+/**
+ * CCM-290 — schema for creating a reply on a feedback thread.
+ *
+ * Shared by the widget reply route (`source:"user"` set by the handler) and
+ * the agent reply route (`source:"agent"`). Source is NOT accepted from the
+ * client — the caller decides.
+ */
+export const replyCreateSchema = z.object({
+  author: z.string().min(1).max(200),
+  authorEmail: z.string().email().max(200).optional(),
+  body: z.string().min(1).max(5000),
+});
+
+/**
+ * CCM-290 — schema for the agent PATCH endpoint. `author` is accepted for
+ * response echo only — it is NOT persisted to any column; agents track
+ * "who resolved this" via the next reply's author field if they post one.
+ */
+export const agentPatchSchema = z.object({
+  status: z.enum(FEEDBACK_STATUSES),
+  author: z.string().min(1).max(200).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Explicit public interfaces — decoupled from Zod to keep .d.ts clean
 // ---------------------------------------------------------------------------
