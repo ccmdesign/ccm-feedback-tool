@@ -210,7 +210,7 @@ describe("flattenAnnotation", () => {
     expect(result.elementId).toBeUndefined();
   });
 
-  it("returns an object with exactly the expected keys", () => {
+  it("returns an object with exactly the expected keys (includes CCM-282 type discriminator)", () => {
     const result = flattenAnnotation(sampleAnnotation);
     const keys = Object.keys(result).sort();
     expect(keys).toEqual([
@@ -226,6 +226,7 @@ describe("flattenAnnotation", () => {
       "textPrefix",
       "textSnippet",
       "textSuffix",
+      "type",
       "viewportH",
       "viewportW",
       "wPct",

@@ -2,7 +2,16 @@ import type { CcmFeedbackConfig } from "@ccm-feedback/core";
 import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n/index.js";
-import { ICON_ANNOTATE, ICON_CHAT, ICON_CLOSE, ICON_EYE, ICON_EYE_OFF, ICON_SITEPING } from "./icons.js";
+import {
+  ICON_ANNOTATE,
+  ICON_CHAT,
+  ICON_CLOSE,
+  ICON_EDIT_TEXT,
+  ICON_EYE,
+  ICON_EYE_OFF,
+  ICON_IMAGE_SWAP,
+  ICON_SITEPING,
+} from "./icons.js";
 
 interface RadialItem {
   id: string;
@@ -41,6 +50,9 @@ export class Fab {
     this.items = [
       { id: "chat", icon: ICON_CHAT, label: t("fab.messages") },
       { id: "annotate", icon: ICON_ANNOTATE, label: t("fab.annotate") },
+      // CCM-282 — new intent modes added after rectangle annotate.
+      { id: "edit-text", icon: ICON_EDIT_TEXT, label: t("fab.editText") },
+      { id: "swap-image", icon: ICON_IMAGE_SWAP, label: t("fab.swapImage") },
       { id: "toggle-annotations", icon: ICON_EYE, iconAlt: ICON_EYE_OFF, label: t("fab.annotations") },
     ];
 
@@ -221,6 +233,12 @@ export class Fab {
         break;
       case "annotate":
         this.bus.emit("annotation:start");
+        break;
+      case "edit-text":
+        this.bus.emit("text-edit:start");
+        break;
+      case "swap-image":
+        this.bus.emit("image-swap:start");
         break;
       case "toggle-annotations": {
         this.annotationsVisible = !this.annotationsVisible;

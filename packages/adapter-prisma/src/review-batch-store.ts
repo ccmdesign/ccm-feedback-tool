@@ -2,6 +2,7 @@
  * Prisma-backed ReviewBatch + annotation-status store.
  */
 
+import type { AnnotationType, AssetMeta, ProposedAssetSource } from "@ccm-feedback/core";
 import { StoreNotFoundError } from "@ccm-feedback/core";
 
 export interface ReviewBatchPrismaClient {
@@ -55,6 +56,15 @@ interface RawAnnotationJoin {
   viewportH: number;
   devicePixelRatio: number;
   createdAt: Date;
+  // CCM-282 — annotation intent discriminator + type-specific columns.
+  type?: string | null;
+  originalText?: string | null;
+  proposedText?: string | null;
+  originalAssetUrl?: string | null;
+  proposedAssetUrl?: string | null;
+  proposedAssetSource?: string | null;
+  proposedAltText?: string | null;
+  assetMeta?: unknown;
   feedback: {
     id: string;
     projectId: string | null;
@@ -63,6 +73,30 @@ interface RawAnnotationJoin {
     message: string;
     url: string;
   };
+}
+
+/** Narrow a raw DB value to the typed `AnnotationType` union (or default to "rectangle"). */
+function coerceAnnotationType(value: string | null | undefined): AnnotationType {
+  if (value === "text_change" || value === "image_swap") return value;
+  return "rectangle";
+}
+
+function coerceAssetSource(value: string | null | undefined): ProposedAssetSource | null {
+  return value === "link" || value === "upload" ? value : null;
+}
+
+function coerceAssetMeta(value: unknown): AssetMeta | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.width === "number" &&
+    typeof v.height === "number" &&
+    typeof v.sizeBytes === "number" &&
+    typeof v.mime === "string"
+  ) {
+    return { width: v.width, height: v.height, sizeBytes: v.sizeBytes, mime: v.mime as AssetMeta["mime"] };
+  }
+  return null;
 }
 
 export class ReviewBatchStore {
@@ -203,6 +237,15 @@ export class ReviewBatchStore {
       viewportH: number;
       devicePixelRatio: number;
       createdAt: Date;
+      // CCM-282 — annotation intent discriminator + type-specific columns.
+      type?: AnnotationType;
+      originalText?: string | null;
+      proposedText?: string | null;
+      originalAssetUrl?: string | null;
+      proposedAssetUrl?: string | null;
+      proposedAssetSource?: ProposedAssetSource | null;
+      proposedAltText?: string | null;
+      assetMeta?: AssetMeta | null;
     }>
   > {
     const rows = (await this.prisma.feedbackAnnotation.findMany({
@@ -237,6 +280,14 @@ export class ReviewBatchStore {
       viewportH: r.viewportH,
       devicePixelRatio: r.devicePixelRatio,
       createdAt: r.createdAt,
+      type: coerceAnnotationType(r.type),
+      originalText: r.originalText ?? null,
+      proposedText: r.proposedText ?? null,
+      originalAssetUrl: r.originalAssetUrl ?? null,
+      proposedAssetUrl: r.proposedAssetUrl ?? null,
+      proposedAssetSource: coerceAssetSource(r.proposedAssetSource),
+      proposedAltText: r.proposedAltText ?? null,
+      assetMeta: coerceAssetMeta(r.assetMeta),
     }));
   }
 }

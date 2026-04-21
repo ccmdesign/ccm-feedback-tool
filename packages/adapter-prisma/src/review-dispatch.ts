@@ -131,6 +131,15 @@ export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string)
         viewportW: ann.viewportW,
         viewportH: ann.viewportH,
         devicePixelRatio: ann.devicePixelRatio,
+        // CCM-282 — pass the annotation intent + type-specific fields.
+        annotationType: ann.type ?? "rectangle",
+        originalText: ann.originalText ?? null,
+        proposedText: ann.proposedText ?? null,
+        originalAssetUrl: ann.originalAssetUrl ?? null,
+        proposedAssetUrl: ann.proposedAssetUrl ?? null,
+        proposedAssetSource: ann.proposedAssetSource ?? null,
+        proposedAltText: ann.proposedAltText ?? null,
+        assetMeta: ann.assetMeta ?? null,
       })),
     });
     canonicalBody = canonicalize(payload);

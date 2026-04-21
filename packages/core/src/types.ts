@@ -81,6 +81,40 @@ export const FEEDBACK_STATUSES = ["open", "resolved"] as const;
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 
 // ---------------------------------------------------------------------------
+// CCM-282 — Annotation intents
+// ---------------------------------------------------------------------------
+
+/** Annotation intent discriminator values. */
+export const ANNOTATION_TYPES = ["rectangle", "text_change", "image_swap"] as const;
+export type AnnotationType = (typeof ANNOTATION_TYPES)[number];
+
+/** Source of a proposed image asset. */
+export const PROPOSED_ASSET_SOURCES = ["link", "upload"] as const;
+export type ProposedAssetSource = (typeof PROPOSED_ASSET_SOURCES)[number];
+
+/** Supported MIME types for image swap uploads / mirrors. */
+export const ALLOWED_IMAGE_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "image/svg+xml",
+  "image/gif",
+] as const;
+export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIMES)[number];
+
+/** Maximum uploaded / mirrored asset size in bytes (10 MB). */
+export const MAX_ASSET_SIZE_BYTES = 10 * 1024 * 1024;
+
+/** Server-canonicalized image metadata — written to `FeedbackAnnotation.assetMeta`. */
+export interface AssetMeta {
+  width: number;
+  height: number;
+  sizeBytes: number;
+  mime: AllowedImageMime;
+}
+
+// ---------------------------------------------------------------------------
 // Abstract Store — adapter pattern
 // ---------------------------------------------------------------------------
 
@@ -119,6 +153,22 @@ export interface AnnotationCreateInput {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  /** CCM-282: annotation intent. Defaults to "rectangle" when omitted by rectangle-only callers. */
+  type?: AnnotationType | undefined;
+  /** CCM-282: text_change intent — original text content. */
+  originalText?: string | undefined;
+  /** CCM-282: text_change intent — proposed text content. */
+  proposedText?: string | undefined;
+  /** CCM-282: image_swap intent — pre-swap asset URL (snapshot, may be external). */
+  originalAssetUrl?: string | undefined;
+  /** CCM-282: image_swap intent — CCM-hosted mirror URL. ALWAYS on the CCM storage origin. */
+  proposedAssetUrl?: string | undefined;
+  /** CCM-282: image_swap intent — how the proposed asset arrived ("link" or "upload"). */
+  proposedAssetSource?: ProposedAssetSource | undefined;
+  /** CCM-282: image_swap intent — alt text entered by the reviewer. */
+  proposedAltText?: string | undefined;
+  /** CCM-282: image_swap intent — server-canonicalized image metadata. */
+  assetMeta?: AssetMeta | undefined;
 }
 
 /** Query parameters for fetching feedbacks. */
@@ -187,6 +237,15 @@ export interface AnnotationRecord {
   implementationResult?: unknown;
   /** When the latest status update was received. */
   implementationUpdatedAt?: Date | null;
+  /** CCM-282: annotation intent — defaults to "rectangle". */
+  type?: AnnotationType;
+  originalText?: string | null;
+  proposedText?: string | null;
+  originalAssetUrl?: string | null;
+  proposedAssetUrl?: string | null;
+  proposedAssetSource?: ProposedAssetSource | null;
+  proposedAltText?: string | null;
+  assetMeta?: AssetMeta | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,9 +297,15 @@ export function isStoreDuplicate(error: unknown): boolean {
 // Store helpers — shared conversion logic for adapters
 // ---------------------------------------------------------------------------
 
-/** Flatten a widget `AnnotationPayload` (nested anchor + rect) into a flat `AnnotationCreateInput`. */
+/**
+ * Flatten a widget `AnnotationPayload` (nested anchor + rect) into a flat `AnnotationCreateInput`.
+ *
+ * Preserves the CCM-282 annotation intent discriminator and any type-specific
+ * fields the widget carries for `text_change` / `image_swap`. Optional fields
+ * are only set when present — keeping `exactOptionalPropertyTypes` happy.
+ */
 export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput {
-  return {
+  const base: AnnotationCreateInput = {
     cssSelector: ann.anchor.cssSelector,
     xpath: ann.anchor.xpath,
     textSnippet: ann.anchor.textSnippet,
@@ -259,7 +324,51 @@ export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput
     viewportW: ann.viewportW,
     viewportH: ann.viewportH,
     devicePixelRatio: ann.devicePixelRatio,
+    type: ann.type ?? "rectangle",
   };
+
+  if (ann.type === "text_change") {
+    if (ann.originalText !== undefined) base.originalText = ann.originalText;
+    if (ann.proposedText !== undefined) base.proposedText = ann.proposedText;
+  } else if (ann.type === "image_swap") {
+    if (ann.originalAssetUrl !== undefined) base.originalAssetUrl = ann.originalAssetUrl;
+    if (ann.proposedAssetUrl !== undefined) base.proposedAssetUrl = ann.proposedAssetUrl;
+    if (ann.proposedAssetSource !== undefined) base.proposedAssetSource = ann.proposedAssetSource;
+    if (ann.proposedAltText !== undefined) base.proposedAltText = ann.proposedAltText;
+    if (ann.assetMeta !== undefined) base.assetMeta = ann.assetMeta;
+  }
+
+  return base;
+}
+
+/** Type guard — annotation carries a `text_change` payload. */
+export function isTextChangeAnnotation(
+  ann: Pick<AnnotationCreateInput, "type" | "originalText" | "proposedText">,
+): ann is AnnotationCreateInput & { type: "text_change"; originalText: string; proposedText: string } {
+  return ann.type === "text_change" && typeof ann.originalText === "string" && typeof ann.proposedText === "string";
+}
+
+/** Type guard — annotation carries an `image_swap` payload. */
+export function isImageSwapAnnotation(
+  ann: Pick<
+    AnnotationCreateInput,
+    "type" | "originalAssetUrl" | "proposedAssetUrl" | "proposedAssetSource" | "assetMeta"
+  >,
+): ann is AnnotationCreateInput & {
+  type: "image_swap";
+  originalAssetUrl: string;
+  proposedAssetUrl: string;
+  proposedAssetSource: ProposedAssetSource;
+  assetMeta: AssetMeta;
+} {
+  return (
+    ann.type === "image_swap" &&
+    typeof ann.originalAssetUrl === "string" &&
+    typeof ann.proposedAssetUrl === "string" &&
+    (ann.proposedAssetSource === "link" || ann.proposedAssetSource === "upload") &&
+    typeof ann.assetMeta === "object" &&
+    ann.assetMeta !== null
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -460,6 +569,15 @@ export interface CcmReviewBatchStore {
       viewportH: number;
       devicePixelRatio: number;
       createdAt: Date;
+      /** CCM-282: annotation intent discriminator. */
+      type?: AnnotationType;
+      originalText?: string | null;
+      proposedText?: string | null;
+      originalAssetUrl?: string | null;
+      proposedAssetUrl?: string | null;
+      proposedAssetSource?: ProposedAssetSource | null;
+      proposedAltText?: string | null;
+      assetMeta?: AssetMeta | null;
     }>
   >;
 }
@@ -511,6 +629,22 @@ export interface AnnotationPayload {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  /** CCM-282: annotation intent — defaults to "rectangle" when omitted. */
+  type?: AnnotationType | undefined;
+  /** CCM-282: text_change intent — original text. */
+  originalText?: string | undefined;
+  /** CCM-282: text_change intent — proposed text. */
+  proposedText?: string | undefined;
+  /** CCM-282: image_swap intent — pre-swap asset URL (snapshot). */
+  originalAssetUrl?: string | undefined;
+  /** CCM-282: image_swap intent — CCM-hosted mirrored asset URL. */
+  proposedAssetUrl?: string | undefined;
+  /** CCM-282: image_swap intent — source of the proposed asset. */
+  proposedAssetSource?: ProposedAssetSource | undefined;
+  /** CCM-282: image_swap intent — reviewer-entered alt text. */
+  proposedAltText?: string | undefined;
+  /** CCM-282: image_swap intent — server-canonicalized image metadata. */
+  assetMeta?: AssetMeta | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -564,4 +698,13 @@ export interface AnnotationResponse {
   implementationResult?: unknown;
   /** CCM-279 when the implementation agent last reported status. ISO string. */
   implementationUpdatedAt?: string | null;
+  /** CCM-282: annotation intent. */
+  type?: AnnotationType;
+  originalText?: string | null;
+  proposedText?: string | null;
+  originalAssetUrl?: string | null;
+  proposedAssetUrl?: string | null;
+  proposedAssetSource?: ProposedAssetSource | null;
+  proposedAltText?: string | null;
+  assetMeta?: AssetMeta | null;
 }

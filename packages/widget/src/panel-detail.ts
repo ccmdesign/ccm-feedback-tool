@@ -773,6 +773,8 @@ export class DetailView {
       setText(annTitleText, this.i18n["detail.annotation"]);
       annSectionTitle.appendChild(annTitleText);
       annSection.appendChild(annSectionTitle);
+      // CCM-282 — render typed intent body above the generic anchor metadata.
+      this.buildIntentDetail(annSection, feedback);
       this.buildAnnotation(annSection, feedback);
       this.content.appendChild(annSection);
     }
@@ -1103,4 +1105,124 @@ export class DetailView {
     setText(span, this.i18n["detail.delete"]);
     this.deleteBtn.appendChild(span);
   }
+
+  /**
+   * CCM-282 — render intent-specific payload for text_change (word diff) and
+   * image_swap (side-by-side thumbnails + alt text). Rectangle annotations
+   * emit nothing (existing shape preserved).
+   */
+  private buildIntentDetail(container: HTMLElement, feedback: FeedbackResponse): void {
+    const ann = feedback.annotations[0];
+    if (!ann) return;
+    const type = ann.type ?? "rectangle";
+    if (type === "rectangle") return;
+
+    const wrapper = el("div", { class: "sp-detail-intent" });
+    wrapper.style.cssText = "display:flex;flex-direction:column;gap:10px;padding:12px 0;";
+
+    if (type === "text_change") {
+      const original = ann.originalText ?? "";
+      const proposed = ann.proposedText ?? "";
+      const diffEls = renderWordDiff(original, proposed, this.colors);
+      const diffBox = el("div");
+      diffBox.style.cssText =
+        "background:rgba(0,0,0,0.04);padding:10px;border-radius:8px;font-size:13px;line-height:1.5;white-space:pre-wrap;";
+      for (const node of diffEls) diffBox.appendChild(node);
+      wrapper.appendChild(diffBox);
+    } else if (type === "image_swap") {
+      const row = el("div");
+      row.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;";
+      row.appendChild(this.buildThumbnail("Original", ann.originalAssetUrl ?? ""));
+      row.appendChild(this.buildThumbnail("Proposed", ann.proposedAssetUrl ?? ""));
+      wrapper.appendChild(row);
+      if (ann.proposedAltText) {
+        const alt = el("div");
+        alt.style.cssText = "font-size:12px;color:#64748b;";
+        setText(alt, `Alt text: ${ann.proposedAltText}`);
+        wrapper.appendChild(alt);
+      }
+    }
+
+    container.appendChild(wrapper);
+  }
+
+  private buildThumbnail(label: string, src: string): HTMLElement {
+    const col = el("div");
+    col.style.cssText = "display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px;";
+    const caption = el("div");
+    caption.style.cssText = "font-size:11px;color:#64748b;font-weight:500;";
+    setText(caption, label);
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = label;
+    img.style.cssText =
+      "max-width:100%;max-height:180px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);object-fit:contain;";
+    img.addEventListener("error", () => {
+      img.style.display = "none";
+      const placeholder = el("div");
+      placeholder.style.cssText =
+        "padding:24px;background:rgba(0,0,0,0.04);border-radius:8px;font-size:12px;color:#64748b;text-align:center;";
+      setText(placeholder, "Preview unavailable");
+      col.appendChild(placeholder);
+    });
+    col.appendChild(caption);
+    col.appendChild(img);
+    return col;
+  }
+}
+
+/**
+ * Hand-rolled word-level diff — cheap enough that the widget bundle doesn't
+ * need the `diff` npm package. Returns an array of span elements classified
+ * as added / removed / unchanged via inline styles.
+ */
+function renderWordDiff(oldText: string, newText: string, colors: ThemeColors): HTMLElement[] {
+  const oldTokens = oldText.split(/(\s+)/);
+  const newTokens = newText.split(/(\s+)/);
+
+  // Longest-common-subsequence table. Size is capped to keep this cheap.
+  const m = oldTokens.length;
+  const n = newTokens.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      const row = dp[i] ?? [];
+      if (oldTokens[i] === newTokens[j]) {
+        row[j] = (dp[i + 1]?.[j + 1] ?? 0) + 1;
+      } else {
+        row[j] = Math.max(dp[i + 1]?.[j] ?? 0, dp[i]?.[j + 1] ?? 0);
+      }
+    }
+  }
+
+  const nodes: HTMLElement[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < m && j < n) {
+    if (oldTokens[i] === newTokens[j]) {
+      nodes.push(makeDiffSpan(oldTokens[i] ?? "", "unchanged", colors));
+      i++;
+      j++;
+    } else if ((dp[i + 1]?.[j] ?? 0) >= (dp[i]?.[j + 1] ?? 0)) {
+      nodes.push(makeDiffSpan(oldTokens[i] ?? "", "removed", colors));
+      i++;
+    } else {
+      nodes.push(makeDiffSpan(newTokens[j] ?? "", "added", colors));
+      j++;
+    }
+  }
+  while (i < m) nodes.push(makeDiffSpan(oldTokens[i++] ?? "", "removed", colors));
+  while (j < n) nodes.push(makeDiffSpan(newTokens[j++] ?? "", "added", colors));
+  return nodes;
+}
+
+function makeDiffSpan(text: string, kind: "added" | "removed" | "unchanged", colors: ThemeColors): HTMLElement {
+  const span = document.createElement("span");
+  if (kind === "added") {
+    span.style.cssText = `background:${colors.typeChangeBg};color:${colors.typeChange};text-decoration:none;`;
+  } else if (kind === "removed") {
+    span.style.cssText = `background:${colors.typeBugBg};color:${colors.typeBug};text-decoration:line-through;`;
+  }
+  span.textContent = text;
+  return span;
 }

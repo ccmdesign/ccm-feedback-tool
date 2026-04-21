@@ -40,10 +40,36 @@ export interface Translations {
   "fab.messages": string;
   "fab.annotate": string;
   "fab.annotations": string;
+  // CCM-282 — new intent modes.
+  "fab.editText": string;
+  "fab.swapImage": string;
 
   // Annotator
   "annotator.instruction": string;
   "annotator.cancel": string;
+
+  // CCM-282 — Text edit mode
+  "textEdit.instruction": string;
+  "textEdit.cancel": string;
+  "textEdit.ariaLabel": string;
+
+  // CCM-282 — Image swap mode
+  "imageSwap.instruction": string;
+  "imageSwap.cancel": string;
+  "imageSwap.ariaLabel": string;
+  "imageSwap.urlLabel": string;
+  "imageSwap.urlPlaceholder": string;
+  "imageSwap.fileLabel": string;
+  "imageSwap.altLabel": string;
+  "imageSwap.altPlaceholder": string;
+  "imageSwap.original": string;
+  "imageSwap.proposed": string;
+  "imageSwap.submit": string;
+  "imageSwap.errorSize": string;
+  "imageSwap.errorMime": string;
+  "imageSwap.errorUrl": string;
+  "imageSwap.errorMirror": string;
+  "imageSwap.errorUpload": string;
 
   // Popup (annotation form)
   "popup.placeholder": string;

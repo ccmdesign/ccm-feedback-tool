@@ -19,6 +19,18 @@ import {
 
 export type { CcmFeedbackStore } from "@ccm-feedback/core";
 export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
+export type { ImageSniffResult } from "./asset-mirror.js";
+export {
+  extensionForMime,
+  isAllowedImageMime,
+  isSafeSvg,
+  normalizeContentType,
+  sniffImage,
+} from "./asset-mirror.js";
+export type { AssetMirrorHandlerOptions, AssetStorageClient } from "./asset-mirror-handler.js";
+export { createAssetMirrorHandler } from "./asset-mirror-handler.js";
+export type { AssetSignUploadHandlerOptions, SignedUploadStorageClient } from "./asset-sign-upload-handler.js";
+export { createAssetSignUploadHandler } from "./asset-sign-upload-handler.js";
 export type { CcmProjectPrismaClient } from "./project-store.js";
 export { ProjectStore } from "./project-store.js";
 export type { ReviewBatchPrismaClient } from "./review-batch-store.js";
@@ -33,6 +45,8 @@ export {
 export type { AnnotationStatusHandlerOptions, ReviewsHandlerOptions } from "./review-handler.js";
 export { createAnnotationStatusHandler, createReviewsHandler } from "./review-handler.js";
 export { generateSecret, hashSecret, verifySecret } from "./secret.js";
+export type { AssetMirrorRequest, SignUploadRequest } from "./validation/asset.js";
+export { assetMirrorRequestSchema, signUploadRequestSchema } from "./validation/asset.js";
 export type { AnnotationStatusCallbackRequest } from "./validation/callback.js";
 export { annotationStatusCallbackSchema } from "./validation/callback.js";
 export type { ProjectCreateRequest, ProjectUpdateRequest } from "./validation/project.js";
@@ -40,11 +54,16 @@ export { projectCreateSchema, projectIdSchema, projectUpdateSchema } from "./val
 export type { ReviewSubmitRequest } from "./validation/review.js";
 export { reviewSubmitSchema } from "./validation/review.js";
 export type {
+  AnnotationInput as AnnotationSchemaInput,
   FeedbackCreateInput as FeedbackCreateSchemaInput,
   FeedbackDeleteInput,
   FeedbackPatchInput,
   GetQueryInput,
+  ImageSwapAnnotationInput,
+  RectangleAnnotationInput,
+  TextChangeAnnotationInput,
 } from "./validation.js";
+export { resolveCcmStorageOrigin } from "./validation.js";
 
 // ---------------------------------------------------------------------------
 // Minimal PrismaClient shape expected by this adapter
@@ -120,6 +139,15 @@ export class PrismaStore implements CcmFeedbackStore {
             viewportW: ann.viewportW,
             viewportH: ann.viewportH,
             devicePixelRatio: ann.devicePixelRatio,
+            // CCM-282 — annotation intent discriminator + type-specific columns.
+            type: ann.type ?? "rectangle",
+            originalText: ann.originalText ?? null,
+            proposedText: ann.proposedText ?? null,
+            originalAssetUrl: ann.originalAssetUrl ?? null,
+            proposedAssetUrl: ann.proposedAssetUrl ?? null,
+            proposedAssetSource: ann.proposedAssetSource ?? null,
+            proposedAltText: ann.proposedAltText ?? null,
+            assetMeta: (ann.assetMeta ?? null) as never,
           })),
         },
       },

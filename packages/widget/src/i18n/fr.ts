@@ -41,10 +41,37 @@ export const fr: Translations = {
   "fab.messages": "Messages",
   "fab.annotate": "Annoter",
   "fab.annotations": "Annotations",
+  // CCM-282
+  "fab.editText": "\u00c9diter le texte",
+  "fab.swapImage": "Changer l\u2019image",
 
   // Annotator
   "annotator.instruction": "Tracez un rectangle sur la zone \u00e0 commenter",
   "annotator.cancel": "Annuler",
+
+  // CCM-282 — Mode \u00e9dition de texte
+  "textEdit.instruction":
+    "Cliquez sur un bloc de texte pour le modifier. Entr\u00e9e pour valider, \u00c9chap pour annuler.",
+  "textEdit.cancel": "Annuler",
+  "textEdit.ariaLabel": "Mode \u00e9dition de texte",
+
+  // CCM-282 — Mode changement d\u2019image
+  "imageSwap.instruction": "Cliquez sur une image pour proposer un remplacement.",
+  "imageSwap.cancel": "Annuler",
+  "imageSwap.ariaLabel": "Mode changement d\u2019image",
+  "imageSwap.urlLabel": "URL de l\u2019image",
+  "imageSwap.urlPlaceholder": "https://exemple.com/image.jpg",
+  "imageSwap.fileLabel": "Ou importez un fichier",
+  "imageSwap.altLabel": "Texte alternatif (optionnel)",
+  "imageSwap.altPlaceholder": "D\u00e9crivez l\u2019image\u2026",
+  "imageSwap.original": "Original",
+  "imageSwap.proposed": "Propos\u00e9",
+  "imageSwap.submit": "Valider le changement",
+  "imageSwap.errorSize": "Le fichier d\u00e9passe la limite de 10\u202fMo.",
+  "imageSwap.errorMime": "Format non pris en charge (jpg, png, webp, avif, svg, gif).",
+  "imageSwap.errorUrl": "URL invalide.",
+  "imageSwap.errorMirror": "Impossible de r\u00e9cup\u00e9rer l\u2019image. R\u00e9essayez.",
+  "imageSwap.errorUpload": "L\u2019envoi a \u00e9chou\u00e9. R\u00e9essayez.",
 
   // Popup
   "popup.ariaLabel": "Formulaire de feedback",

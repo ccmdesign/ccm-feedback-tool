@@ -103,9 +103,18 @@ model FeedbackAnnotation {
   status                  String           @default("submitted")
   implementationResult    Json?
   implementationUpdatedAt DateTime?
+  type                    String           @default("rectangle")
+  originalText            String?          @db.Text
+  proposedText            String?          @db.Text
+  originalAssetUrl        String?          @db.Text
+  proposedAssetUrl        String?          @db.Text
+  proposedAssetSource     String?
+  proposedAltText         String?          @db.Text
+  assetMeta               Json?
 
   @@index([feedbackId])
   @@index([status])
+  @@index([type])
 }
 `;
 

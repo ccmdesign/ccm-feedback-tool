@@ -1,4 +1,27 @@
-import type { FeedbackPayload, FeedbackResponse, FeedbackStatus, FeedbackType } from "@ccm-feedback/core";
+import type {
+  AllowedImageMime,
+  AssetMeta,
+  FeedbackPayload,
+  FeedbackResponse,
+  FeedbackStatus,
+  FeedbackType,
+} from "@ccm-feedback/core";
+
+/** CCM-282 — result of a mirror or signed-upload request. */
+export interface MirrorAssetResponse {
+  proposedAssetUrl: string;
+  assetMeta: AssetMeta | null;
+  alreadyMirrored?: boolean;
+}
+
+export interface SignUploadResponse {
+  signedUrl: string;
+  token: string;
+  path: string;
+  proposedAssetUrl: string;
+  contentType: AllowedImageMime;
+  expiresInSeconds: number;
+}
 
 /**
  * Abstract client interface used by the widget internals.
@@ -24,6 +47,21 @@ export interface WidgetClient {
     annotationIds: string[];
     reviewer?: { name: string; email?: string };
   }): Promise<{ batchId: string; dispatchStatus: string; dispatchAttempts: number }>;
+  /**
+   * CCM-282: mirror an external asset URL into CCM storage.
+   * HTTP clients POST to `/api/v1/assets/mirror`; store clients throw.
+   */
+  mirrorAsset?(input: { projectId: string; url: string }): Promise<MirrorAssetResponse>;
+  /**
+   * CCM-282: request a short-lived signed upload URL for direct-to-Storage PUT.
+   * HTTP clients POST to `/api/v1/assets/sign-upload`; store clients throw.
+   */
+  signUpload?(input: {
+    projectId: string;
+    filename: string;
+    contentType: AllowedImageMime;
+    sizeBytes: number;
+  }): Promise<SignUploadResponse>;
 }
 
 const MAX_RETRIES = 3;
@@ -271,5 +309,44 @@ export class ApiClient {
       throw new Error(`Failed to submit review: ${response.status} ${text}`);
     }
     return (await response.json()) as { batchId: string; dispatchStatus: string; dispatchAttempts: number };
+  }
+
+  /** Rebuild the `/api/v1/...` URL from the widget's feedback endpoint. */
+  private v1Url(path: string): string {
+    const base = this.endpoint.replace(/\/api\/feedback\/?$/, "");
+    return `${base || ""}/api/v1/${path.replace(/^\//, "")}`;
+  }
+
+  /** CCM-282 — mirror an external image URL into the CCM Storage bucket. */
+  async mirrorAsset(input: { projectId: string; url: string }): Promise<MirrorAssetResponse> {
+    const response = await resilientFetch(this.v1Url("assets/mirror"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`mirror failed: ${response.status} ${text}`);
+    }
+    return (await response.json()) as MirrorAssetResponse;
+  }
+
+  /** CCM-282 — request a short-lived signed upload URL. */
+  async signUpload(input: {
+    projectId: string;
+    filename: string;
+    contentType: AllowedImageMime;
+    sizeBytes: number;
+  }): Promise<SignUploadResponse> {
+    const response = await resilientFetch(this.v1Url("assets/sign-upload"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`sign-upload failed: ${response.status} ${text}`);
+    }
+    return (await response.json()) as SignUploadResponse;
   }
 }

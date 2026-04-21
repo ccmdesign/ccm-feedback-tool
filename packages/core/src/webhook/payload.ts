@@ -7,9 +7,17 @@
  * layer. Fields use snake_case to match the spec.
  */
 
-/** Known annotation "types" emitted by the widget. Only "comment" is implemented today. */
+/** Known annotation "types" emitted by the widget. CCM-282 adds text_change + image_swap. */
 export const WEBHOOK_ANNOTATION_TYPES = ["comment", "text_change", "area", "image_swap"] as const;
 export type WebhookAnnotationType = (typeof WEBHOOK_ANNOTATION_TYPES)[number];
+
+/** Canonical asset metadata emitted on `image_swap` annotations. */
+export interface WebhookAssetMeta {
+  width: number;
+  height: number;
+  size_bytes: number;
+  mime: string;
+}
 
 /** Reviewer metadata. */
 export interface WebhookReviewerPayload {
@@ -56,6 +64,23 @@ export interface WebhookAnnotationPayload {
   viewport_w: number;
   viewport_h: number;
   device_pixel_ratio: number;
+  // CCM-282 — type-specific fields at annotation top level (spec §6.1).
+  /** Widget-intent discriminator — "rectangle" | "text_change" | "image_swap". */
+  annotation_type?: string;
+  /** `text_change` — original text node content. */
+  original_text?: string;
+  /** `text_change` — proposed text node content. */
+  proposed_text?: string;
+  /** `image_swap` — pre-swap asset URL (may be external / reviewer-provided). */
+  original_asset_url?: string;
+  /** `image_swap` — CCM-hosted mirrored asset URL. NEVER the external source. */
+  proposed_asset_url?: string;
+  /** `image_swap` — how the proposed asset arrived ("link" or "upload"). */
+  proposed_asset_source?: string;
+  /** `image_swap` — reviewer-entered alt text (may be empty). */
+  proposed_alt_text?: string;
+  /** `image_swap` — server-canonicalized image metadata. */
+  asset_meta?: WebhookAssetMeta;
 }
 
 /** Top-level WebhookPayload — the canonical §6.1 contract. */
@@ -100,6 +125,20 @@ export interface WebhookPayloadBuilderInput {
     viewportW: number;
     viewportH: number;
     devicePixelRatio: number;
+    // CCM-282 — annotation intent discriminator + type-specific fields.
+    annotationType?: string | null;
+    originalText?: string | null;
+    proposedText?: string | null;
+    originalAssetUrl?: string | null;
+    proposedAssetUrl?: string | null;
+    proposedAssetSource?: string | null;
+    proposedAltText?: string | null;
+    assetMeta?: {
+      width: number;
+      height: number;
+      sizeBytes: number;
+      mime: string;
+    } | null;
   }>;
 }
 
@@ -125,34 +164,64 @@ export function buildWebhookPayload(input: WebhookPayloadBuilderInput): WebhookP
       name: input.reviewer.name,
       ...(input.reviewer.email ? { email: input.reviewer.email } : {}),
     },
-    annotations: input.annotations.map((ann) => ({
-      id: ann.id,
-      type: ann.type,
-      message: ann.message,
-      url: ann.url,
-      created_at: isoString(ann.createdAt),
-      anchor: {
-        css_selector: ann.anchor.cssSelector,
-        xpath: ann.anchor.xpath,
-        text_snippet: ann.anchor.textSnippet,
-        element_tag: ann.anchor.elementTag,
-        ...(ann.anchor.elementId ? { element_id: ann.anchor.elementId } : {}),
-        text_prefix: ann.anchor.textPrefix,
-        text_suffix: ann.anchor.textSuffix,
-        fingerprint: ann.anchor.fingerprint,
-        neighbor_text: ann.anchor.neighborText,
-      },
-      rect: {
-        x_pct: ann.rect.xPct,
-        y_pct: ann.rect.yPct,
-        w_pct: ann.rect.wPct,
-        h_pct: ann.rect.hPct,
-      },
-      scroll_x: ann.scrollX,
-      scroll_y: ann.scrollY,
-      viewport_w: ann.viewportW,
-      viewport_h: ann.viewportH,
-      device_pixel_ratio: ann.devicePixelRatio,
-    })),
+    annotations: input.annotations.map((ann) => {
+      const base: WebhookAnnotationPayload = {
+        id: ann.id,
+        type: ann.type,
+        message: ann.message,
+        url: ann.url,
+        created_at: isoString(ann.createdAt),
+        anchor: {
+          css_selector: ann.anchor.cssSelector,
+          xpath: ann.anchor.xpath,
+          text_snippet: ann.anchor.textSnippet,
+          element_tag: ann.anchor.elementTag,
+          ...(ann.anchor.elementId ? { element_id: ann.anchor.elementId } : {}),
+          text_prefix: ann.anchor.textPrefix,
+          text_suffix: ann.anchor.textSuffix,
+          fingerprint: ann.anchor.fingerprint,
+          neighbor_text: ann.anchor.neighborText,
+        },
+        rect: {
+          x_pct: ann.rect.xPct,
+          y_pct: ann.rect.yPct,
+          w_pct: ann.rect.wPct,
+          h_pct: ann.rect.hPct,
+        },
+        scroll_x: ann.scrollX,
+        scroll_y: ann.scrollY,
+        viewport_w: ann.viewportW,
+        viewport_h: ann.viewportH,
+        device_pixel_ratio: ann.devicePixelRatio,
+      };
+
+      // CCM-282 — emit annotation intent + type-specific fields at annotation top level.
+      const intent = ann.annotationType ?? "rectangle";
+      if (intent !== "rectangle") {
+        base.annotation_type = intent;
+      }
+
+      if (intent === "text_change") {
+        // Defensive: explicit empty strings are meaningful (diff of "x" -> "" is valid)
+        if (typeof ann.originalText === "string") base.original_text = ann.originalText;
+        if (typeof ann.proposedText === "string") base.proposed_text = ann.proposedText;
+      } else if (intent === "image_swap") {
+        if (ann.originalAssetUrl) base.original_asset_url = ann.originalAssetUrl;
+        if (ann.proposedAssetUrl) base.proposed_asset_url = ann.proposedAssetUrl;
+        if (ann.proposedAssetSource) base.proposed_asset_source = ann.proposedAssetSource;
+        // Alt text is optional — omit if null/empty.
+        if (ann.proposedAltText) base.proposed_alt_text = ann.proposedAltText;
+        if (ann.assetMeta) {
+          base.asset_meta = {
+            width: ann.assetMeta.width,
+            height: ann.assetMeta.height,
+            size_bytes: ann.assetMeta.sizeBytes,
+            mime: ann.assetMeta.mime,
+          };
+        }
+      }
+
+      return base;
+    }),
   };
 }
