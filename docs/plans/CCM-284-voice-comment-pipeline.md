@@ -342,7 +342,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 4: Known-bad fixture + cleanup prompt regression test**
+- [x] **Unit 4: Known-bad fixture + cleanup prompt regression test**
 
 **Goal:** Prove the cleanup prompt shape removes fillers and normalizes punctuation — the ticket's explicit acceptance criterion.
 
