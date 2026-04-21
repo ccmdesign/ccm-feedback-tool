@@ -36,6 +36,8 @@ const annotationSchema = z.object({
   viewportW: z.number().int().positive(),
   viewportH: z.number().int().positive(),
   devicePixelRatio: z.number().positive().default(1),
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl: z.string().url().max(2000).optional(),
 });
 
 export const feedbackCreateSchema = z.object({
@@ -103,6 +105,8 @@ export interface AnnotationInput {
   viewportH: number;
   /** Set to 1 by schema default when omitted from raw input. */
   devicePixelRatio: number;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 export interface FeedbackCreateInput {

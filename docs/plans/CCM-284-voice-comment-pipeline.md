@@ -226,7 +226,7 @@ sequenceDiagram
 
 ## Implementation Units
 
-- [ ] **Unit 1: Schema + type plumbing for `audioUrl`**
+- [x] **Unit 1: Schema + type plumbing for `audioUrl`**
 
 **Goal:** Thread `audioUrl` from schema through the core types and Prisma store so every other unit can use it.
 

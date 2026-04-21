@@ -119,6 +119,8 @@ export interface AnnotationCreateInput {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 /** Query parameters for fetching feedbacks. */
@@ -187,6 +189,8 @@ export interface AnnotationRecord {
   implementationResult?: unknown;
   /** When the latest status update was received. */
   implementationUpdatedAt?: Date | null;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +263,7 @@ export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput
     viewportW: ann.viewportW,
     viewportH: ann.viewportH,
     devicePixelRatio: ann.devicePixelRatio,
+    ...(ann.audioUrl ? { audioUrl: ann.audioUrl } : {}),
   };
 }
 
@@ -511,6 +516,8 @@ export interface AnnotationPayload {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -564,4 +571,6 @@ export interface AnnotationResponse {
   implementationResult?: unknown;
   /** CCM-279 when the implementation agent last reported status. ISO string. */
   implementationUpdatedAt?: string | null;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | null;
 }

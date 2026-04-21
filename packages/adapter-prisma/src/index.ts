@@ -120,6 +120,7 @@ export class PrismaStore implements CcmFeedbackStore {
             viewportW: ann.viewportW,
             viewportH: ann.viewportH,
             devicePixelRatio: ann.devicePixelRatio,
+            ...(ann.audioUrl ? { audioUrl: ann.audioUrl } : {}),
           })),
         },
       },
