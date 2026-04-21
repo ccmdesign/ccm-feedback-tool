@@ -465,6 +465,8 @@ export interface CcmReviewBatchStore {
       viewportH: number;
       devicePixelRatio: number;
       createdAt: Date;
+      /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+      audioUrl?: string | null;
     }>
   >;
 }

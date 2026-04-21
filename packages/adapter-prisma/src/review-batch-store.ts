@@ -54,6 +54,7 @@ interface RawAnnotationJoin {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  audioUrl: string | null;
   createdAt: Date;
   feedback: {
     id: string;
@@ -203,6 +204,7 @@ export class ReviewBatchStore {
       viewportH: number;
       devicePixelRatio: number;
       createdAt: Date;
+      audioUrl: string | null;
     }>
   > {
     const rows = (await this.prisma.feedbackAnnotation.findMany({
@@ -237,6 +239,7 @@ export class ReviewBatchStore {
       viewportH: r.viewportH,
       devicePixelRatio: r.devicePixelRatio,
       createdAt: r.createdAt,
+      audioUrl: r.audioUrl ?? null,
     }));
   }
 }

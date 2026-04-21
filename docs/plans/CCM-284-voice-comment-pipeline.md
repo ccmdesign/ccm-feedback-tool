@@ -264,7 +264,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 2: Webhook payload field `audio_url`**
+- [x] **Unit 2: Webhook payload field `audio_url`**
 
 **Goal:** Add `audio_url` to the outbound §6.1 webhook payload so the implementation agent sees voice comments.
 

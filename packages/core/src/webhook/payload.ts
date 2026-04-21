@@ -56,6 +56,11 @@ export interface WebhookAnnotationPayload {
   viewport_w: number;
   viewport_h: number;
   device_pixel_ratio: number;
+  /**
+   * CCM-284 — optional public URL of the persisted voice audio for this annotation.
+   * Absent from the payload when the project did not opt into audio persistence.
+   */
+  audio_url?: string;
 }
 
 /** Top-level WebhookPayload — the canonical §6.1 contract. */
@@ -100,6 +105,8 @@ export interface WebhookPayloadBuilderInput {
     viewportW: number;
     viewportH: number;
     devicePixelRatio: number;
+    /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+    audioUrl?: string | null;
   }>;
 }
 
@@ -153,6 +160,7 @@ export function buildWebhookPayload(input: WebhookPayloadBuilderInput): WebhookP
       viewport_w: ann.viewportW,
       viewport_h: ann.viewportH,
       device_pixel_ratio: ann.devicePixelRatio,
+      ...(ann.audioUrl ? { audio_url: ann.audioUrl } : {}),
     })),
   };
 }
