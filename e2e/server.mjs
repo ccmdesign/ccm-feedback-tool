@@ -35,7 +35,7 @@ const HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div class="hero" id="hero">
-    <h1>Page de test E2E</h1>
+    <h1 data-ccm-pin-target="true">Page de test E2E</h1>
     <p>Cette page simule un site client pour tester le widget CCM Feedback.</p>
   </div>
   <div class="section">

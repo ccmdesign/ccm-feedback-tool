@@ -40,7 +40,7 @@ vi.mock(new URL("../../src/dom/anchor.js", import.meta.url).pathname, () => ({
   rectToPercentages: vi.fn().mockReturnValue({ xPct: 0, yPct: 0, wPct: 1, hPct: 1 }),
 }));
 
-import { Annotator } from "../../src/annotator.js";
+import { Annotator, openCommentPopupForElement } from "../../src/annotator.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -568,6 +568,110 @@ describe("Annotator", () => {
   // -------------------------------------------------------------------------
   // Cancel button hover effects
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // CCM-291 — extracted popup-opening helper
+  // -------------------------------------------------------------------------
+
+  describe("openCommentPopupForElement (CCM-291)", () => {
+    it("happy path — resolves anchor, awaits popup, emits annotation:complete with full-bounds rect", async () => {
+      const target = document.createElement("button");
+      target.textContent = "Hello";
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 20, 100, 40));
+
+      const localBus = new EventBus<WidgetEvents>();
+      const completeListener = vi.fn();
+      localBus.on("annotation:complete", completeListener);
+
+      const popup = {
+        show: vi.fn().mockResolvedValue({ type: "change" as const, message: "Pin comment" }),
+        destroy: vi.fn(),
+      } as unknown as import("../../src/popup.js").Popup;
+
+      await openCommentPopupForElement(target, popup, "project-x", localBus);
+
+      expect(popup.show).toHaveBeenCalledOnce();
+      expect(completeListener).toHaveBeenCalledOnce();
+      const data = completeListener.mock.calls[0][0];
+      expect(data.annotation.rect).toEqual({ xPct: 0, yPct: 0, wPct: 1, hPct: 1 });
+      // `type` on the annotation itself is not set (defaults to rectangle server-side).
+      expect(data.annotation.type).toBeUndefined();
+      expect(data.type).toBe("change");
+      expect(data.message).toBe("Pin comment");
+
+      target.remove();
+    });
+
+    it("edge case — zero-bounds element returns without calling popup.show or emitting", async () => {
+      const target = document.createElement("span");
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 0, 0));
+
+      const localBus = new EventBus<WidgetEvents>();
+      const completeListener = vi.fn();
+      localBus.on("annotation:complete", completeListener);
+
+      const popup = {
+        show: vi.fn(),
+        destroy: vi.fn(),
+      } as unknown as import("../../src/popup.js").Popup;
+
+      await openCommentPopupForElement(target, popup, "project-x", localBus);
+
+      expect(popup.show).not.toHaveBeenCalled();
+      expect(completeListener).not.toHaveBeenCalled();
+
+      target.remove();
+    });
+
+    it("popup cancel — null result from popup.show does not emit annotation:complete", async () => {
+      const target = document.createElement("button");
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 20, 100, 40));
+
+      const localBus = new EventBus<WidgetEvents>();
+      const completeListener = vi.fn();
+      localBus.on("annotation:complete", completeListener);
+
+      const popup = {
+        show: vi.fn().mockResolvedValue(null),
+        destroy: vi.fn(),
+      } as unknown as import("../../src/popup.js").Popup;
+
+      await openCommentPopupForElement(target, popup, "project-x", localBus);
+
+      expect(popup.show).toHaveBeenCalledOnce();
+      expect(completeListener).not.toHaveBeenCalled();
+
+      target.remove();
+    });
+
+    it("propagates audioUrl when popup result includes one", async () => {
+      const target = document.createElement("button");
+      document.body.appendChild(target);
+      vi.spyOn(target, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 20, 100, 40));
+
+      const localBus = new EventBus<WidgetEvents>();
+      const completeListener = vi.fn();
+      localBus.on("annotation:complete", completeListener);
+
+      const popup = {
+        show: vi
+          .fn()
+          .mockResolvedValue({ type: "change" as const, message: "dictated", audioUrl: "https://x/audio.webm" }),
+        destroy: vi.fn(),
+      } as unknown as import("../../src/popup.js").Popup;
+
+      await openCommentPopupForElement(target, popup, "project-x", localBus);
+
+      const data = completeListener.mock.calls[0][0];
+      expect(data.annotation.audioUrl).toBe("https://x/audio.webm");
+      expect(data.audioUrl).toBe("https://x/audio.webm");
+
+      target.remove();
+    });
+  });
 
   describe("cancel button hover effects", () => {
     it("mouseenter on cancel changes styles", () => {

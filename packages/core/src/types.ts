@@ -36,6 +36,10 @@ export interface CcmFeedbackConfig {
   onAnnotationStart?: () => void;
   /** Called when the user finishes drawing an annotation. */
   onAnnotationEnd?: () => void;
+  /** CCM-291 — called when the user enters pin mode (click-to-anchor comment). */
+  onPinStart?: () => void;
+  /** CCM-291 — called when the user exits pin mode. */
+  onPinEnd?: () => void;
 }
 
 /** Instance returned by initCcmFeedback() with lifecycle methods. */

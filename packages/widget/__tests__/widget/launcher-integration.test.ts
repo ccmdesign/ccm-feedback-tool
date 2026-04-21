@@ -43,9 +43,15 @@ vi.mock(new URL("../../src/annotator.js", import.meta.url).pathname, () => ({
       bus.on("annotation:start", () => {});
       return {
         destroy: vi.fn(),
+        // CCM-291 — launcher queries this to wire pin-mode's popup helper.
+        getPopup: vi.fn().mockReturnValue({ show: vi.fn(), destroy: vi.fn() }),
       };
     },
   ),
+  // CCM-291 — launcher imports this named export. The real helper opens a
+  // popup + emits annotation:complete; the integration tests drive
+  // `annotation:complete` directly via the captured bus, so the mock is a noop.
+  openCommentPopupForElement: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock(new URL("../../src/markers.js", import.meta.url).pathname, () => ({
@@ -379,6 +385,50 @@ describe("launcher — annotation:complete integration", () => {
       expect(payload.url).not.toContain("auth=");
       // Non-sensitive params should remain
       expect(payload.url).toContain("page=1");
+
+      instance.destroy();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // CCM-291 — Pin mode integration
+  // -------------------------------------------------------------------------
+
+  describe("pin mode (CCM-291)", () => {
+    it("onPinStart / onPinEnd callbacks fire via bus events", () => {
+      const onPinStart = vi.fn();
+      const onPinEnd = vi.fn();
+
+      const instance = launch(defaultConfig({ onPinStart, onPinEnd }));
+      expect(capturedBus).not.toBeNull();
+
+      capturedBus!.emit("pin:start");
+      capturedBus!.emit("pin:end");
+
+      expect(onPinStart).toHaveBeenCalledOnce();
+      expect(onPinEnd).toHaveBeenCalledOnce();
+
+      instance.destroy();
+    });
+
+    it("pin annotation:complete payload has no `type` field (defaults to rectangle server-side)", async () => {
+      const response = makeFeedbackResponse();
+      mockSendFeedback.mockResolvedValue(response);
+
+      const instance = launch(defaultConfig());
+      expect(capturedBus).not.toBeNull();
+
+      // Pin emits an annotation:complete payload identical to area mode — no
+      // `type` field on the AnnotationPayload. This is what the shared helper
+      // emits.
+      capturedBus!.emit("annotation:complete", makeAnnotationCompleteData());
+
+      await vi.waitFor(() => expect(mockSendFeedback).toHaveBeenCalledOnce());
+
+      const payload = mockSendFeedback.mock.calls[0][0];
+      expect(payload.annotations).toHaveLength(1);
+      expect(payload.annotations[0].type).toBeUndefined();
+      expect(payload.annotations[0].rect).toEqual({ xPct: 0, yPct: 0, wPct: 1, hPct: 1 });
 
       instance.destroy();
     });

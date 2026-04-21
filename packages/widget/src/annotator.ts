@@ -16,6 +16,63 @@ export interface AnnotationComplete {
 }
 
 /**
+ * CCM-291 — Shared helper that opens the comment popup anchored to a single
+ * DOM element and emits `annotation:complete` on the bus when the reviewer
+ * submits. Reused by the Annotator keyboard-Enter path and by the pin-mode
+ * click handler.
+ *
+ * Pure function: does not touch any overlay DOM, so it's safe to call while
+ * another mode owns the overlay. Caller is responsible for deactivating its
+ * own mode after awaiting this promise.
+ *
+ * The emitted `AnnotationPayload` uses a full-bounds rect
+ * (`{ xPct:0, yPct:0, wPct:1, hPct:1 }`) relative to the clicked element,
+ * with `type` omitted so it defaults to `"rectangle"` server-side. This is
+ * byte-for-byte identical to what the area-mode drag path produces when the
+ * drawn rectangle exactly covers one element.
+ */
+export async function openCommentPopupForElement(
+  element: HTMLElement,
+  popup: Popup,
+  projectName: string,
+  bus: EventBus<WidgetEvents>,
+): Promise<void> {
+  const bounds = element.getBoundingClientRect();
+  // Guard: zero-sized elements can't be meaningfully commented on.
+  if (bounds.width <= 0 || bounds.height <= 0) return;
+
+  const rectBounds = new DOMRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+  // Resolve the anchor BEFORE showing the popup so voice dictation (CCM-284)
+  // has page context (selector + neighbor text) available.
+  const anchor = generateAnchor(element);
+  const result = await popup.show(rectBounds, {
+    selector: anchor.cssSelector,
+    surroundingText: `${anchor.neighborText} ${anchor.textSnippet}`.trim(),
+    projectName,
+  });
+  if (!result) return;
+
+  const annotation: AnnotationPayload = {
+    anchor,
+    rect: { xPct: 0, yPct: 0, wPct: 1, hPct: 1 },
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    viewportW: window.innerWidth,
+    viewportH: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+    ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
+  };
+
+  bus.emit("annotation:complete", {
+    annotation,
+    type: result.type,
+    message: result.message,
+    ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
+  });
+}
+
+/**
  * Annotation mode: full-page overlay with rectangle drawing.
  *
  * Glassmorphism design:
@@ -193,6 +250,9 @@ export class Annotator {
    * Keyboard annotation: pressing Enter while the overlay is active selects
    * the element that was focused before activation and creates a full-bounds
    * annotation covering that element (WCAG 2.1.1 Level A).
+   *
+   * CCM-291 — the popup round-trip is factored into `openCommentPopupForElement`,
+   * shared with pin mode.
    */
   private onOverlayKeyDown = async (e: KeyboardEvent): Promise<void> => {
     if (e.key !== "Enter") return;
@@ -201,39 +261,11 @@ export class Annotator {
     const target = this.preActiveFocusElement;
     if (!target || !(target instanceof HTMLElement)) return;
 
-    const bounds = target.getBoundingClientRect();
-    if (bounds.width <= 0 || bounds.height <= 0) return;
-
-    const rectBounds = new DOMRect(bounds.x, bounds.y, bounds.width, bounds.height);
-
-    // Generate anchor first so the popup has context for voice dictation.
-    const anchor = generateAnchor(target);
-    const result = await this.popup.show(rectBounds, {
-      selector: anchor.cssSelector,
-      surroundingText: `${anchor.neighborText} ${anchor.textSnippet}`.trim(),
-      projectName: this.projectName,
-    });
-    if (!result) return;
-
-    const annotation: AnnotationPayload = {
-      anchor,
-      rect: { xPct: 0, yPct: 0, wPct: 1, hPct: 1 },
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
-      viewportW: window.innerWidth,
-      viewportH: window.innerHeight,
-      devicePixelRatio: window.devicePixelRatio,
-      ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
-    };
-
+    // Deactivate before awaiting the popup — the overlay must release
+    // pointer events so the popup (appended to body) can receive input.
     this.deactivate();
 
-    this.bus.emit("annotation:complete", {
-      annotation,
-      type: result.type,
-      message: result.message,
-      ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
-    });
+    await openCommentPopupForElement(target, this.popup, this.projectName, this.bus);
   };
 
   private onMouseDown = (e: MouseEvent): void => {
@@ -381,6 +413,15 @@ export class Annotator {
       devicePixelRatio: window.devicePixelRatio,
     };
   }
+  /**
+   * CCM-291 — expose the internal Popup instance so the launcher can hand a
+   * popup-opening wrapper to pin-mode without instantiating a second Popup
+   * (which would duplicate audio recorders + submission state).
+   */
+  getPopup(): Popup {
+    return this.popup;
+  }
+
   destroy(): void {
     this.deactivate();
     this.popup.destroy();

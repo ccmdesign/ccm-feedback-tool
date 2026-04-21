@@ -67,6 +67,10 @@ export interface WidgetEvents {
   "image-swap:start": [];
   "image-swap:end": [];
   "image-swap:complete": [import("./image-swap-mode.js").ImageSwapComplete];
+  // CCM-291 — pin mode lifecycle. Pin reuses "annotation:complete" for its
+  // submission payload (shape parity with area mode), so no new complete event.
+  "pin:start": [];
+  "pin:end": [];
 }
 
 /** Subset of WidgetEvents exposed to consumers via CcmFeedbackInstance */
