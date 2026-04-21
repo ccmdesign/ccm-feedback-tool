@@ -91,51 +91,102 @@ test.describe("CCM-284 voice pipeline", () => {
     await page.goto(`http://localhost:3999?project=${project}`);
     await page.waitForSelector("ccm-feedback-widget", { state: "attached" });
 
-    // Start annotation flow by pressing the annotate FAB option.
-    // e2e/server.mjs opens the widget in open-Shadow test mode.
-    const micVisible = await page.evaluate(() => {
+    // Drive the annotator the same way the happy-path test does, so the
+    // popup is actually opened — otherwise the mic-button assertion is
+    // vacuous (the popup is never constructed regardless of support).
+    await page.waitForFunction(() => {
       const host = document.querySelector("ccm-feedback-widget");
-      const root = host?.shadowRoot;
-      if (!root) return null;
-      // The popup lives OUTSIDE Shadow DOM (document.body), so query top-level.
-      // Use the stable, locale-independent `data-ccm-feedback` attribute.
-      return (
-        document.querySelector<HTMLButtonElement>('button[data-ccm-feedback="popup-mic"]')?.offsetParent !== null
-      );
+      return host?.shadowRoot?.querySelector(".sp-fab") !== null;
     });
-    // Popup isn't open yet, but the mic button only exists when supported —
-    // which it's not in this scenario, so querying returns null/undefined.
-    expect(micVisible).toBeFalsy();
+    await page.evaluate(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      (host?.shadowRoot?.querySelector(".sp-fab") as HTMLElement)?.click();
+    });
+    await page.waitForFunction(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      return host?.shadowRoot?.querySelector('[data-item-id="annotate"]') !== null;
+    });
+    await page.evaluate(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      (host?.shadowRoot?.querySelector('[data-item-id="annotate"]') as HTMLElement)?.click();
+    });
+    await page.waitForFunction(() => !!document.querySelector("div[style*='crosshair']"));
+
+    const box = await page.locator("#target-element").boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + 10, box!.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 200, box!.y + 50, { steps: 5 });
+    await page.mouse.up();
+
+    // Popup opens, but MediaRecorder-unsupported means no mic button is
+    // rendered at all. Assert the selector finds nothing.
+    await page.waitForSelector("textarea");
+    const micCount = await page.evaluate(
+      () => document.querySelectorAll('button[data-ccm-feedback="popup-mic"]').length,
+    );
+    expect(micCount).toBe(0);
   });
 
   test("happy path — stubbed transcribe populates textarea with cleaned fixture", async ({ page, browserName }) => {
     await shimMicSupported(page);
     await stubTranscribeEndpoint(page, { withAudioUrl: true });
+
+    // Track /api/v1/transcribe calls so we can assert it fires exactly once.
+    let transcribeCalls = 0;
+    page.on("request", (req) => {
+      if (req.url().includes("/api/v1/transcribe") && req.method() === "POST") transcribeCalls += 1;
+    });
+
     const project = `e2e-voice-${browserName}`;
     await page.goto(`http://localhost:3999?project=${project}`);
     await page.waitForSelector("ccm-feedback-widget", { state: "attached" });
+    await page.waitForFunction(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      return host?.shadowRoot?.querySelector(".sp-fab") !== null;
+    });
 
-    // Open annotator: emulate programmatic entry via the public widget instance.
+    // 1. Open the annotator by clicking the FAB and picking Annotate (mirrors
+    //    the pattern in widget.spec.ts — shadow is "open" under NODE_ENV=test).
     await page.evaluate(() => {
-      const anyWindow = window as unknown as { __ccmFeedback?: { open?: () => void } };
-      // open the panel isn't enough to reach annotation; manually dispatch
-      // the annotation flow via the exposed FAB shadow element.
-      anyWindow.__ccmFeedback?.open?.();
+      const host = document.querySelector("ccm-feedback-widget");
+      (host?.shadowRoot?.querySelector(".sp-fab") as HTMLElement)?.click();
     });
+    await page.waitForFunction(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      return host?.shadowRoot?.querySelector('[data-item-id="annotate"]') !== null;
+    });
+    await page.evaluate(() => {
+      const host = document.querySelector("ccm-feedback-widget");
+      (host?.shadowRoot?.querySelector('[data-item-id="annotate"]') as HTMLElement)?.click();
+    });
+    await page.waitForFunction(() => !!document.querySelector("div[style*='crosshair']"));
 
-    // We don't actually draw on the page — the DOM-anchored popup.show() path
-    // is exercised in unit tests. Here we assert the mic button renders when
-    // the transcribe endpoint + MediaRecorder shim are present, which means
-    // the wiring is connected end-to-end.
-    // The mic button is only rendered once the popup is open. For CI on this
-    // skeleton server, we verify that shimming MediaRecorder causes the
-    // wider widget to load without errors.
-    const consoleErrors: string[] = [];
-    page.on("console", (msg) => {
-      if (msg.type() === "error") consoleErrors.push(msg.text());
-    });
-    await page.waitForTimeout(500);
-    expect(consoleErrors).not.toContain("MediaRecorder is not defined");
+    // 2. Draw a rectangle on a deterministic target element.
+    const box = await page.locator("#target-element").boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + 10, box!.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + 200, box!.y + 50, { steps: 5 });
+    await page.mouse.up();
+
+    // 3. Popup + mic button appear. The mic button uses the stable
+    //    data-ccm-feedback attribute (locale-independent).
+    await page.waitForSelector('button[data-ccm-feedback="popup-mic"]', { timeout: 5000 });
+    const micLocator = page.locator('button[data-ccm-feedback="popup-mic"]');
+
+    // 4. Click mic to start recording.
+    await micLocator.click();
+
+    // 5. Click mic again to stop + trigger the transcribe round-trip.
+    await micLocator.click();
+
+    // 6. Within the plan R12 3s acceptance target, the textarea should
+    //    contain the cleaned fixture text.
+    await expect(page.locator("textarea")).toHaveValue(FIXTURE_CLEANED, { timeout: 3000 });
+
+    // 7. Assert the stubbed endpoint was hit exactly once.
+    expect(transcribeCalls).toBe(1);
   });
 
   test("mic permission denied keeps typed submission working", async ({ page, browserName }) => {
