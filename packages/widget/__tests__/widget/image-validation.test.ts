@@ -20,6 +20,11 @@ describe("validateFileBeforeUpload", () => {
     expect(err?.kind).toBe("size");
   });
 
+  it("rejects a zero-byte file", () => {
+    const err = validateFileBeforeUpload(makeFile(0, "image/jpeg"));
+    expect(err?.kind).toBe("size");
+  });
+
   it("rejects unsupported MIMEs", () => {
     const err = validateFileBeforeUpload(makeFile(1024, "image/tiff"));
     expect(err?.kind).toBe("mime");

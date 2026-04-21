@@ -9,8 +9,13 @@ export type ImageValidationError =
 /**
  * Client-side file validator. Order: size → MIME. Returns `null` on success or
  * a structured error object that the UI surfaces with the localized string.
+ *
+ * Zero-byte files are rejected up front — they waste a signed-upload round-trip,
+ * land as orphans in Storage (because the server-side Zod schema requires
+ * `sizeBytes > 0`), and never surface a useful annotation.
  */
 export function validateFileBeforeUpload(file: File): ImageValidationError | null {
+  if (file.size <= 0) return { kind: "size" };
   if (file.size > MAX_ASSET_SIZE_BYTES) return { kind: "size" };
   if (!(ALLOWED_IMAGE_MIMES as readonly string[]).includes(file.type)) return { kind: "mime" };
   return null;
