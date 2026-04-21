@@ -375,7 +375,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 5: Next.js route + env wiring**
+- [x] **Unit 5: Next.js route + env wiring**
 
 **Goal:** Expose the transcribe handler as `/api/v1/transcribe` in the demo app with real adapters.
 
