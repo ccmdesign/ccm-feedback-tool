@@ -51,6 +51,9 @@ const _CCM_FEEDBACK_MODELS = {
       stagingUrl: { type: "String", default: '""' },
       implementationWebhookUrl: { type: "String", optional: true, nativeType: "Text" },
       implementationWebhookSecretHash: { type: "String", optional: true, nativeType: "Text" },
+      // CCM-290 — plaintext agent token (per user decision). Comparisons at
+      // the handler layer must use timingSafeEqual.
+      agentToken: { type: "String", optional: true },
       createdAt: { type: "DateTime", default: "now()" },
       feedbacks: {
         type: "FeedbackItem",
@@ -126,6 +129,11 @@ const _CCM_FEEDBACK_MODELS = {
         type: "FeedbackAnnotation",
         relation: { kind: "1-to-many", model: "FeedbackAnnotation" },
       },
+      // CCM-290 — 1-to-many relation to reply threads.
+      replies: {
+        type: "FeedbackReply",
+        relation: { kind: "1-to-many", model: "FeedbackReply" },
+      },
     },
     indexes: [
       { fields: ["projectName"] },
@@ -182,6 +190,31 @@ const _CCM_FEEDBACK_MODELS = {
       audioUrl: { type: "String", optional: true, nativeType: "Text" },
     },
     indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }, { fields: ["type"] }],
+  },
+  // CCM-290 — threaded replies on a FeedbackItem. Source is a plain String
+  // ("user" | "agent") to stay portable across MySQL/Postgres (Prisma enums
+  // are Postgres-only, matching how FeedbackItem.type is stored).
+  FeedbackReply: {
+    fields: {
+      id: { type: "String", isId: true, default: "cuid()" },
+      feedbackId: { type: "String" },
+      feedback: {
+        type: "FeedbackItem",
+        relation: {
+          kind: "many-to-1",
+          model: "FeedbackItem",
+          fields: ["feedbackId"],
+          references: ["id"],
+          onDelete: "Cascade",
+        },
+      },
+      source: { type: "String" },
+      author: { type: "String" },
+      authorEmail: { type: "String", optional: true },
+      body: { type: "String", nativeType: "Text" },
+      createdAt: { type: "DateTime", default: "now()" },
+    },
+    indexes: [{ fields: ["feedbackId"] }],
   },
 } as const satisfies Record<string, ModelDef>;
 

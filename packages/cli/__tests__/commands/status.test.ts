@@ -26,6 +26,7 @@ model Project {
   stagingUrl                      String        @default("")
   implementationWebhookUrl        String?       @db.Text
   implementationWebhookSecretHash String?       @db.Text
+  agentToken                      String?
   createdAt                       DateTime      @default(now())
   feedbacks                       FeedbackItem[]
   reviewBatches                   ReviewBatch[]
@@ -68,6 +69,7 @@ model FeedbackItem {
   authorEmail  String
   clientId     String              @unique
   resolvedAt   DateTime?
+  replies      FeedbackReply[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   annotations  FeedbackAnnotation[]
@@ -116,6 +118,19 @@ model FeedbackAnnotation {
   @@index([feedbackId])
   @@index([status])
   @@index([type])
+}
+
+model FeedbackReply {
+  id          String       @id @default(cuid())
+  feedbackId  String
+  feedback    FeedbackItem @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  source      String
+  author      String
+  authorEmail String?
+  body        String       @db.Text
+  createdAt   DateTime     @default(now())
+
+  @@index([feedbackId])
 }
 `;
 

@@ -61,12 +61,13 @@ export type SortI18n = Record<SortI18nKey, string>;
 // Sort utilities
 // ---------------------------------------------------------------------------
 
-/** Type priority for "by-type" sort: question, change, bug, other */
+/** Type priority for "by-type" sort: comment first (default), then question, change, bug, other. */
 const TYPE_ORDER: Record<FeedbackType, number> = {
-  question: 0,
-  change: 1,
-  bug: 2,
-  other: 3,
+  comment: 0,
+  question: 1,
+  change: 2,
+  bug: 3,
+  other: 4,
 };
 
 /** Sort feedbacks according to the given mode. Returns a new array. */

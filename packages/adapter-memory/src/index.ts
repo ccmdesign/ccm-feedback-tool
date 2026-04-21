@@ -6,6 +6,8 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
+  type ReplyCreateInput,
+  type ReplyRecord,
   StoreNotFoundError,
 } from "@ccm-feedback/core";
 
@@ -96,6 +98,7 @@ export class MemoryStore implements CcmFeedbackStore {
       createdAt: now,
       updatedAt: now,
       annotations,
+      replies: [],
     };
 
     this.feedbacks.unshift(record);
@@ -142,6 +145,14 @@ export class MemoryStore implements CcmFeedbackStore {
 
   async deleteAllFeedbacks(projectName: string): Promise<void> {
     this.feedbacks = this.feedbacks.filter((f) => f.projectName !== projectName);
+  }
+
+  async addReply(_input: ReplyCreateInput): Promise<ReplyRecord> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
+
+  async listReplies(_feedbackId: string): Promise<ReplyRecord[]> {
+    throw new Error("CCM-290 Phase 2 pending");
   }
 
   /** Remove all data from this store instance. */

@@ -177,6 +177,23 @@ export class ProjectStore {
       throw error;
     }
   }
+
+  /**
+   * CCM-290 — rotate (or initially generate) the plaintext `agentToken` on
+   * the project. Stubbed in P1 so the TypeScript surface matches the new
+   * `CcmProjectStore` contract; real implementation lands in P2.
+   */
+  async rotateAgentToken(_id: string): Promise<{ agentToken: string }> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
+
+  /**
+   * CCM-290 — look up a project by its agent token with a timing-safe
+   * compare. Stubbed in P1, real implementation lands in P2.
+   */
+  async findByAgentToken(_token: string): Promise<{ id: string; name: string } | null> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
 }
 
 function isPrismaNotFound(error: unknown): boolean {

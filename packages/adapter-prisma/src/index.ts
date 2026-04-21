@@ -8,6 +8,8 @@ import {
   flattenAnnotation,
   isStoreDuplicate,
   isStoreNotFound,
+  type ReplyCreateInput,
+  type ReplyRecord,
 } from "@ccm-feedback/core";
 import {
   feedbackCreateSchema,
@@ -226,6 +228,14 @@ export class PrismaStore implements CcmFeedbackStore {
 
   async deleteAllFeedbacks(projectName: string): Promise<void> {
     await this.prisma.feedbackItem.deleteMany({ where: { projectName } });
+  }
+
+  async addReply(_input: ReplyCreateInput): Promise<ReplyRecord> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
+
+  async listReplies(_feedbackId: string): Promise<ReplyRecord[]> {
+    throw new Error("CCM-290 Phase 2 pending");
   }
 
   /**

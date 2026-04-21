@@ -197,7 +197,7 @@ function buildField(name: string, def: FieldDef): Field {
     name,
     fieldType: def.relation ? def.relation.model : def.type,
     optional: def.optional ?? false,
-    array: def.relation?.kind === "1-to-many",
+    array: def.relation?.kind === "1-to-many" || (def.isList ?? false),
     attributes: [],
   };
 

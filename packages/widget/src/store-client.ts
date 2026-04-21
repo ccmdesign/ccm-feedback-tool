@@ -8,6 +8,8 @@ import {
   type FeedbackStatus,
   type FeedbackType,
   flattenAnnotation,
+  type ReplyRecord,
+  type ReplyResponse,
 } from "@ccm-feedback/core";
 import type { WidgetClient } from "./api-client.js";
 
@@ -95,6 +97,19 @@ function toResponse(record: FeedbackRecord): FeedbackResponse {
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     annotations: record.annotations.map(toAnnotationResponse),
+    replies: (record.replies ?? []).map(toReplyResponse),
+  };
+}
+
+export function toReplyResponse(reply: ReplyRecord): ReplyResponse {
+  return {
+    id: reply.id,
+    feedbackId: reply.feedbackId,
+    source: reply.source,
+    author: reply.author,
+    authorEmail: reply.authorEmail,
+    body: reply.body,
+    createdAt: reply.createdAt.toISOString(),
   };
 }
 

@@ -6,6 +6,8 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
+  type ReplyCreateInput,
+  type ReplyRecord,
   StoreNotFoundError,
 } from "@ccm-feedback/core";
 
@@ -139,6 +141,7 @@ export class LocalStorageStore implements CcmFeedbackStore {
       createdAt: now,
       updatedAt: now,
       annotations,
+      replies: [],
     };
 
     feedbacks.unshift(record);
@@ -194,6 +197,14 @@ export class LocalStorageStore implements CcmFeedbackStore {
     this.save(feedbacks);
   }
 
+  async addReply(_input: ReplyCreateInput): Promise<ReplyRecord> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
+
+  async listReplies(_feedbackId: string): Promise<ReplyRecord[]> {
+    throw new Error("CCM-290 Phase 2 pending");
+  }
+
   /** Remove all data from localStorage for this store key. */
   clear(): void {
     localStorage.removeItem(this.key);
@@ -204,14 +215,27 @@ export class LocalStorageStore implements CcmFeedbackStore {
 // JSON serialization helpers — revive date strings from localStorage
 // ---------------------------------------------------------------------------
 
-interface SerializedFeedback extends Omit<FeedbackRecord, "createdAt" | "updatedAt" | "resolvedAt" | "annotations"> {
+interface SerializedFeedback
+  extends Omit<FeedbackRecord, "createdAt" | "updatedAt" | "resolvedAt" | "annotations" | "replies"> {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
   annotations: SerializedAnnotation[];
+  /** Present on records written by this adapter; absent on records written by earlier versions. */
+  replies?: SerializedReply[];
 }
 
 interface SerializedAnnotation extends Omit<AnnotationRecord, "createdAt"> {
+  createdAt: string;
+}
+
+interface SerializedReply {
+  id: string;
+  feedbackId: string;
+  source: "user" | "agent";
+  author: string;
+  authorEmail: string | null;
+  body: string;
   createdAt: string;
 }
 
@@ -224,6 +248,10 @@ function reviveFeedback(raw: SerializedFeedback): FeedbackRecord {
     annotations: raw.annotations.map((ann) => ({
       ...ann,
       createdAt: new Date(ann.createdAt),
+    })),
+    replies: (raw.replies ?? []).map((r) => ({
+      ...r,
+      createdAt: new Date(r.createdAt),
     })),
   };
 }
