@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: `TextEditMode` keydown handler now guards on `e.isComposing`, `state.isComposing` (tracked via compositionstart/compositionend), and legacy `keyCode === 229`; blur also waits for composition to finish. Regression tests cover IME confirmation and legacy Safari paths.
 ---
 
 # CCM-282 — `TextEditMode` submits mid-IME-composition on Enter

@@ -1,8 +1,9 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: `TextEditMode` now snapshots `document.activeElement` on activate and restores focus on deactivate (with `document.contains` guard). Regression test verifies Escape returns focus to the triggering button.
 ---
 
 # CCM-282 — `TextEditMode` does not restore focus on abort/submit

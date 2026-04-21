@@ -33,6 +33,11 @@ export class TextEditMode {
   private editingState: EditingState | null = null;
   private isActive = false;
   private savedOverflow = "";
+  /**
+   * Element that held focus when text-edit mode activated. Restored on
+   * deactivate so keyboard-only users don't lose their place (CCM-282 P3).
+   */
+  private previouslyFocused: HTMLElement | null = null;
 
   constructor(
     private readonly colors: ThemeColors,
@@ -48,6 +53,8 @@ export class TextEditMode {
     if (this.isActive) return;
     this.isActive = true;
     this.savedOverflow = document.body.style.overflow;
+    // CCM-282 P3: remember the focused element so we can restore it on exit.
+    this.previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     this.overlay = el("div", {
       style: `
@@ -111,6 +118,21 @@ export class TextEditMode {
     this.overlay = null;
     this.toolbar = null;
     this.isActive = false;
+
+    // CCM-282 P3: restore focus to the element that had it before activation.
+    // Guarded because the element may have been detached from the DOM while
+    // the mode was active (unlikely, but a nav during edit is possible).
+    const toFocus = this.previouslyFocused;
+    this.previouslyFocused = null;
+    if (toFocus && typeof toFocus.focus === "function" && document.contains(toFocus)) {
+      try {
+        toFocus.focus();
+      } catch {
+        // Some browsers throw when focusing a disabled / display:none element;
+        // ignore — the user can Tab to recover.
+      }
+    }
+
     this.bus.emit("text-edit:end");
   }
 
@@ -191,11 +213,23 @@ export class TextEditMode {
       savedContentEditable,
       savedOutline,
       savedUserSelect,
+      isComposing: false,
     };
     this.editingState = state;
 
-    const onBlur = () => void this.finishEditing(state);
+    const onBlur = () => {
+      // CCM-282 P2: blur while the IME is still composing would swallow the
+      // partial candidate. Wait for composition to end before finishing.
+      if (state.isComposing) return;
+      void this.finishEditing(state);
+    };
     const onKey = (e: KeyboardEvent) => {
+      // CCM-282 P2: IME-composition guard. When a CJK / Vietnamese / etc.
+      // reviewer confirms an IME candidate, the browser fires `keydown` with
+      // `key === "Enter"` AND `isComposing === true`. That Enter belongs to
+      // the IME — submitting now would throw away the partially-typed edit.
+      // `keyCode === 229` is the legacy Safari <14 signal for the same state.
+      if (e.isComposing || state.isComposing || e.keyCode === 229) return;
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         void this.finishEditing(state);
@@ -205,10 +239,20 @@ export class TextEditMode {
         this.deactivate();
       }
     };
+    const onCompositionStart = () => {
+      state.isComposing = true;
+    };
+    const onCompositionEnd = () => {
+      state.isComposing = false;
+    };
     state.onBlur = onBlur;
     state.onKey = onKey;
+    state.onCompositionStart = onCompositionStart;
+    state.onCompositionEnd = onCompositionEnd;
     target.addEventListener("blur", onBlur);
     target.addEventListener("keydown", onKey);
+    target.addEventListener("compositionstart", onCompositionStart);
+    target.addEventListener("compositionend", onCompositionEnd);
   }
 
   private async finishEditing(state: EditingState): Promise<void> {
@@ -273,6 +317,8 @@ export class TextEditMode {
     element.style.removeProperty("outline-offset");
     if (state.onBlur) element.removeEventListener("blur", state.onBlur);
     if (state.onKey) element.removeEventListener("keydown", state.onKey);
+    if (state.onCompositionStart) element.removeEventListener("compositionstart", state.onCompositionStart);
+    if (state.onCompositionEnd) element.removeEventListener("compositionend", state.onCompositionEnd);
   }
 
   /**
@@ -302,6 +348,10 @@ interface EditingState {
   savedContentEditable: string | null;
   savedOutline: string;
   savedUserSelect: string;
+  /** Tracks an active IME composition — set between compositionstart and compositionend. */
+  isComposing?: boolean;
   onBlur?: (e: Event) => void;
   onKey?: (e: KeyboardEvent) => void;
+  onCompositionStart?: (e: Event) => void;
+  onCompositionEnd?: (e: Event) => void;
 }
