@@ -450,7 +450,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 7: Widget — transcribe round-trip + textarea insertion**
+- [x] **Unit 7: Widget — transcribe round-trip + textarea insertion**
 
 **Goal:** Wire the recorded blob through the new `/api/v1/transcribe` endpoint and insert cleaned text into the textarea with the correct merge rule.
 
