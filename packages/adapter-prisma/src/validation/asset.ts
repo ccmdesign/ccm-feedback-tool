@@ -7,7 +7,7 @@
  *    client PUT.
  */
 
-import { ALLOWED_IMAGE_MIMES, MAX_ASSET_SIZE_BYTES } from "@ccm-feedback/core";
+import { MAX_ASSET_SIZE_BYTES, UPLOAD_ALLOWED_IMAGE_MIMES } from "@ccm-feedback/core";
 import * as zod from "zod";
 
 const z: typeof zod.z = ("z" in zod ? zod.z : zod) as typeof zod.z;
@@ -31,10 +31,17 @@ export const assetMirrorRequestSchema = z.object({
 
 export type AssetMirrorRequest = zod.z.infer<typeof assetMirrorRequestSchema>;
 
+/**
+ * Sign-upload content-type allowlist — deliberately narrower than
+ * `ALLOWED_IMAGE_MIMES` (CCM-282 P1). SVG is forced through the mirror path,
+ * which runs `isSafeSvg()` on the bytes before upload. The signed-upload path
+ * hands the client a direct-PUT URL to Supabase Storage, bypassing every
+ * server-side check — accepting SVG here would be a stored-XSS bypass.
+ */
 export const signUploadRequestSchema = z.object({
   projectId: z.string().min(1).max(200),
   filename: filenameShape,
-  contentType: z.enum(ALLOWED_IMAGE_MIMES),
+  contentType: z.enum(UPLOAD_ALLOWED_IMAGE_MIMES),
   sizeBytes: z.number().int().positive().max(MAX_ASSET_SIZE_BYTES),
 });
 

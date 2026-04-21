@@ -1,8 +1,9 @@
 ---
 priority: p1
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-282)
 run_id: 20260420-204032-85e065a3
+resolution: Added `UPLOAD_ALLOWED_IMAGE_MIMES` (excludes SVG) in `@ccm-feedback/core`; `signUploadRequestSchema` and the widget's file-input accept list + client validator now use it. SVG is forced through the mirror path which sanitizes.
 ---
 
 # CCM-282 — Signed-upload path bypasses server-side SVG sanitizer

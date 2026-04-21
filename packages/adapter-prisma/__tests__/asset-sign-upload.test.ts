@@ -101,6 +101,26 @@ describe("createAssetSignUploadHandler", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects image/svg+xml on the signed-upload path (CCM-282 P1 — SVG bypass fix)", async () => {
+    // The signed-upload path hands the client a direct-PUT URL that bypasses
+    // every server-side check. Accepting SVG here would be a stored-XSS hole;
+    // reviewers must use the mirror path (which runs isSafeSvg() on bytes).
+    const handler = createAssetSignUploadHandler({
+      projectStore: projectStore(true),
+      storageClient: storageClient(),
+      storageOrigin,
+    });
+    const res = await handler(
+      jsonRequest({
+        projectId: "proj-1",
+        filename: "evil.svg",
+        contentType: "image/svg+xml",
+        sizeBytes: 512,
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("rejects path-traversal filenames", async () => {
     const handler = createAssetSignUploadHandler({
       projectStore: projectStore(true),

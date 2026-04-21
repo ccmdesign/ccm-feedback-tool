@@ -68,7 +68,8 @@ export const fr: Translations = {
   "imageSwap.proposed": "Propos\u00e9",
   "imageSwap.submit": "Valider le changement",
   "imageSwap.errorSize": "Le fichier d\u00e9passe la limite de 10\u202fMo.",
-  "imageSwap.errorMime": "Format non pris en charge (jpg, png, webp, avif, svg, gif).",
+  "imageSwap.errorMime":
+    "Format non pris en charge pour l\u2019import (jpg, png, webp, avif, gif). Collez une URL SVG \u00e0 la place.",
   "imageSwap.errorUrl": "URL invalide.",
   "imageSwap.errorMirror": "Impossible de r\u00e9cup\u00e9rer l\u2019image. R\u00e9essayez.",
   "imageSwap.errorUpload": "L\u2019envoi a \u00e9chou\u00e9. R\u00e9essayez.",

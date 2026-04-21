@@ -30,10 +30,17 @@ describe("validateFileBeforeUpload", () => {
     expect(err?.kind).toBe("mime");
   });
 
-  it("accepts all allowed MIMEs", () => {
-    for (const type of ["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml", "image/gif"]) {
+  it("accepts all upload-allowed MIMEs", () => {
+    for (const type of ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]) {
       expect(validateFileBeforeUpload(makeFile(2048, type))).toBeNull();
     }
+  });
+
+  it("rejects image/svg+xml on the upload path (CCM-282 P1 — SVG must go through mirror)", () => {
+    // Direct-PUT uploads skip the server sanitizer; SVG is routed through the
+    // mirror path instead, which runs isSafeSvg() before storage.
+    const err = validateFileBeforeUpload(makeFile(2048, "image/svg+xml"));
+    expect(err?.kind).toBe("mime");
   });
 });
 

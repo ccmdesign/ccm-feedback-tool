@@ -103,6 +103,22 @@ export const ALLOWED_IMAGE_MIMES = [
 ] as const;
 export type AllowedImageMime = (typeof ALLOWED_IMAGE_MIMES)[number];
 
+/**
+ * MIME types accepted by the signed-upload path (direct client PUT to Storage).
+ *
+ * SVG is intentionally excluded here (CCM-282 P1): the signed-upload path lets
+ * the client PUT raw bytes directly to Supabase Storage, bypassing every
+ * server-side check. The mirror path (`/api/v1/assets/mirror`) runs
+ * `isSafeSvg()` on SVG bytes before upload; the signed-upload path has no such
+ * hook. Rather than add a fragile post-upload verify step, we force all SVG
+ * ingress through the mirror path (paste-a-URL) until a full DOMPurify
+ * sanitizer lands.
+ *
+ * Callers that want "everything including SVG" should use `ALLOWED_IMAGE_MIMES`.
+ */
+export const UPLOAD_ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"] as const;
+export type UploadAllowedImageMime = (typeof UPLOAD_ALLOWED_IMAGE_MIMES)[number];
+
 /** Maximum uploaded / mirrored asset size in bytes (10 MB). */
 export const MAX_ASSET_SIZE_BYTES = 10 * 1024 * 1024;
 

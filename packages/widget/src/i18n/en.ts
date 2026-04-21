@@ -67,7 +67,7 @@ export const en: Translations = {
   "imageSwap.proposed": "Proposed",
   "imageSwap.submit": "Submit swap",
   "imageSwap.errorSize": "File exceeds 10 MB limit.",
-  "imageSwap.errorMime": "Format not supported (jpg, png, webp, avif, svg, gif).",
+  "imageSwap.errorMime": "Format not supported for upload (jpg, png, webp, avif, gif). Paste an SVG URL instead.",
   "imageSwap.errorUrl": "Invalid URL.",
   "imageSwap.errorMirror": "Could not fetch image. Please try again.",
   "imageSwap.errorUpload": "Upload failed. Please try again.",

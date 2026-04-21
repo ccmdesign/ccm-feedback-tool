@@ -46,6 +46,7 @@ export type {
   FeedbackUpdateInput,
   ProposedAssetSource,
   RectData,
+  UploadAllowedImageMime,
 } from "./types.js";
 export {
   ALLOWED_IMAGE_MIMES,
@@ -61,6 +62,7 @@ export {
   PROPOSED_ASSET_SOURCES,
   StoreDuplicateError,
   StoreNotFoundError,
+  UPLOAD_ALLOWED_IMAGE_MIMES,
 } from "./types.js";
 export { canonicalize } from "./webhook/canonicalization.js";
 export type {

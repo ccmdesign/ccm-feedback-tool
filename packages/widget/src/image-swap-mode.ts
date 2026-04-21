@@ -1,5 +1,5 @@
 import type { AllowedImageMime, AnnotationPayload, AssetMeta, ProposedAssetSource } from "@ccm-feedback/core";
-import { ALLOWED_IMAGE_MIMES, MAX_ASSET_SIZE_BYTES } from "@ccm-feedback/core";
+import { MAX_ASSET_SIZE_BYTES, UPLOAD_ALLOWED_IMAGE_MIMES } from "@ccm-feedback/core";
 import type { WidgetClient } from "./api-client.js";
 import { Z_INDEX_MAX } from "./constants.js";
 import { generateAnchor } from "./dom/anchor.js";
@@ -220,7 +220,10 @@ export class ImageSwapMode {
     fileLabel.style.color = this.colors.textTertiary;
     const fileInput = document.createElement("input");
     fileInput.type = "file";
-    fileInput.accept = ALLOWED_IMAGE_MIMES.join(",");
+    // CCM-282 P1: SVG is intentionally excluded from the signed-upload accept
+    // list. Reviewers can still mirror SVGs by pasting a URL — that path runs
+    // `isSafeSvg()` server-side before storage.
+    fileInput.accept = UPLOAD_ALLOWED_IMAGE_MIMES.join(",");
     fileInput.style.fontSize = "13px";
 
     const altLabel = document.createElement("label");
