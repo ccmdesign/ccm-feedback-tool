@@ -6,6 +6,8 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
+  type ReplyCreateInput,
+  type ReplyRecord,
   StoreNotFoundError,
 } from "@ccm-feedback/core";
 
@@ -139,6 +141,7 @@ export class LocalStorageStore implements CcmFeedbackStore {
       createdAt: now,
       updatedAt: now,
       annotations,
+      replies: [],
     };
 
     feedbacks.unshift(record);
@@ -168,6 +171,10 @@ export class LocalStorageStore implements CcmFeedbackStore {
     return this.load().find((f) => f.clientId === clientId) ?? null;
   }
 
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return this.load().find((f) => f.id === id) ?? null;
+  }
+
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
     const feedbacks = this.load();
     const fb = feedbacks.find((f) => f.id === id);
@@ -194,6 +201,32 @@ export class LocalStorageStore implements CcmFeedbackStore {
     this.save(feedbacks);
   }
 
+  async addReply(input: ReplyCreateInput): Promise<ReplyRecord> {
+    const feedbacks = this.load();
+    const parent = feedbacks.find((f) => f.id === input.feedbackId);
+    if (!parent) throw new StoreNotFoundError("Feedback not found");
+
+    const reply: ReplyRecord = {
+      id: this.generateId(),
+      feedbackId: input.feedbackId,
+      source: input.source,
+      author: input.author,
+      authorEmail: input.authorEmail ?? null,
+      body: input.body,
+      createdAt: new Date(),
+    };
+    parent.replies = [...(parent.replies ?? []), reply];
+    parent.updatedAt = new Date();
+    this.save(feedbacks);
+    return reply;
+  }
+
+  async listReplies(feedbackId: string): Promise<ReplyRecord[]> {
+    const parent = this.load().find((f) => f.id === feedbackId);
+    if (!parent) return [];
+    return [...(parent.replies ?? [])].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
   /** Remove all data from localStorage for this store key. */
   clear(): void {
     localStorage.removeItem(this.key);
@@ -204,14 +237,27 @@ export class LocalStorageStore implements CcmFeedbackStore {
 // JSON serialization helpers — revive date strings from localStorage
 // ---------------------------------------------------------------------------
 
-interface SerializedFeedback extends Omit<FeedbackRecord, "createdAt" | "updatedAt" | "resolvedAt" | "annotations"> {
+interface SerializedFeedback
+  extends Omit<FeedbackRecord, "createdAt" | "updatedAt" | "resolvedAt" | "annotations" | "replies"> {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
   annotations: SerializedAnnotation[];
+  /** Present on records written by this adapter; absent on records written by earlier versions. */
+  replies?: SerializedReply[];
 }
 
 interface SerializedAnnotation extends Omit<AnnotationRecord, "createdAt"> {
+  createdAt: string;
+}
+
+interface SerializedReply {
+  id: string;
+  feedbackId: string;
+  source: "user" | "agent";
+  author: string;
+  authorEmail: string | null;
+  body: string;
   createdAt: string;
 }
 
@@ -224,6 +270,10 @@ function reviveFeedback(raw: SerializedFeedback): FeedbackRecord {
     annotations: raw.annotations.map((ann) => ({
       ...ann,
       createdAt: new Date(ann.createdAt),
+    })),
+    replies: (raw.replies ?? []).map((r) => ({
+      ...r,
+      createdAt: new Date(r.createdAt),
     })),
   };
 }

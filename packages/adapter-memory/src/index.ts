@@ -6,6 +6,8 @@ import {
   type FeedbackQuery,
   type FeedbackRecord,
   type FeedbackUpdateInput,
+  type ReplyCreateInput,
+  type ReplyRecord,
   StoreNotFoundError,
 } from "@ccm-feedback/core";
 
@@ -96,6 +98,7 @@ export class MemoryStore implements CcmFeedbackStore {
       createdAt: now,
       updatedAt: now,
       annotations,
+      replies: [],
     };
 
     this.feedbacks.unshift(record);
@@ -124,6 +127,10 @@ export class MemoryStore implements CcmFeedbackStore {
     return this.feedbacks.find((f) => f.clientId === clientId) ?? null;
   }
 
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return this.feedbacks.find((f) => f.id === id) ?? null;
+  }
+
   async updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord> {
     const fb = this.feedbacks.find((f) => f.id === id);
     if (!fb) throw new StoreNotFoundError();
@@ -142,6 +149,30 @@ export class MemoryStore implements CcmFeedbackStore {
 
   async deleteAllFeedbacks(projectName: string): Promise<void> {
     this.feedbacks = this.feedbacks.filter((f) => f.projectName !== projectName);
+  }
+
+  async addReply(input: ReplyCreateInput): Promise<ReplyRecord> {
+    const parent = this.feedbacks.find((f) => f.id === input.feedbackId);
+    if (!parent) throw new StoreNotFoundError("Feedback not found");
+
+    const reply: ReplyRecord = {
+      id: this.generateId(),
+      feedbackId: input.feedbackId,
+      source: input.source,
+      author: input.author,
+      authorEmail: input.authorEmail ?? null,
+      body: input.body,
+      createdAt: new Date(),
+    };
+    parent.replies = [...(parent.replies ?? []), reply];
+    parent.updatedAt = new Date();
+    return reply;
+  }
+
+  async listReplies(feedbackId: string): Promise<ReplyRecord[]> {
+    const parent = this.feedbacks.find((f) => f.id === feedbackId);
+    if (!parent) return [];
+    return [...(parent.replies ?? [])].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   /** Remove all data from this store instance. */

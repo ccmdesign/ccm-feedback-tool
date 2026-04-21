@@ -46,6 +46,10 @@ export type {
   FeedbackUpdateInput,
   ProposedAssetSource,
   RectData,
+  ReplyCreateInput,
+  ReplyRecord,
+  ReplyResponse,
+  ReplySource,
   UploadAllowedImageMime,
 } from "./types.js";
 export {
@@ -60,6 +64,7 @@ export {
   isTextChangeAnnotation,
   MAX_ASSET_SIZE_BYTES,
   PROPOSED_ASSET_SOURCES,
+  REPLY_SOURCES,
   StoreDuplicateError,
   StoreNotFoundError,
   UPLOAD_ALLOWED_IMAGE_MIMES,

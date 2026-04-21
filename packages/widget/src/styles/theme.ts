@@ -22,11 +22,15 @@ export interface ThemeColors {
   typeChange: string;
   typeBug: string;
   typeOther: string;
+  /** CCM-290 — the new "comment" type swatch. */
+  typeComment: string;
   // Soft type backgrounds (pastel)
   typeQuestionBg: string;
   typeChangeBg: string;
   typeBugBg: string;
   typeOtherBg: string;
+  /** CCM-290 — matching pastel for the "comment" type. */
+  typeCommentBg: string;
 }
 
 const DEFAULT_ACCENT = "#0066ff";
@@ -108,11 +112,13 @@ export function buildThemeColors(accent: string = DEFAULT_ACCENT, theme?: "light
       typeChange: "#fbbf24",
       typeBug: "#f87171",
       typeOther: "#94a3b8",
+      typeComment: "#9ca3af",
       // Dark pastel backgrounds
       typeQuestionBg: "rgba(59, 130, 246, 0.15)",
       typeChangeBg: "rgba(245, 158, 11, 0.15)",
       typeBugBg: "rgba(239, 68, 68, 0.15)",
       typeOtherBg: "rgba(100, 116, 139, 0.15)",
+      typeCommentBg: "rgba(107, 114, 128, 0.15)",
     };
   }
 
@@ -139,11 +145,13 @@ export function buildThemeColors(accent: string = DEFAULT_ACCENT, theme?: "light
     typeChange: "#b45309",
     typeBug: "#ef4444",
     typeOther: "#64748b",
+    typeComment: "#6b7280",
     // Pastel backgrounds
     typeQuestionBg: "#eff6ff",
     typeChangeBg: "#fffbeb",
     typeBugBg: "#fef2f2",
     typeOtherBg: "#f8fafc",
+    typeCommentBg: "#e5e7eb",
   };
 }
 
@@ -155,6 +163,8 @@ export function getTypeColor(type: string, colors: ThemeColors): string {
       return colors.typeChange;
     case "bug":
       return colors.typeBug;
+    case "comment":
+      return colors.typeComment;
     default:
       return colors.typeOther;
   }
@@ -168,6 +178,8 @@ export function getTypeBgColor(type: string, colors: ThemeColors): string {
       return colors.typeChangeBg;
     case "bug":
       return colors.typeBugBg;
+    case "comment":
+      return colors.typeCommentBg;
     default:
       return colors.typeOtherBg;
   }
@@ -195,10 +207,12 @@ export function cssVariables(colors: ThemeColors): string {
     --sp-type-change: ${colors.typeChange};
     --sp-type-bug: ${colors.typeBug};
     --sp-type-other: ${colors.typeOther};
+    --sp-type-comment: ${colors.typeComment};
     --sp-type-question-bg: ${colors.typeQuestionBg};
     --sp-type-change-bg: ${colors.typeChangeBg};
     --sp-type-bug-bg: ${colors.typeBugBg};
     --sp-type-other-bg: ${colors.typeOtherBg};
+    --sp-type-comment-bg: ${colors.typeCommentBg};
     --sp-radius: 12px;
     --sp-radius-lg: 16px;
     --sp-radius-xl: 20px;

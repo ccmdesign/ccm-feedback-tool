@@ -5,6 +5,7 @@ import type {
   FeedbackResponse,
   FeedbackStatus,
   FeedbackType,
+  ReplyResponse,
 } from "@ccm-feedback/core";
 
 /** CCM-282 — result of a mirror or signed-upload request. */
@@ -73,6 +74,10 @@ export interface WidgetClient {
     surroundingText: string;
     projectName: string;
   }): Promise<{ cleaned_text: string; raw_text: string; audio_url?: string }>;
+  /** CCM-290 — list replies on a feedback. */
+  listReplies(id: string): Promise<ReplyResponse[]>;
+  /** CCM-290 — append a user reply on a feedback. `source` is fixed to "user". */
+  addReply(id: string, input: { author: string; authorEmail?: string; body: string }): Promise<ReplyResponse>;
 }
 
 const MAX_RETRIES = 3;
@@ -369,6 +374,42 @@ export class ApiClient {
    * would still be surfaced to the user as an inline error (they can press
    * mic again), so we use a bare `fetch` rather than `resilientFetch`.
    */
+  /**
+   * CCM-290 — list replies for a feedback.
+   *
+   * Routes to `${endpointBase}/api/feedback/:id/replies` (GET). `endpointBase`
+   * is the widget's `endpoint` config with a trailing `/api/feedback` removed
+   * (parallels the `submitReview` / `v1Url` derivation).
+   */
+  async listReplies(id: string): Promise<ReplyResponse[]> {
+    const response = await resilientFetch(`${this.endpoint}/${encodeURIComponent(id)}/replies`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to list replies: ${response.status}`);
+    }
+    return (await response.json()) as ReplyResponse[];
+  }
+
+  /**
+   * CCM-290 — append a user reply. The widget is session-trusted, so author
+   * + optional email come from the current identity; `source` is always
+   * `"user"` server-side (the agent API has its own route factory).
+   */
+  async addReply(id: string, input: { author: string; authorEmail?: string; body: string }): Promise<ReplyResponse> {
+    const response = await resilientFetch(`${this.endpoint}/${encodeURIComponent(id)}/replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Failed to add reply: ${response.status} ${text}`);
+    }
+    return (await response.json()) as ReplyResponse;
+  }
+
   async transcribe(input: {
     audio: Blob;
     selector: string;

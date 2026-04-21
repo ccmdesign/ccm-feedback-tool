@@ -8,6 +8,9 @@ import {
   flattenAnnotation,
   isStoreDuplicate,
   isStoreNotFound,
+  type ReplyCreateInput,
+  type ReplyRecord,
+  StoreNotFoundError,
 } from "@ccm-feedback/core";
 import {
   feedbackCreateSchema,
@@ -19,6 +22,8 @@ import {
 
 export type { CcmFeedbackStore } from "@ccm-feedback/core";
 export { flattenAnnotation, StoreDuplicateError, StoreNotFoundError } from "@ccm-feedback/core";
+export type { AgentFeedbackHandler, AgentFeedbackHandlerOptions } from "./agent-handler.js";
+export { createCcmAgentFeedbackHandler } from "./agent-handler.js";
 export type { ImageSniffResult } from "./asset-mirror.js";
 export {
   extensionForMime,
@@ -86,7 +91,7 @@ export type {
   RectangleAnnotationInput,
   TextChangeAnnotationInput,
 } from "./validation.js";
-export { resolveCcmStorageOrigin } from "./validation.js";
+export { agentPatchSchema, formatValidationErrors, replyCreateSchema, resolveCcmStorageOrigin } from "./validation.js";
 
 // ---------------------------------------------------------------------------
 // Minimal PrismaClient shape expected by this adapter
@@ -108,13 +113,23 @@ export interface CcmFeedbackPrismaClient {
     deleteMany: (args: unknown) => Promise<unknown>;
     count: (args: unknown) => Promise<number>;
   };
+  /** CCM-290 — reply thread on a feedback. */
+  feedbackReply: {
+    create: (args: unknown) => Promise<unknown>;
+    findMany: (args: unknown) => Promise<unknown[]>;
+  };
 }
 
 // ---------------------------------------------------------------------------
 // PrismaStore — CcmFeedbackStore implementation backed by Prisma
 // ---------------------------------------------------------------------------
 
-const INCLUDE_ANNOTATIONS = { annotations: true };
+// CCM-290 — every feedback read hydrates annotations *and* replies (ordered
+// ascending by createdAt for transcript-style rendering in the detail view).
+const INCLUDE_RELATIONS = {
+  annotations: true,
+  replies: { orderBy: { createdAt: "asc" as const } },
+};
 
 /**
  * Prisma-backed implementation of `CcmFeedbackStore`.
@@ -176,14 +191,21 @@ export class PrismaStore implements CcmFeedbackStore {
           })),
         },
       },
-      include: INCLUDE_ANNOTATIONS,
+      include: INCLUDE_RELATIONS,
     })) as FeedbackRecord;
   }
 
   async findByClientId(clientId: string): Promise<FeedbackRecord | null> {
     return (await this.prisma.feedbackItem.findUnique({
       where: { clientId },
-      include: INCLUDE_ANNOTATIONS,
+      include: INCLUDE_RELATIONS,
+    })) as FeedbackRecord | null;
+  }
+
+  async findById(id: string): Promise<FeedbackRecord | null> {
+    return (await this.prisma.feedbackItem.findUnique({
+      where: { id },
+      include: INCLUDE_RELATIONS,
     })) as FeedbackRecord | null;
   }
 
@@ -198,7 +220,7 @@ export class PrismaStore implements CcmFeedbackStore {
     const [feedbacks, total] = await Promise.all([
       this.prisma.feedbackItem.findMany({
         where,
-        include: INCLUDE_ANNOTATIONS,
+        include: INCLUDE_RELATIONS,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
@@ -216,7 +238,7 @@ export class PrismaStore implements CcmFeedbackStore {
         status: data.status,
         resolvedAt: data.resolvedAt,
       },
-      include: INCLUDE_ANNOTATIONS,
+      include: INCLUDE_RELATIONS,
     })) as FeedbackRecord;
   }
 
@@ -226,6 +248,35 @@ export class PrismaStore implements CcmFeedbackStore {
 
   async deleteAllFeedbacks(projectName: string): Promise<void> {
     await this.prisma.feedbackItem.deleteMany({ where: { projectName } });
+  }
+
+  async addReply(input: ReplyCreateInput): Promise<ReplyRecord> {
+    try {
+      return (await this.prisma.feedbackReply.create({
+        data: {
+          feedbackId: input.feedbackId,
+          source: input.source,
+          author: input.author,
+          authorEmail: input.authorEmail ?? null,
+          body: input.body,
+        },
+      })) as ReplyRecord;
+    } catch (error) {
+      // Foreign-key miss → normalize to StoreNotFoundError so the handler can
+      // translate to 404 without importing Prisma error codes.
+      if (isPrismaForeignKeyViolation(error)) {
+        throw new StoreNotFoundError("Feedback not found");
+      }
+      throw error;
+    }
+  }
+
+  async listReplies(feedbackId: string): Promise<ReplyRecord[]> {
+    const rows = (await this.prisma.feedbackReply.findMany({
+      where: { feedbackId },
+      orderBy: { createdAt: "asc" },
+    })) as ReplyRecord[];
+    return rows;
   }
 
   /**
@@ -567,6 +618,14 @@ export function createCcmFeedbackHandler({
 
 function isTableNotFoundError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2021";
+}
+
+/**
+ * CCM-290 — `P2003` = foreign-key constraint failed. Used by `addReply` to
+ * translate "parent feedback does not exist" into a `StoreNotFoundError`.
+ */
+function isPrismaForeignKeyViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2003";
 }
 
 /**

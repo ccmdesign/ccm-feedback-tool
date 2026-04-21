@@ -24,6 +24,8 @@ export const en: Translations = {
   "panel.cancel": "Cancel",
   "panel.confirmDelete": "Delete",
   "panel.loadMore": "Load more ({remaining} remaining)",
+  "panel.apiLink": "API link",
+  "panel.apiLinkCopied": "Copied",
 
   // Status filter labels
   "panel.statusAll": "All",
@@ -31,6 +33,7 @@ export const en: Translations = {
   "panel.statusResolved": "Resolved",
 
   // Feedback type labels
+  "type.comment": "Comment",
   "type.question": "Question",
   "type.change": "Change",
   "type.bug": "Bug",
@@ -87,6 +90,7 @@ export const en: Translations = {
   "popup.submitHintOther": "Ctrl+Enter to send",
   "popup.cancel": "Cancel",
   "popup.submit": "Send",
+  "popup.typeLabel": "Feedback type",
 
   // Popup mic (CCM-284)
   "popup.mic.record": "Dictate comment",
@@ -118,4 +122,11 @@ export const en: Translations = {
 
   // Badge
   "badge.count": "{count} unresolved feedbacks",
+
+  // CCM-290 — reply thread
+  "detail.replies": "Replies",
+  "detail.replyPlaceholder": "Write a reply…",
+  "detail.send": "Send",
+  "detail.source.user": "user",
+  "detail.source.agent": "agent",
 };

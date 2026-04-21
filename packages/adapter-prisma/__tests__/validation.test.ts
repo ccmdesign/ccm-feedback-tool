@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { assetMirrorRequestSchema, signUploadRequestSchema } from "../src/validation/asset.js";
 import {
+  agentPatchSchema,
   feedbackCreateSchema,
   feedbackPatchSchema,
   formatValidationErrors,
+  replyCreateSchema,
   resolveCcmStorageOrigin,
 } from "../src/validation.js";
 import { validAnnotation, validPayload } from "./fixtures.js";
@@ -464,5 +466,65 @@ describe("formatValidationErrors", () => {
       expect(errors[0]).toHaveProperty("field");
       expect(errors[0]).toHaveProperty("message");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CCM-290 — comment type, replyCreateSchema, agentPatchSchema
+// ---------------------------------------------------------------------------
+
+describe("CCM-290 feedback type + reply validation", () => {
+  it("feedbackCreateSchema accepts type 'comment'", () => {
+    const result = feedbackCreateSchema.safeParse({ ...validPayload, type: "comment" });
+    expect(result.success).toBe(true);
+  });
+
+  it("feedbackCreateSchema still rejects unknown types", () => {
+    const result = feedbackCreateSchema.safeParse({ ...validPayload, type: "totally-bogus" });
+    expect(result.success).toBe(false);
+  });
+
+  it("replyCreateSchema accepts author + body", () => {
+    const result = replyCreateSchema.safeParse({ author: "Alice", body: "Thanks!" });
+    expect(result.success).toBe(true);
+  });
+
+  it("replyCreateSchema accepts optional authorEmail", () => {
+    const result = replyCreateSchema.safeParse({
+      author: "Alice",
+      authorEmail: "alice@example.com",
+      body: "Thanks!",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("replyCreateSchema rejects empty body", () => {
+    const result = replyCreateSchema.safeParse({ author: "Alice", body: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("replyCreateSchema rejects body over 5000 chars", () => {
+    const result = replyCreateSchema.safeParse({ author: "Alice", body: "x".repeat(5001) });
+    expect(result.success).toBe(false);
+  });
+
+  it("replyCreateSchema rejects missing author", () => {
+    const result = replyCreateSchema.safeParse({ body: "Hi" });
+    expect(result.success).toBe(false);
+  });
+
+  it("agentPatchSchema accepts a status update", () => {
+    const result = agentPatchSchema.safeParse({ status: "resolved" });
+    expect(result.success).toBe(true);
+  });
+
+  it("agentPatchSchema accepts optional author", () => {
+    const result = agentPatchSchema.safeParse({ status: "resolved", author: "agent-alice" });
+    expect(result.success).toBe(true);
+  });
+
+  it("agentPatchSchema rejects unknown status", () => {
+    const result = agentPatchSchema.safeParse({ status: "in-flight" });
+    expect(result.success).toBe(false);
   });
 });

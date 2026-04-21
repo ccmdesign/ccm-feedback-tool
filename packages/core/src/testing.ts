@@ -344,5 +344,68 @@ export function testCcmFeedbackStore(factory: () => CcmFeedbackStore): void {
         await expect(store.deleteAllFeedbacks("nonexistent")).resolves.toBeUndefined();
       });
     });
+
+    // ------------------------------------------------------------------
+    // CCM-290 — replies
+    // ------------------------------------------------------------------
+
+    describe("replies (CCM-290)", () => {
+      it("newly-created feedback hydrates an empty replies array", async () => {
+        freshStore();
+        const fb = await store.createFeedback(createInput());
+        expect(fb.replies).toEqual([]);
+      });
+
+      it("listReplies returns [] for a feedback with no replies", async () => {
+        freshStore();
+        const fb = await store.createFeedback(createInput());
+        expect(await store.listReplies(fb.id)).toEqual([]);
+      });
+
+      it("addReply persists and listReplies returns rows in insertion order", async () => {
+        freshStore();
+        const fb = await store.createFeedback(createInput());
+
+        const user = await store.addReply({
+          feedbackId: fb.id,
+          source: "user",
+          author: "Alice",
+          body: "Is this still broken?",
+        });
+        const agent = await store.addReply({
+          feedbackId: fb.id,
+          source: "agent",
+          author: "agent-bot",
+          body: "Fixed in deploy 42.",
+        });
+
+        const rows = await store.listReplies(fb.id);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]?.id).toBe(user.id);
+        expect(rows[0]?.source).toBe("user");
+        expect(rows[0]?.body).toBe("Is this still broken?");
+        expect(rows[1]?.id).toBe(agent.id);
+        expect(rows[1]?.source).toBe("agent");
+      });
+
+      it("addReply throws StoreNotFoundError when the feedback does not exist", async () => {
+        freshStore();
+        await expect(
+          store.addReply({ feedbackId: "does-not-exist", source: "user", author: "Alice", body: "hi" }),
+        ).rejects.toThrow(StoreNotFoundError);
+      });
+
+      it("authorEmail is null when omitted on addReply", async () => {
+        freshStore();
+        const fb = await store.createFeedback(createInput());
+        const reply = await store.addReply({
+          feedbackId: fb.id,
+          source: "user",
+          author: "Alice",
+          body: "hi",
+        });
+        expect(reply.authorEmail).toBeNull();
+      });
+    });
   });
 }

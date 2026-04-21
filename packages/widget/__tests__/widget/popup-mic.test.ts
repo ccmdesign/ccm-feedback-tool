@@ -309,11 +309,10 @@ describe("Popup — CCM-284 mic button", () => {
     popup.destroy();
   });
 
-  it("disables type-selector + submit buttons while transcription is in flight and restores them on resolve", async () => {
-    // Plan R4: "while the request is in flight, a 'Transcribing...' loading
-    // state replaces the mic; other popup interactions (type select, submit)
-    // are disabled." Use a deferred promise so we can observe the
-    // `transcribing` state before it resolves.
+  it("disables the type <select> + submit while transcription is in flight and restores them on resolve", async () => {
+    // CCM-290 — the 2x2 button grid is now a single <select>. While a
+    // transcribe request is in flight the select is disabled + faded; submit
+    // is also forced off regardless of textarea contents.
     let resolveTranscribe: (value: { cleaned_text: string; raw_text: string }) => void = () => {};
     const transcribe: PopupTranscribe = vi.fn(
       () =>
@@ -325,19 +324,16 @@ describe("Popup — CCM-284 mic button", () => {
     popup.show(makeBounds(), CONTEXT);
     await flush();
 
-    // User picks a type + types content so submit would otherwise be enabled.
-    const questionBtn = document.querySelector<HTMLButtonElement>('button[data-type="question"]')!;
-    questionBtn.click();
+    const typeSelect = document.querySelector<HTMLSelectElement>('select[data-ccm-feedback="popup-type"]')!;
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     textarea.value = "typed before recording";
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
-    // The submit button is the last button in the popup; its initial label is
-    // "Send" in the en locale. We pick it by position (last button) to stay
-    // locale-agnostic.
+    // Submit button is the last button in the popup; locale-agnostic pick.
     const allButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
     const submitBtn = allButtons[allButtons.length - 1]!;
     expect(submitBtn.disabled).toBe(false);
+    expect(typeSelect.disabled).toBe(false);
 
     const btn = micButton()!;
     btn.click(); // start
@@ -345,20 +341,15 @@ describe("Popup — CCM-284 mic button", () => {
     btn.click(); // stop + begin transcribe (will hang until we resolve)
     await flush();
 
-    // In-flight: type buttons + submit must all be disabled.
+    // In-flight: select + submit disabled, mic still visible-but-disabled.
     expect(btn.disabled).toBe(true);
-    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>("button[data-type]")) {
-      expect(typeBtn.disabled).toBe(true);
-    }
+    expect(typeSelect.disabled).toBe(true);
     expect(submitBtn.disabled).toBe(true);
 
-    // Resolve transcribe — type buttons + submit should re-enable.
+    // Resolve transcribe — select + submit should re-enable.
     resolveTranscribe({ cleaned_text: "cleaned", raw_text: "raw" });
     await flush();
-    for (const typeBtn of document.querySelectorAll<HTMLButtonElement>("button[data-type]")) {
-      expect(typeBtn.disabled).toBe(false);
-    }
-    // Submit is re-enabled because a type is selected and the textarea has content.
+    expect(typeSelect.disabled).toBe(false);
     expect(submitBtn.disabled).toBe(false);
     popup.destroy();
   });

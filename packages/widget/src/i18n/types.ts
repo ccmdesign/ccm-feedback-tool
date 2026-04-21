@@ -23,6 +23,10 @@ export interface Translations {
   "panel.cancel": string;
   "panel.confirmDelete": string;
   "panel.loadMore": string;
+  /** CCM-290 — "API link" pill shown when agentApiUrl is configured. */
+  "panel.apiLink": string;
+  /** CCM-290 — transient toast shown after the API link is copied. */
+  "panel.apiLinkCopied": string;
 
   // Status filter labels
   "panel.statusAll": string;
@@ -30,6 +34,8 @@ export interface Translations {
   "panel.statusResolved": string;
 
   // Feedback type labels (UI display only)
+  /** CCM-290 — new "comment" type (composer default). */
+  "type.comment": string;
   "type.question": string;
   "type.change": string;
   "type.bug": string;
@@ -86,6 +92,8 @@ export interface Translations {
   "popup.ariaLabel": string;
   "popup.cancel": string;
   "popup.submit": string;
+  /** CCM-290 — aria-label on the new <select> that replaces the button grid. */
+  "popup.typeLabel": string;
 
   // Popup mic (CCM-284 voice comments)
   "popup.mic.record": string;
@@ -117,6 +125,13 @@ export interface Translations {
 
   // Badge
   "badge.count": string;
+
+  // CCM-290 — detail-view reply thread
+  "detail.replies": string;
+  "detail.replyPlaceholder": string;
+  "detail.send": string;
+  "detail.source.user": string;
+  "detail.source.agent": string;
 }
 
 /** A translate function that returns the string for a given key. */

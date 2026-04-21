@@ -22,6 +22,12 @@ export interface CcmFeedbackConfig {
   theme?: "light" | "dark" | "auto";
   /** UI locale — defaults to 'en' */
   locale?: "fr" | "en" | (string & {}) | undefined;
+  /**
+   * Optional agent API URL — shown to developers via an "API link" pill in the
+   * panel header (copy-to-clipboard). Used only for display; the widget itself
+   * never calls the agent API. CCM-290.
+   */
+  agentApiUrl?: string | undefined;
   /** Called when the widget is skipped (production mode, mobile viewport) */
   onSkip?: (reason: "production" | "mobile") => void;
 
@@ -77,8 +83,12 @@ export interface CcmFeedbackPublicEvents {
 // ---------------------------------------------------------------------------
 
 /** Single source of truth for feedback types — used by both TS types and Zod schemas. */
-export const FEEDBACK_TYPES = ["question", "change", "bug", "other"] as const;
+export const FEEDBACK_TYPES = ["comment", "question", "change", "bug", "other"] as const;
 export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
+
+/** Source of a reply on a feedback thread. */
+export const REPLY_SOURCES = ["user", "agent"] as const;
+export type ReplySource = (typeof REPLY_SOURCES)[number];
 
 /** Single source of truth for feedback statuses. */
 export const FEEDBACK_STATUSES = ["open", "resolved"] as const;
@@ -209,6 +219,26 @@ export interface FeedbackUpdateInput {
   resolvedAt: Date | null;
 }
 
+/** Input for creating a reply row on an existing feedback. CCM-290. */
+export interface ReplyCreateInput {
+  feedbackId: string;
+  source: ReplySource;
+  author: string;
+  authorEmail?: string | undefined;
+  body: string;
+}
+
+/** A persisted reply record returned by the store. CCM-290. */
+export interface ReplyRecord {
+  id: string;
+  feedbackId: string;
+  source: ReplySource;
+  author: string;
+  authorEmail: string | null;
+  body: string;
+  createdAt: Date;
+}
+
 /** A persisted feedback record returned by the store. */
 export interface FeedbackRecord {
   id: string;
@@ -228,6 +258,8 @@ export interface FeedbackRecord {
   createdAt: Date;
   updatedAt: Date;
   annotations: AnnotationRecord[];
+  /** CCM-290 — threaded reply records (oldest first). Empty when no replies. */
+  replies: ReplyRecord[];
 }
 
 /** A persisted annotation record returned by the store. */
@@ -423,12 +455,30 @@ export interface CcmFeedbackStore {
   getFeedbacks(query: FeedbackQuery): Promise<{ feedbacks: FeedbackRecord[]; total: number }>;
   /** Lookup by client-generated UUID. Returns `null` (not error) when not found. */
   findByClientId(clientId: string): Promise<FeedbackRecord | null>;
+  /**
+   * CCM-290 — fetch a single feedback (with annotations + replies) by id.
+   * Returns `null` when no record matches. Used by the agent handler to enforce
+   * cross-project isolation without paginating. Must bypass any pagination cap
+   * and return the full relations graph, just like `getFeedbacks` items.
+   */
+  findById(id: string): Promise<FeedbackRecord | null>;
   /** Update status/resolvedAt. Throws `StoreNotFoundError` if `id` does not exist. */
   updateFeedback(id: string, data: FeedbackUpdateInput): Promise<FeedbackRecord>;
   /** Delete a single record. Throws `StoreNotFoundError` if `id` does not exist. */
   deleteFeedback(id: string): Promise<void>;
   /** Bulk delete all feedbacks for a project. No-op (not error) if none exist. */
   deleteAllFeedbacks(projectName: string): Promise<void>;
+  /**
+   * CCM-290 — append a reply to a feedback. Throws `StoreNotFoundError` when
+   * `feedbackId` does not exist. The caller supplies the `source` tag
+   * (`"user"` for widget submissions, `"agent"` for agent API calls).
+   */
+  addReply(input: ReplyCreateInput): Promise<ReplyRecord>;
+  /**
+   * CCM-290 — list replies for a feedback, ordered by `createdAt` ascending
+   * (oldest first). Returns an empty array when the feedback has no replies.
+   */
+  listReplies(feedbackId: string): Promise<ReplyRecord[]>;
 }
 
 /** Payload sent from the widget to the server when submitting feedback. */
@@ -503,6 +553,22 @@ export interface CcmProjectStore {
   rotateProjectSecret(id: string): Promise<{ secret: string }>;
   verifyProjectSecret(id: string, plaintext: string): Promise<boolean>;
   deleteProject(id: string): Promise<void>;
+  /**
+   * CCM-290 — rotate (or initially generate) the plaintext agent token for the
+   * given project. Returns the new token exactly once. This token gates the
+   * agent HTTP API (`/api/v1/agent/feedback`). Plaintext-on-disk is
+   * intentional (user decision); comparisons at the handler must still use a
+   * timing-safe primitive.
+   */
+  rotateAgentToken(id: string): Promise<{ agentToken: string }>;
+  /**
+   * CCM-290 — look up a project by its agent token using a timing-safe
+   * compare. Returns `null` when no project matches. Implementations SHOULD
+   * iterate every non-null `agentToken` and use `timingSafeEqual` for each
+   * comparison rather than an index-backed lookup (which leaks rough
+   * existence through query timing).
+   */
+  findByAgentToken(token: string): Promise<{ id: string; name: string } | null>;
 }
 
 /**
@@ -696,6 +762,19 @@ export interface FeedbackResponse {
   createdAt: string;
   updatedAt: string;
   annotations: AnnotationResponse[];
+  /** CCM-290 — reply records serialized for the wire. */
+  replies: ReplyResponse[];
+}
+
+/** CCM-290 — reply record as returned by the API (createdAt is ISO string). */
+export interface ReplyResponse {
+  id: string;
+  feedbackId: string;
+  source: ReplySource;
+  author: string;
+  authorEmail: string | null;
+  body: string;
+  createdAt: string;
 }
 
 /** Annotation record as returned by the API. */

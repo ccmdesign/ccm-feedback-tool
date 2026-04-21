@@ -42,6 +42,18 @@ function makeBounds(overrides: Partial<DOMRect> = {}): DOMRect {
   } as DOMRect;
 }
 
+function getTypeSelect(): HTMLSelectElement {
+  const sel = document.querySelector<HTMLSelectElement>('select[data-ccm-feedback="popup-type"]');
+  if (!sel) throw new Error("popup-type select not found");
+  return sel;
+}
+
+function setSelectValue(value: string): void {
+  const sel = getTypeSelect();
+  sel.value = value;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -77,22 +89,21 @@ describe("Popup", () => {
       expect(dialog.getAttribute("aria-label")).toBe(t("popup.ariaLabel"));
     });
 
-    it("creates four type selection buttons", () => {
-      const buttons = document.querySelectorAll<HTMLButtonElement>("[data-type]");
-      expect(buttons.length).toBe(4);
+    it("renders a single type <select> with a CCM-290-stable data attribute", () => {
+      expect(getTypeSelect()).not.toBeNull();
     });
 
-    it("type buttons have aria-pressed=false initially", () => {
-      const buttons = document.querySelectorAll<HTMLButtonElement>("[data-type]");
-      for (const btn of buttons) {
-        expect(btn.getAttribute("aria-pressed")).toBe("false");
-      }
+    it("type <select> has aria-label popup.typeLabel", () => {
+      expect(getTypeSelect().getAttribute("aria-label")).toBe(t("popup.typeLabel"));
     });
 
-    it("creates type buttons for all four feedback types", () => {
-      const buttons = document.querySelectorAll<HTMLButtonElement>("[data-type]");
-      const types = Array.from(buttons).map((btn) => btn.dataset.type);
-      expect(types).toEqual(["question", "change", "bug", "other"]);
+    it("type <select> exposes all five feedback types (comment first)", () => {
+      const values = Array.from(getTypeSelect().options).map((o) => o.value);
+      expect(values).toEqual(["comment", "question", "change", "bug", "other"]);
+    });
+
+    it("defaults the selected type to 'comment'", () => {
+      expect(getTypeSelect().value).toBe("comment");
     });
 
     it("creates a textarea with correct placeholder", () => {
@@ -139,19 +150,15 @@ describe("Popup", () => {
     });
 
     it("flips up when not enough vertical space below", () => {
-      // Simulate small viewport: bottom of rect is near the window bottom
-      // window.innerHeight defaults to 768 in jsdom
       popup.show(makeBounds({ top: 500, bottom: 600 }));
 
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-      // Should flip up: top = rectTop - 220 - 8 = 500 - 228 = 272
       expect(dialog.style.top).toBe("272px");
     });
 
     it("resolves to null when cancelled (via cancel button)", async () => {
       const promise = popup.show(makeBounds());
 
-      // Find the cancel button (it has the cancel text)
       const buttons = document.querySelectorAll<HTMLButtonElement>("button");
       const cancelBtn = Array.from(buttons).find((btn) => btn.textContent === t("popup.cancel"));
       cancelBtn!.click();
@@ -172,62 +179,27 @@ describe("Popup", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Type selection
+  // Type selection (CCM-290 — <select>)
   // -------------------------------------------------------------------------
 
   describe("type selection", () => {
-    it("sets aria-pressed=true on selected type button", () => {
+    it("changing the <select> updates the internal selectedType", () => {
       popup.show(makeBounds());
-
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
-      expect(bugBtn.getAttribute("aria-pressed")).toBe("true");
-    });
-
-    it("only one type button is active at a time", () => {
-      popup.show(makeBounds());
-
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
-      const questionBtn = document.querySelector<HTMLButtonElement>('[data-type="question"]')!;
-      questionBtn.click();
-
-      expect(bugBtn.getAttribute("aria-pressed")).toBe("false");
-      expect(questionBtn.getAttribute("aria-pressed")).toBe("true");
-    });
-
-    it("all other type buttons become inactive when one is selected", () => {
-      popup.show(makeBounds());
-
-      const changeBtn = document.querySelector<HTMLButtonElement>('[data-type="change"]')!;
-      changeBtn.click();
-
-      const allButtons = document.querySelectorAll<HTMLButtonElement>("[data-type]");
-      for (const btn of allButtons) {
-        if (btn.dataset.type === "change") {
-          expect(btn.getAttribute("aria-pressed")).toBe("true");
-        } else {
-          expect(btn.getAttribute("aria-pressed")).toBe("false");
-        }
-      }
+      setSelectValue("bug");
+      expect(getTypeSelect().value).toBe("bug");
     });
   });
 
   // -------------------------------------------------------------------------
-  // Submit validation
+  // Submit validation (CCM-290 — any non-empty textarea enables submit)
   // -------------------------------------------------------------------------
 
   describe("submit", () => {
-    it("enables submit button when type and message are provided", () => {
+    it("enables submit as soon as the textarea has non-whitespace content", () => {
       popup.show(makeBounds());
 
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
-      textarea.value = "This is a bug";
+      textarea.value = "Just a comment";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
       const buttons = document.querySelectorAll<HTMLButtonElement>("button");
@@ -236,22 +208,17 @@ describe("Popup", () => {
       expect(submitBtn.style.pointerEvents).toBe("auto");
     });
 
-    it("does not enable submit with only type selected (no message)", () => {
+    it("submit stays disabled while the textarea is empty", () => {
       popup.show(makeBounds());
-
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
       const buttons = document.querySelectorAll<HTMLButtonElement>("button");
       const submitBtn = Array.from(buttons).find((btn) => btn.textContent === t("popup.submit"))!;
       expect(submitBtn.style.pointerEvents).toBe("none");
     });
 
-    it("does not enable submit with only message (no type selected)", () => {
+    it("submit stays disabled when the textarea only contains whitespace", () => {
       popup.show(makeBounds());
-
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
-      textarea.value = "Some message";
+      textarea.value = "   ";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
       const buttons = document.querySelectorAll<HTMLButtonElement>("button");
@@ -259,12 +226,25 @@ describe("Popup", () => {
       expect(submitBtn.style.pointerEvents).toBe("none");
     });
 
-    it("resolves with type and message on submit", async () => {
+    it("resolves with the default 'comment' type when nothing else is selected", async () => {
       const promise = popup.show(makeBounds());
 
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+      textarea.value = "Looks great";
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
 
+      const buttons = document.querySelectorAll<HTMLButtonElement>("button");
+      const submitBtn = Array.from(buttons).find((btn) => btn.textContent === t("popup.submit"))!;
+      submitBtn.click();
+
+      const result = await promise;
+      expect(result).toEqual({ type: "comment", message: "Looks great" });
+    });
+
+    it("resolves with the chosen type when the user changes the select", async () => {
+      const promise = popup.show(makeBounds());
+
+      setSelectValue("bug");
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "Found a bug";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -280,9 +260,7 @@ describe("Popup", () => {
     it("trims message whitespace on submit", async () => {
       const promise = popup.show(makeBounds());
 
-      const questionBtn = document.querySelector<HTMLButtonElement>('[data-type="question"]')!;
-      questionBtn.click();
-
+      setSelectValue("question");
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "  How does this work?  ";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -298,9 +276,7 @@ describe("Popup", () => {
     it("supports Ctrl+Enter keyboard shortcut to submit", async () => {
       const promise = popup.show(makeBounds());
 
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
+      setSelectValue("bug");
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "A bug";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -311,17 +287,12 @@ describe("Popup", () => {
       expect(result).toEqual({ type: "bug", message: "A bug" });
     });
 
-    it("does not submit via Ctrl+Enter when form is incomplete", () => {
+    it("does not submit via Ctrl+Enter when the textarea is empty", () => {
       popup.show(makeBounds());
 
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
-      textarea.value = "A message without type";
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-
-      // This should not throw or resolve — the popup stays open
       textarea.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
 
-      // Popup should still be visible
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
       expect(dialog.style.display).toBe("block");
     });
@@ -349,7 +320,7 @@ describe("Popup", () => {
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
       const focusableEls = Array.from(
         dialog.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), textarea, input, [tabindex]:not([tabindex="-1"])',
+          'button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
         ),
       );
       expect(focusableEls.length).toBeGreaterThan(0);
@@ -370,7 +341,7 @@ describe("Popup", () => {
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
       const focusableEls = Array.from(
         dialog.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), textarea, input, [tabindex]:not([tabindex="-1"])',
+          'button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
         ),
       );
 
@@ -396,42 +367,31 @@ describe("Popup", () => {
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "Some text";
 
-      // Cancel to complete the first show promise
       const buttons = document.querySelectorAll<HTMLButtonElement>("button");
       const cancelBtn = Array.from(buttons).find((btn) => btn.textContent === t("popup.cancel"))!;
       cancelBtn.click();
       await promise1;
 
-      // Re-show
       popup.show(makeBounds());
-
       const textarea2 = document.querySelector<HTMLTextAreaElement>("textarea")!;
       expect(textarea2.value).toBe("");
     });
 
-    it("resets type selection on each show()", async () => {
+    it("resets the <select> value to 'comment' on each show()", async () => {
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
       const promise1 = popup.show(makeBounds());
 
-      const bugBtn = dialog.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-      expect(bugBtn.getAttribute("aria-pressed")).toBe("true");
+      setSelectValue("bug");
+      expect(getTypeSelect().value).toBe("bug");
 
-      // Cancel
       const cancelBtn = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button")).find(
         (btn) => btn.textContent === t("popup.cancel"),
       )!;
       cancelBtn.click();
       await promise1;
 
-      // Re-show
       popup.show(makeBounds());
-
-      // All type buttons should be reset
-      const allTypeButtons = dialog.querySelectorAll<HTMLButtonElement>("[data-type]");
-      for (const btn of allTypeButtons) {
-        expect(btn.getAttribute("aria-pressed")).toBe("false");
-      }
+      expect(getTypeSelect().value).toBe("comment");
     });
   });
 
@@ -449,34 +409,6 @@ describe("Popup", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Type button hover effects
-  // -------------------------------------------------------------------------
-
-  describe("type button hover effects", () => {
-    it("mouseenter on type button changes background", () => {
-      popup.show(makeBounds());
-
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-
-      // Background should change from default glassBg to a type-specific bg color
-      expect(bugBtn.style.background).not.toBe(colors.glassBg);
-    });
-
-    it("mouseleave on type button restores background", () => {
-      popup.show(makeBounds());
-
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-      const hoverBg = bugBtn.style.background;
-
-      bugBtn.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
-      // After mouseleave, background should differ from hover state
-      expect(bugBtn.style.background).not.toBe(hoverBg);
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // Textarea focus/blur styles
   // -------------------------------------------------------------------------
 
@@ -489,7 +421,6 @@ describe("Popup", () => {
 
       textarea.dispatchEvent(new Event("focus", { bubbles: true }));
 
-      // Border color should change on focus
       expect(textarea.style.borderColor).not.toBe(borderBefore);
     });
 
@@ -502,7 +433,6 @@ describe("Popup", () => {
 
       textarea.dispatchEvent(new Event("blur", { bubbles: true }));
 
-      // Border color should revert from the focus state
       expect(textarea.style.borderColor).not.toBe(focusBorder);
     });
   });
@@ -513,11 +443,9 @@ describe("Popup", () => {
 
   describe("horizontal collision", () => {
     it("popup flips left when not enough horizontal space (left + 300 > innerWidth)", () => {
-      // innerWidth defaults to 1024 in jsdom — place rect near right edge
       popup.show(makeBounds({ left: 900, right: 950, bottom: 100, top: 50 }));
 
       const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
-      // Should flip: left = right - 300 = 950 - 300 = 650
       expect(Number.parseInt(dialog.style.left, 10)).toBeLessThan(900);
     });
   });
@@ -530,9 +458,7 @@ describe("Popup", () => {
     it("Meta+Enter (Mac shortcut) submits the form", async () => {
       const promise = popup.show(makeBounds());
 
-      const bugBtn = document.querySelector<HTMLButtonElement>('[data-type="bug"]')!;
-      bugBtn.click();
-
+      setSelectValue("bug");
       const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
       textarea.value = "Mac shortcut test";
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
