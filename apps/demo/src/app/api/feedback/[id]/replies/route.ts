@@ -8,8 +8,14 @@
  * Rate limiting is an edge-layer concern; keep the handler minimal.
  */
 
-import { formatValidationErrors, replyCreateSchema } from "@ccm-feedback/adapter-prisma";
-import { type ReplyResponse, StoreNotFoundError } from "@ccm-feedback/core";
+// CCM-290 — Option B per P2 import-location-deviation todo. Direct
+// `@ccm-feedback/core` imports resolve under Bun/vitest (exports condition +
+// raw-TS entry) but webpack can't resolve core's `./types.js`/`./webhook/...`
+// extension imports under Next even with transpilePackages. So imports go
+// through `@ccm-feedback/adapter-prisma`, which bundles core via `noExternal`
+// and is the single server-route import surface for this project.
+import { formatValidationErrors, replyCreateSchema, StoreNotFoundError } from "@ccm-feedback/adapter-prisma";
+import type { ReplyResponse } from "@ccm-feedback/core";
 import { resolveStore } from "@/lib/store";
 
 export const runtime = "nodejs";

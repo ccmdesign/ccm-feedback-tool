@@ -1,8 +1,9 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
+resolution: "Four route smoke test files added under apps/demo/src/**/__tests__/. Cover happy path + auth failure + method exports + context.params forwarding + agent-vs-user source tagging. Added `@/` alias to vitest.config.ts so route modules resolve `@/lib/store` + `@/lib/ccm-stores` the same way Next.js does."
 ---
 
 # CCM-290 — Next.js agent route files have no unit-test coverage

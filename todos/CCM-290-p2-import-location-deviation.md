@@ -3,7 +3,7 @@ priority: p2
 status: resolved
 origin: ce-code-review autofix (CCM-290)
 run_id: 20260421-110003-ccm290-review
-resolution: "Option A applied — StoreNotFoundError imported from @ccm-feedback/core in widget replies route; Zod-bound formatValidationErrors + replyCreateSchema stay on adapter-prisma."
+resolution: "Option B applied. Tried Option A first — `bun run build` failed with webpack 'Can't resolve ./types.js' for @ccm-feedback/core even with transpilePackages (the review doc's claim that it'd resolve was wrong). Kept StoreNotFoundError on @ccm-feedback/adapter-prisma with a header comment documenting adapter-prisma as the single server-route import surface. Type-only ReplyResponse still comes from core (erased, no resolution at runtime)."
 ---
 
 # CCM-290 — Widget replies route imports from adapter-prisma; evaluate whether core is viable
