@@ -15,6 +15,7 @@ export function WidgetInit() {
         forceShow: true,
         accentColor: "#173CFF",
         locale: "en",
+        agentApiUrl: "/api/v1/agent/feedback",
       });
     });
 
