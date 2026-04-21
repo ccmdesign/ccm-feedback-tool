@@ -154,7 +154,9 @@ function makeBounds(): DOMRect {
 }
 
 function micButton(): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>('button[aria-label*="ictate" i], button[aria-label*="top" i]');
+  // Locale-independent selector: the mic button carries a stable
+  // `data-ccm-feedback="popup-mic"` attribute (see popup.ts).
+  return document.querySelector<HTMLButtonElement>('button[data-ccm-feedback="popup-mic"]');
 }
 
 /** Await microtasks so queryMicrophonePermission + transcription resolve. */

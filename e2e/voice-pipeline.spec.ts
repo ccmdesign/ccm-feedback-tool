@@ -98,9 +98,9 @@ test.describe("CCM-284 voice pipeline", () => {
       const root = host?.shadowRoot;
       if (!root) return null;
       // The popup lives OUTSIDE Shadow DOM (document.body), so query top-level.
+      // Use the stable, locale-independent `data-ccm-feedback` attribute.
       return (
-        document.querySelector<HTMLButtonElement>('button[aria-label*="ictate" i], button[aria-label*="top" i]')
-          ?.offsetParent !== null
+        document.querySelector<HTMLButtonElement>('button[data-ccm-feedback="popup-mic"]')?.offsetParent !== null
       );
     });
     // Popup isn't open yet, but the mic button only exists when supported —

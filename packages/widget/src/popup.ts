@@ -222,6 +222,9 @@ export class Popup {
       `;
       this.micBtn.setAttribute("aria-label", this.t("popup.mic.record"));
       this.micBtn.setAttribute("title", this.t("popup.mic.record"));
+      // Stable, locale-independent selector for tests (unit + e2e). Matches
+      // the existing FAB/panel convention of `data-ccm-feedback` attributes.
+      this.micBtn.setAttribute("data-ccm-feedback", "popup-mic");
       this.renderMicIcon(ICON_MIC);
       this.micBtn.addEventListener("click", () => this.onMicClick());
       btnRow.appendChild(this.micBtn);
