@@ -75,6 +75,22 @@ export class StoreClient implements WidgetClient {
   async deleteAllFeedbacks(projectName: string): Promise<void> {
     await this.store.deleteAllFeedbacks(projectName);
   }
+
+  async listReplies(id: string): Promise<ReplyResponse[]> {
+    const rows = await this.store.listReplies(id);
+    return rows.map(toReplyResponse);
+  }
+
+  async addReply(id: string, input: { author: string; authorEmail?: string; body: string }): Promise<ReplyResponse> {
+    const reply = await this.store.addReply({
+      feedbackId: id,
+      source: "user",
+      author: input.author,
+      ...(input.authorEmail ? { authorEmail: input.authorEmail } : {}),
+      body: input.body,
+    });
+    return toReplyResponse(reply);
+  }
 }
 
 // ---------------------------------------------------------------------------

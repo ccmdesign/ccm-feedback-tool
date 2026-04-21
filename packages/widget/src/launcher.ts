@@ -180,7 +180,20 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
 
   // Components inside Shadow DOM
   const fab = new Fab(shadow, config, bus, t);
-  const panel = new Panel(shadow, colors, bus, client, config.projectName, markers, t, locale);
+  const panel = new Panel(
+    shadow,
+    colors,
+    bus,
+    client,
+    config.projectName,
+    markers,
+    t,
+    locale,
+    // CCM-290 — optional agent API URL surfaced as a copy-to-clipboard pill.
+    config.agentApiUrl,
+    // CCM-290 — identity getter for the reply composer.
+    () => getIdentity(),
+  );
   // CCM-284 — wire the transcribe round-trip into the popup composer.
   // Only HTTP clients expose `transcribe`; store-only mode leaves the mic hidden.
   const transcribeFn = client.transcribe

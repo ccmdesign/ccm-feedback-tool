@@ -8,8 +8,8 @@
  * Rate limiting is an edge-layer concern; keep the handler minimal.
  */
 
-import { formatValidationErrors, replyCreateSchema } from "@ccm-feedback/adapter-prisma";
-import { isStoreNotFound, type ReplyResponse, StoreNotFoundError } from "@ccm-feedback/core";
+import { formatValidationErrors, replyCreateSchema, StoreNotFoundError } from "@ccm-feedback/adapter-prisma";
+import type { ReplyResponse } from "@ccm-feedback/core";
 import { resolveStore } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     }));
     return Response.json(serialized);
   } catch (error) {
-    if (isStoreNotFound(error) || error instanceof StoreNotFoundError) {
+    if (error instanceof StoreNotFoundError) {
       return Response.json({ error: "Feedback not found" }, { status: 404 });
     }
     console.error("[ccm-feedback] listReplies failed:", error);
@@ -69,7 +69,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     };
     return Response.json(serialized, { status: 201 });
   } catch (error) {
-    if (isStoreNotFound(error) || error instanceof StoreNotFoundError) {
+    if (error instanceof StoreNotFoundError) {
       return Response.json({ error: "Feedback not found" }, { status: 404 });
     }
     console.error("[ccm-feedback] addReply failed:", error);

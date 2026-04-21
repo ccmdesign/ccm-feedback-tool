@@ -9,8 +9,10 @@
  * animations, accent gradients, premium micro-interactions.
  */
 
-import type { FeedbackResponse } from "@ccm-feedback/core";
-import { el, parseSvg, setText } from "./dom-utils.js";
+import type { FeedbackResponse, ReplyResponse } from "@ccm-feedback/core";
+import type { WidgetClient } from "./api-client.js";
+import { el, formatRelativeDate, parseSvg, setText } from "./dom-utils.js";
+import type { TFunction } from "./i18n/index.js";
 import { getTypeBgColor, getTypeColor, type ThemeColors } from "./styles/theme.js";
 
 // ---------------------------------------------------------------------------
@@ -660,6 +662,18 @@ export interface DetailCallbacks {
   onGoToAnnotation: (feedback: FeedbackResponse) => void;
 }
 
+/**
+ * CCM-290 — optional wiring for the reply thread rendered inside the detail
+ * view. When omitted, the replies section is suppressed entirely.
+ */
+export interface DetailReplyContext {
+  client: WidgetClient;
+  t: TFunction;
+  locale: string;
+  /** Resolves the current widget identity; used as the reply composer's default author. */
+  getIdentity: () => { name: string; email?: string | null } | null;
+}
+
 // ---------------------------------------------------------------------------
 // DetailView Class
 // ---------------------------------------------------------------------------
@@ -679,6 +693,8 @@ export class DetailView {
     private readonly colors: ThemeColors,
     private readonly callbacks: DetailCallbacks,
     locale: string,
+    /** CCM-290 — when provided, a replies section is rendered in the detail view. */
+    private readonly replyContext?: DetailReplyContext,
   ) {
     this.i18n = locale.startsWith("fr") ? DETAIL_I18N_FR : DETAIL_I18N_EN;
 
@@ -777,6 +793,13 @@ export class DetailView {
       this.buildIntentDetail(annSection, feedback);
       this.buildAnnotation(annSection, feedback);
       this.content.appendChild(annSection);
+    }
+
+    // CCM-290 — Section 5: Replies + composer (only when wired).
+    if (this.replyContext) {
+      const repliesSection = this.buildSection(sectionIndex++);
+      this.buildReplies(repliesSection, feedback);
+      this.content.appendChild(repliesSection);
     }
 
     // ---- Show with animation ----
@@ -1144,6 +1167,124 @@ export class DetailView {
     }
 
     container.appendChild(wrapper);
+  }
+
+  /**
+   * CCM-290 — render the reply thread + inline composer inside the detail
+   * view. Replies hydrated on the feedback record are used as the first
+   * paint; optionally we could refresh via `client.listReplies(id)` but the
+   * record is already transcript-ready from the server.
+   */
+  private buildReplies(container: HTMLElement, feedback: FeedbackResponse): void {
+    if (!this.replyContext) return;
+    const { client, t, locale, getIdentity } = this.replyContext;
+
+    const title = el("div", { class: "sp-detail-section-title" });
+    setText(title, t("detail.replies"));
+    container.appendChild(title);
+
+    const list = el("div", { class: "sp-detail-replies" });
+    list.style.cssText = "display:flex;flex-direction:column;gap:10px;margin-bottom:12px;";
+    const renderRow = (reply: ReplyResponse) => {
+      list.appendChild(this.buildReplyRow(reply, locale, t));
+    };
+    for (const r of feedback.replies ?? []) renderRow(r);
+    container.appendChild(list);
+
+    // Composer
+    const composer = el("div", { class: "sp-detail-reply-composer" });
+    composer.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+    const textarea = document.createElement("textarea");
+    textarea.placeholder = t("detail.replyPlaceholder");
+    textarea.rows = 2;
+    textarea.style.cssText =
+      "width:100%;min-height:60px;padding:8px 10px;border:1px solid var(--sp-border);border-radius:8px;" +
+      "background:var(--sp-glass-bg-heavy);color:var(--sp-text);font-family:var(--sp-font);" +
+      "font-size:13px;resize:vertical;box-sizing:border-box;";
+    composer.appendChild(textarea);
+
+    const sendBtn = document.createElement("button");
+    sendBtn.type = "button";
+    sendBtn.setAttribute("data-ccm-feedback", "detail-reply-send");
+    sendBtn.style.cssText =
+      "align-self:flex-end;height:32px;padding:0 14px;border-radius:9999px;border:none;" +
+      "background:var(--sp-accent-gradient);color:#fff;font-family:var(--sp-font);" +
+      "font-size:13px;font-weight:600;cursor:pointer;opacity:0.35;pointer-events:none;";
+    setText(sendBtn, t("detail.send"));
+
+    const updateSendState = () => {
+      const enabled = textarea.value.trim().length > 0 && !sendBtn.dataset.inFlight;
+      sendBtn.style.opacity = enabled ? "1" : "0.35";
+      sendBtn.style.pointerEvents = enabled ? "auto" : "none";
+      sendBtn.disabled = !enabled;
+    };
+    textarea.addEventListener("input", updateSendState);
+
+    sendBtn.addEventListener("click", async () => {
+      const identity = getIdentity();
+      if (!identity || !this.currentFeedback) return;
+      const body = textarea.value.trim();
+      if (!body) return;
+      sendBtn.dataset.inFlight = "1";
+      sendBtn.disabled = true;
+      try {
+        const created = await client.addReply(this.currentFeedback.id, {
+          author: identity.name,
+          ...(identity.email ? { authorEmail: identity.email } : {}),
+          body,
+        });
+        // Optimistic local append — keeps the panel in sync without a full reload.
+        this.currentFeedback.replies = [...(this.currentFeedback.replies ?? []), created];
+        list.appendChild(this.buildReplyRow(created, locale, t));
+        textarea.value = "";
+      } catch (error) {
+        console.warn("[ccm-feedback] addReply failed:", error);
+      } finally {
+        delete sendBtn.dataset.inFlight;
+        updateSendState();
+      }
+    });
+    composer.appendChild(sendBtn);
+    container.appendChild(composer);
+  }
+
+  /** Build one reply row with badge + author + relative timestamp + body. */
+  private buildReplyRow(reply: ReplyResponse, locale: string, t: TFunction): HTMLElement {
+    const row = el("div", { class: "sp-detail-reply" });
+    row.style.cssText =
+      "padding:10px 12px;border-radius:10px;background:var(--sp-glass-bg-heavy);border:1px solid var(--sp-glass-border-subtle);";
+
+    const head = el("div");
+    head.style.cssText = "display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px;";
+
+    const badge = el("span");
+    const isAgent = reply.source === "agent";
+    const bg = isAgent ? this.colors.accentLight : this.colors.typeCommentBg;
+    const fg = isAgent ? this.colors.accent : this.colors.typeComment;
+    badge.style.cssText = `background:${bg};color:${fg};padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;text-transform:lowercase;`;
+    badge.setAttribute("aria-label", `${reply.source} reply`);
+    setText(badge, isAgent ? t("detail.source.agent") : t("detail.source.user"));
+    head.appendChild(badge);
+
+    const author = el("span");
+    author.style.cssText = "color:var(--sp-text);font-weight:500;";
+    setText(author, reply.author);
+    head.appendChild(author);
+
+    const date = el("span");
+    date.style.cssText = "color:var(--sp-text-tertiary);margin-left:auto;";
+    setText(date, formatRelativeDate(reply.createdAt, locale));
+    head.appendChild(date);
+
+    row.appendChild(head);
+
+    const body = el("div");
+    body.style.cssText =
+      "font-size:13px;line-height:1.45;color:var(--sp-text);white-space:pre-wrap;word-break:break-word;";
+    setText(body, reply.body);
+    row.appendChild(body);
+
+    return row;
   }
 
   private buildThumbnail(label: string, src: string): HTMLElement {

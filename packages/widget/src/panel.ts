@@ -67,6 +67,10 @@ export class Panel {
     private readonly markers: MarkerManager,
     private readonly t: TFunction,
     private readonly locale: string,
+    /** CCM-290 — optional agent API URL; when set, an "API link" pill is rendered. */
+    private readonly agentApiUrl?: string | undefined,
+    /** CCM-290 — identity accessor used by the detail view reply composer. */
+    private readonly getIdentity?: () => { name: string; email?: string | null } | null,
   ) {
     this.shadowRoot = shadowRoot;
     this.bulkI18n = locale === "fr" ? BULK_I18N_FR : BULK_I18N_EN;
@@ -101,6 +105,19 @@ export class Panel {
     if (locale === "fr") this.exportBtn.setLabels(EXPORT_I18N_FR);
 
     const headerRight = el("div", { class: "sp-panel-header-right" });
+    // CCM-290 — "API link" pill is rendered only when agentApiUrl is set.
+    if (this.agentApiUrl) {
+      const apiBtn = document.createElement("button");
+      apiBtn.type = "button";
+      apiBtn.className = "sp-btn-api-link";
+      apiBtn.setAttribute("data-ccm-feedback", "panel-api-link");
+      apiBtn.setAttribute("aria-label", this.t("panel.apiLink"));
+      setText(apiBtn, this.t("panel.apiLink"));
+      apiBtn.addEventListener("click", () => {
+        void this.copyApiLink(apiBtn);
+      });
+      headerRight.appendChild(apiBtn);
+    }
     headerRight.appendChild(this.exportBtn.element);
     headerRight.appendChild(this.deleteAllBtn);
     headerRight.appendChild(this.closeBtn);
@@ -227,6 +244,15 @@ export class Panel {
         },
       },
       locale,
+      // CCM-290 — wire reply thread + composer when an identity getter is provided.
+      this.getIdentity
+        ? {
+            client: this.client,
+            t: this.t,
+            locale,
+            getIdentity: () => this.getIdentity?.() ?? null,
+          }
+        : undefined,
     );
 
     // --- Keyboard Shortcuts ---
@@ -424,6 +450,60 @@ export class Panel {
         this.closeBtn.focus();
       }
     });
+  }
+
+  /**
+   * CCM-290 — copy the configured agent API URL to the clipboard and flash a
+   * transient toast. Falls back to a hidden-`<textarea>` + `execCommand("copy")`
+   * path when `navigator.clipboard` is unavailable (insecure context,
+   * older browsers). Errors are swallowed — the UI still shows the toast so
+   * the user has visible confirmation the click registered.
+   */
+  private async copyApiLink(button: HTMLButtonElement): Promise<void> {
+    if (!this.agentApiUrl) return;
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(this.agentApiUrl);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied) {
+      // Fallback — only runs when the async Clipboard API is unavailable.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = this.agentApiUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        copied = true;
+      } catch {
+        // Swallow — toast still shows so the user has feedback.
+      }
+    }
+    this.flashApiLinkToast(button);
+  }
+
+  /**
+   * CCM-290 — transient "Copied" toast anchored under the API link pill.
+   * Uses `aria-live="polite"` so screen readers announce the copy.
+   */
+  private flashApiLinkToast(anchor: HTMLButtonElement): void {
+    const toast = document.createElement("div");
+    toast.className = "sp-api-link-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    setText(toast, this.t("panel.apiLinkCopied"));
+    anchor.appendChild(toast);
+    // Remove after ~1500ms — matches the CCM-284 mic-error toast cadence.
+    setTimeout(() => {
+      if (toast.parentElement) toast.parentElement.removeChild(toast);
+    }, 1500);
   }
 
   close(): void {
