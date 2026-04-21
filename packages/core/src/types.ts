@@ -185,6 +185,8 @@ export interface AnnotationCreateInput {
   proposedAltText?: string | undefined;
   /** CCM-282: image_swap intent — server-canonicalized image metadata. */
   assetMeta?: AssetMeta | undefined;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 /** Query parameters for fetching feedbacks. */
@@ -262,6 +264,8 @@ export interface AnnotationRecord {
   proposedAssetSource?: ProposedAssetSource | null;
   proposedAltText?: string | null;
   assetMeta?: AssetMeta | null;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +345,7 @@ export function flattenAnnotation(ann: AnnotationPayload): AnnotationCreateInput
     viewportH: ann.viewportH,
     devicePixelRatio: ann.devicePixelRatio,
     type: ann.type ?? "rectangle",
+    ...(ann.audioUrl ? { audioUrl: ann.audioUrl } : {}),
   };
 
   if (ann.type === "text_change") {
@@ -594,6 +599,8 @@ export interface CcmReviewBatchStore {
       proposedAssetSource?: ProposedAssetSource | null;
       proposedAltText?: string | null;
       assetMeta?: AssetMeta | null;
+      /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+      audioUrl?: string | null;
     }>
   >;
 }
@@ -661,6 +668,8 @@ export interface AnnotationPayload {
   proposedAltText?: string | undefined;
   /** CCM-282: image_swap intent — server-canonicalized image metadata. */
   assetMeta?: AssetMeta | undefined;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -723,4 +732,6 @@ export interface AnnotationResponse {
   proposedAssetSource?: ProposedAssetSource | null;
   proposedAltText?: string | null;
   assetMeta?: AssetMeta | null;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | null;
 }

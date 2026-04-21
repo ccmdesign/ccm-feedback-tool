@@ -45,6 +45,29 @@ export {
 export type { AnnotationStatusHandlerOptions, ReviewsHandlerOptions } from "./review-handler.js";
 export { createAnnotationStatusHandler, createReviewsHandler } from "./review-handler.js";
 export { generateSecret, hashSecret, verifySecret } from "./secret.js";
+export type {
+  AudioStorage,
+  AudioStorageOptions,
+  CleanupClient,
+  CleanupClientOptions,
+  CleanupContext,
+  SupabaseStorageLike,
+  WhisperClient,
+  WhisperClientOptions,
+} from "./transcribe-clients.js";
+export {
+  buildCleanupMessages,
+  CLEANUP_SYSTEM_PROMPT,
+  createAudioStorage,
+  createCleanupClient,
+  createWhisperClient,
+} from "./transcribe-clients.js";
+export type {
+  TranscribeHandlerOptions,
+  TranscribeProjectStore,
+  TranscribeResponseBody,
+} from "./transcribe-handler.js";
+export { adaptProjectStore, createTranscribeHandler } from "./transcribe-handler.js";
 export type { AssetMirrorRequest, SignUploadRequest } from "./validation/asset.js";
 export { assetMirrorRequestSchema, signUploadRequestSchema } from "./validation/asset.js";
 export type { AnnotationStatusCallbackRequest } from "./validation/callback.js";
@@ -148,6 +171,8 @@ export class PrismaStore implements CcmFeedbackStore {
             proposedAssetSource: ann.proposedAssetSource ?? null,
             proposedAltText: ann.proposedAltText ?? null,
             assetMeta: (ann.assetMeta ?? null) as never,
+            // CCM-284 — optional voice audio URL when widget persisted audio.
+            ...(ann.audioUrl ? { audioUrl: ann.audioUrl } : {}),
           })),
         },
       },

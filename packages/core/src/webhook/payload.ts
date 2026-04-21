@@ -81,6 +81,11 @@ export interface WebhookAnnotationPayload {
   proposed_alt_text?: string;
   /** `image_swap` — server-canonicalized image metadata. */
   asset_meta?: WebhookAssetMeta;
+  /**
+   * CCM-284 — optional public URL of the persisted voice audio for this annotation.
+   * Absent from the payload when the project did not opt into audio persistence.
+   */
+  audio_url?: string;
 }
 
 /** Top-level WebhookPayload — the canonical §6.1 contract. */
@@ -139,6 +144,8 @@ export interface WebhookPayloadBuilderInput {
       sizeBytes: number;
       mime: string;
     } | null;
+    /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+    audioUrl?: string | null;
   }>;
 }
 
@@ -219,6 +226,11 @@ export function buildWebhookPayload(input: WebhookPayloadBuilderInput): WebhookP
             mime: ann.assetMeta.mime,
           };
         }
+      }
+
+      // CCM-284 — emit audio_url at annotation top level when voice audio was persisted.
+      if (ann.audioUrl) {
+        base.audio_url = ann.audioUrl;
       }
 
       return base;

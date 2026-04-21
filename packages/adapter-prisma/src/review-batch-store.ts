@@ -55,6 +55,7 @@ interface RawAnnotationJoin {
   viewportW: number;
   viewportH: number;
   devicePixelRatio: number;
+  audioUrl: string | null;
   createdAt: Date;
   // CCM-282 — annotation intent discriminator + type-specific columns.
   type?: string | null;
@@ -246,6 +247,8 @@ export class ReviewBatchStore {
       proposedAssetSource?: ProposedAssetSource | null;
       proposedAltText?: string | null;
       assetMeta?: AssetMeta | null;
+      // CCM-284 — optional persisted voice audio URL.
+      audioUrl: string | null;
     }>
   > {
     const rows = (await this.prisma.feedbackAnnotation.findMany({
@@ -288,6 +291,7 @@ export class ReviewBatchStore {
       proposedAssetSource: coerceAssetSource(r.proposedAssetSource),
       proposedAltText: r.proposedAltText ?? null,
       assetMeta: coerceAssetMeta(r.assetMeta),
+      audioUrl: r.audioUrl ?? null,
     }));
   }
 }

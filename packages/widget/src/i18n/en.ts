@@ -81,6 +81,13 @@ export const en: Translations = {
   "popup.cancel": "Cancel",
   "popup.submit": "Send",
 
+  // Popup mic (CCM-284)
+  "popup.mic.record": "Dictate comment",
+  "popup.mic.stop": "Stop recording",
+  "popup.mic.recording": "Recording…",
+  "popup.mic.transcribing": "Transcribing…",
+  "popup.mic.error": "Could not transcribe audio",
+
   // Identity modal
   "identity.title": "Identify yourself",
   "identity.nameLabel": "Name",

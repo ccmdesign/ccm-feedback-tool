@@ -181,7 +181,26 @@ export function launch(config: CcmFeedbackConfig): CcmFeedbackInstance {
   // Components inside Shadow DOM
   const fab = new Fab(shadow, config, bus, t);
   const panel = new Panel(shadow, colors, bus, client, config.projectName, markers, t, locale);
-  const annotator = new Annotator(colors, bus, t);
+  // CCM-284 — wire the transcribe round-trip into the popup composer.
+  // Only HTTP clients expose `transcribe`; store-only mode leaves the mic hidden.
+  const transcribeFn = client.transcribe
+    ? async ({
+        audio,
+        context,
+      }: {
+        audio: Blob;
+        context: { selector: string; surroundingText: string; projectName: string };
+      }) => {
+        if (!client.transcribe) throw new Error("transcribe unavailable");
+        return client.transcribe({
+          audio,
+          selector: context.selector,
+          surroundingText: context.surroundingText,
+          projectName: context.projectName,
+        });
+      }
+    : undefined;
+  const annotator = new Annotator(colors, bus, t, config.projectName, transcribeFn);
   // CCM-282 — `shouldIgnoreElement` self-excludes host + widget-internal nodes.
   const shouldIgnoreElement = (element: Element) => element === host || host.contains(element);
   const textEditMode = new TextEditMode(colors, bus, t, shouldIgnoreElement);

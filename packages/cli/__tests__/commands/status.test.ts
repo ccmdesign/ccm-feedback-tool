@@ -111,6 +111,7 @@ model FeedbackAnnotation {
   proposedAssetSource     String?
   proposedAltText         String?          @db.Text
   assetMeta               Json?
+  audioUrl                String?          @db.Text
 
   @@index([feedbackId])
   @@index([status])

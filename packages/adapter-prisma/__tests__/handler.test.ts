@@ -135,6 +135,40 @@ describe("createCcmFeedbackHandler", () => {
       expect(flatAnnotation.viewportW).toBe(1920);
       expect(flatAnnotation.viewportH).toBe(1080);
       expect(flatAnnotation.devicePixelRatio).toBe(2);
+      // CCM-284 — audioUrl is absent when not supplied by the widget
+      expect(flatAnnotation.audioUrl).toBeUndefined();
+    });
+
+    // CCM-284 — audioUrl on annotation is persisted when supplied
+    it("persists audioUrl on the annotation when provided", async () => {
+      const payload = {
+        ...validPayloadNoAnnotations,
+        annotations: [{ ...validAnnotation, audioUrl: "https://storage.example.com/audio/proj/uuid.webm" }],
+      };
+      const req = new Request("http://localhost/api/feedback", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const res = await handler.POST(req);
+      expect(res.status).toBe(201);
+      const createArg = prisma.feedbackItem.create.mock.calls[0][0] as {
+        data: { annotations: { create: Array<Record<string, unknown>> } };
+      };
+      expect(createArg.data.annotations.create[0].audioUrl).toBe("https://storage.example.com/audio/proj/uuid.webm");
+    });
+
+    // CCM-284 — invalid audioUrl is rejected at validation time
+    it("rejects annotation with invalid audioUrl", async () => {
+      const payload = {
+        ...validPayloadNoAnnotations,
+        annotations: [{ ...validAnnotation, audioUrl: "not-a-url" }],
+      };
+      const req = new Request("http://localhost/api/feedback", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const res = await handler.POST(req);
+      expect(res.status).toBe(400);
     });
   });
 

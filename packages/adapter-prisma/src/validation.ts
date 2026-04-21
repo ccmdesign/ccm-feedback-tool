@@ -75,6 +75,8 @@ const annotationMetricsShape = {
   viewportW: z.number().int().positive(),
   viewportH: z.number().int().positive(),
   devicePixelRatio: z.number().positive().default(1),
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl: z.string().url().max(2000).optional(),
 } as const;
 
 // CCM-282 P3: `.strict()` on each discriminated-union branch. Without it, Zod
@@ -220,6 +222,8 @@ interface AnnotationMetricsInput {
   viewportH: number;
   /** Set to 1 by schema default when omitted from raw input. */
   devicePixelRatio: number;
+  /** CCM-284 — optional public URL of the persisted voice audio for this annotation. */
+  audioUrl?: string | undefined;
 }
 
 /** Rectangle annotation — the CCM-279-era shape, `type` defaults to `"rectangle"`. */

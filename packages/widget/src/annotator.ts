@@ -4,13 +4,15 @@ import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anch
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n/index.js";
-import { Popup } from "./popup.js";
+import { Popup, type PopupTranscribe } from "./popup.js";
 import type { ThemeColors } from "./styles/theme.js";
 
 export interface AnnotationComplete {
   annotation: AnnotationPayload;
   type: FeedbackType;
   message: string;
+  /** CCM-284 — optional public URL of the persisted voice audio. */
+  audioUrl?: string;
 }
 
 /**
@@ -39,8 +41,11 @@ export class Annotator {
     private readonly colors: ThemeColors,
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
+    /** CCM-284 — the launcher supplies projectName + optional transcribe client. */
+    private readonly projectName: string = "",
+    transcribe?: PopupTranscribe,
   ) {
-    this.popup = new Popup(colors, t);
+    this.popup = new Popup(colors, t, transcribe);
 
     this.bus.on("annotation:start", () => this.activate());
   }
@@ -201,10 +206,15 @@ export class Annotator {
 
     const rectBounds = new DOMRect(bounds.x, bounds.y, bounds.width, bounds.height);
 
-    const result = await this.popup.show(rectBounds);
+    // Generate anchor first so the popup has context for voice dictation.
+    const anchor = generateAnchor(target);
+    const result = await this.popup.show(rectBounds, {
+      selector: anchor.cssSelector,
+      surroundingText: `${anchor.neighborText} ${anchor.textSnippet}`.trim(),
+      projectName: this.projectName,
+    });
     if (!result) return;
 
-    const anchor = generateAnchor(target);
     const annotation: AnnotationPayload = {
       anchor,
       rect: { xPct: 0, yPct: 0, wPct: 1, hPct: 1 },
@@ -213,6 +223,7 @@ export class Annotator {
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
       devicePixelRatio: window.devicePixelRatio,
+      ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
     };
 
     this.deactivate();
@@ -221,6 +232,7 @@ export class Annotator {
       annotation,
       type: result.type,
       message: result.message,
+      ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
     });
   };
 
@@ -313,8 +325,17 @@ export class Annotator {
 
     const rectBounds = new DOMRect(x, y, w, h);
 
-    // Show popup for type + message
-    const result = await this.popup.show(rectBounds);
+    // CCM-284 — resolve the anchor BEFORE showing the popup so voice
+    // dictation has page context (selector + neighbor text) available.
+    // buildAnnotation temporarily hides the overlay while resolving, which
+    // matches the legacy behaviour.
+    const annotation = this.buildAnnotation(rectBounds);
+
+    const result = await this.popup.show(rectBounds, {
+      selector: annotation.anchor.cssSelector,
+      surroundingText: `${annotation.anchor.neighborText} ${annotation.anchor.textSnippet}`.trim(),
+      projectName: this.projectName,
+    });
 
     if (!result) {
       this.drawingRect?.remove();
@@ -322,8 +343,7 @@ export class Annotator {
       return;
     }
 
-    // Build annotation payload BEFORE deactivating (needs overlay for elementFromPoint)
-    const annotation = this.buildAnnotation(rectBounds);
+    if (result.audioUrl) annotation.audioUrl = result.audioUrl;
     this.drawingRect?.remove();
     this.drawingRect = null;
     this.deactivate();
@@ -333,6 +353,7 @@ export class Annotator {
       annotation,
       type: result.type,
       message: result.message,
+      ...(result.audioUrl ? { audioUrl: result.audioUrl } : {}),
     });
   };
 

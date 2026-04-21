@@ -178,6 +178,8 @@ const _CCM_FEEDBACK_MODELS = {
       proposedAssetSource: { type: "String", optional: true },
       proposedAltText: { type: "String", optional: true, nativeType: "Text" },
       assetMeta: { type: "Json", optional: true },
+      // CCM-284: optional public URL of the persisted voice audio.
+      audioUrl: { type: "String", optional: true, nativeType: "Text" },
     },
     indexes: [{ fields: ["feedbackId"] }, { fields: ["status"] }, { fields: ["type"] }],
   },

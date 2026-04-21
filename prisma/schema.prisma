@@ -107,6 +107,8 @@ model FeedbackAnnotation {
   proposedAssetSource     String?
   proposedAltText         String?       @db.Text
   assetMeta               Json?
+  // CCM-284: optional public URL of the persisted voice audio for this annotation.
+  audioUrl                String?       @db.Text
 
   @@index([feedbackId])
   @@index([status])

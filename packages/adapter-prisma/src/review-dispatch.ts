@@ -140,6 +140,8 @@ export async function dispatchReviewBatch(ctx: DispatchContext, batchId: string)
         proposedAssetSource: ann.proposedAssetSource ?? null,
         proposedAltText: ann.proposedAltText ?? null,
         assetMeta: ann.assetMeta ?? null,
+        // CCM-284 — pass through the optional persisted voice audio URL.
+        audioUrl: ann.audioUrl ?? null,
       })),
     });
     canonicalBody = canonicalize(payload);
