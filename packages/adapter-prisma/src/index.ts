@@ -33,6 +33,30 @@ export {
 export type { AnnotationStatusHandlerOptions, ReviewsHandlerOptions } from "./review-handler.js";
 export { createAnnotationStatusHandler, createReviewsHandler } from "./review-handler.js";
 export { generateSecret, hashSecret, verifySecret } from "./secret.js";
+export type {
+  AudioStorage,
+  AudioStorageOptions,
+  CleanupClient,
+  CleanupClientOptions,
+  CleanupContext,
+  SupabaseStorageLike,
+  WhisperClient,
+  WhisperClientOptions,
+} from "./transcribe-clients.js";
+export {
+  buildCleanupMessages,
+  CLEANUP_SYSTEM_PROMPT,
+  createAudioStorage,
+  createCleanupClient,
+  createWhisperClient,
+  extensionForMime,
+} from "./transcribe-clients.js";
+export type {
+  TranscribeHandlerOptions,
+  TranscribeProjectStore,
+  TranscribeResponseBody,
+} from "./transcribe-handler.js";
+export { adaptProjectStore, createTranscribeHandler } from "./transcribe-handler.js";
 export type { AnnotationStatusCallbackRequest } from "./validation/callback.js";
 export { annotationStatusCallbackSchema } from "./validation/callback.js";
 export type { ProjectCreateRequest, ProjectUpdateRequest } from "./validation/project.js";

@@ -296,7 +296,7 @@ sequenceDiagram
 
 ---
 
-- [ ] **Unit 3: Server route — `/api/v1/transcribe` handler factory**
+- [x] **Unit 3: Server route — `/api/v1/transcribe` handler factory**
 
 **Goal:** Ship the multipart-accepting, Whisper + cleanup + (optional) storage handler as a factory in `adapter-prisma`.
 
