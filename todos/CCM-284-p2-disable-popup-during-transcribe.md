@@ -1,7 +1,15 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-284)
+resolution:
+  commit: 6df8c711f63162362155d5c92dfc653fd5e29758
+  note: |
+    stopAndTranscribe now calls setPopupInteractivityDuringTranscribe()
+    on entry (disabling type buttons + submit) and again inside finally
+    on exit (restoring). Added a unit test that holds the transcribe
+    promise open and asserts all controls are disabled mid-flight and
+    re-enabled on resolve.
 ---
 
 # CCM-284 — Plan R4 partially met: type/submit buttons stay interactive during transcription

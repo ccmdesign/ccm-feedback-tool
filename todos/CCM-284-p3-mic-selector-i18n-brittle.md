@@ -1,7 +1,14 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-284)
+resolution:
+  commit: 337f835daed1d54c0106ec76f5907df1abc22203
+  note: |
+    Added a stable `data-ccm-feedback="popup-mic"` attribute to the mic
+    button in packages/widget/src/popup.ts and switched both the unit
+    spec (popup-mic.test.ts) and the e2e spec (voice-pipeline.spec.ts)
+    to query by that attribute instead of English aria-label substrings.
 ---
 
 # CCM-284 — Mic button selectors in tests rely on English substring matches

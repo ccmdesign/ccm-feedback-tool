@@ -1,7 +1,17 @@
 ---
 priority: p3
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-284)
+resolution:
+  commit: 40ab86fd62ffac4e8355387639902b88b9a89200
+  note: |
+    Added CCM_FEEDBACK_ALLOWED_ORIGINS env (comma-separated) and
+    threaded it into createTranscribeHandler for both POST and OPTIONS
+    in apps/demo/src/app/api/v1/transcribe/route.ts. Documented the
+    var in apps/demo/.env.example. Scope limited to the CCM-284 route
+    per the todo's own "this is not a CCM-284 regression" note;
+    /api/feedback and /api/v1/reviews remain CCM-279 territory and
+    were not touched.
 ---
 
 # CCM-284 — `/api/v1/transcribe` route never configures `allowedOrigins`

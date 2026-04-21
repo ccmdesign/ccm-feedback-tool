@@ -1,7 +1,22 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-284)
+resolution:
+  commit: 3b4b5d51f02a8526661ab6124d689f0a31e6365d
+  note: |
+    Rewrote the happy-path e2e block to open the FAB → annotate →
+    draw a deterministic rectangle → click mic → stop → assert the
+    textarea receives the stubbed cleaned fixture within 3s, plus
+    assert /api/v1/transcribe was POSTed exactly once. Also fixed a
+    pre-existing vacuous assertion in the MediaRecorder-unsupported
+    test (it was relying on `null?.offsetParent !== null` which is
+    always true) by driving the popup open and asserting the mic
+    button count is zero. Verified on Chromium — Firefox + WebKit
+    binaries aren't installed in this worktree. The audio_url webhook
+    assertion noted in the original todo remains a follow-up (it
+    needs /api/mock-webhook plumbing the e2e skeleton server doesn't
+    currently expose; filed as out-of-scope for this round).
 ---
 
 # CCM-284 — E2E happy-path test does not assert the promised acceptance behavior

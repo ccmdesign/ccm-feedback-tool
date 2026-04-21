@@ -1,7 +1,14 @@
 ---
 priority: p2
-status: ready
+status: resolved
 origin: ce-code-review autofix (CCM-284)
+resolution:
+  commit: 6877333ec4207e8e8521dc058b11a48facd530a4
+  note: |
+    Added the "appends cleaned text when the user typed BEFORE pressing
+    the mic" case to packages/widget/__tests__/widget/popup-mic.test.ts.
+    Verifies the plan merge rule #2 — a future revert to unconditional
+    overwrite will now fail this test.
 ---
 
 # CCM-284 — Missing test: pre-existing typed text preserved when mic is pressed
