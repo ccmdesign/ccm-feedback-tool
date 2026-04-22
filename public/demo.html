@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CCM Feedback — MVP Demo</title>
+    <style>
+      body {
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 24px;
+        color: #0f172a;
+        line-height: 1.6;
+      }
+      header { margin-bottom: 32px; }
+      h1 { font-size: 32px; letter-spacing: -0.02em; }
+      h2 { font-size: 20px; margin-top: 32px; letter-spacing: -0.01em; }
+      .card { padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; margin: 16px 0; }
+      .badge { display:inline-block; padding: 2px 10px; border-radius: 9999px; background:#eff6ff; color:#3b82f6; font-size: 12px; font-weight: 600; margin-right: 6px; }
+      img { max-width: 100%; border-radius: 8px; display: block; margin: 16px 0; }
+      code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+      button {
+        padding: 10px 18px;
+        border-radius: 9999px;
+        border: 1px solid #0066ff;
+        background: #0066ff;
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      ul { padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>CCM Feedback — MVP Demo Page</h1>
+      <p>Use the floating action button (bottom-right) to drop a comment anywhere on this page. Pins persist in <code>localStorage</code>.</p>
+    </header>
+
+    <section class="card" id="section-intro">
+      <span class="badge">Intro</span>
+      <h2>What is this?</h2>
+      <p>A single-script-tag feedback widget. No backend, no accounts, no multiplayer — just you, the page you're reviewing, and a JSON file you can hand off to a developer.</p>
+      <ul>
+        <li>Click the FAB → radial menu</li>
+        <li>Pin (crosshair) → click any element to comment</li>
+        <li>Toggle (eye) → show/hide pins</li>
+        <li>Export (arrow) → download JSON of all annotations</li>
+      </ul>
+    </section>
+
+    <section class="card" id="section-sample">
+      <span class="badge">Sample content</span>
+      <h2>Try commenting on anything here</h2>
+      <p>
+        Hover over an element while in pin mode — it gets a blue outline. Click to drop a pin.
+        A popover opens with a textarea. <strong>Cmd/Ctrl + Enter</strong> submits.
+      </p>
+      <p>Feedback pins survive page reloads. Use the export button to hand off work to engineering.</p>
+      <button type="button" id="cta">Try pinning this button</button>
+    </section>
+
+    <section class="card" id="section-reset">
+      <span class="badge">Reset</span>
+      <h2>Clear all annotations</h2>
+      <p>Run in the devtools console:</p>
+      <pre><code>localStorage.removeItem('ccm-feedback:demo')</code></pre>
+      <p>…then reload.</p>
+    </section>
+
+    <script src="./w.js" data-project="demo" data-debug="true" defer></script>
+  </body>
+</html>

@@ -1,16 +1,10 @@
 node_modules/
 dist/
-.next/
-.turbo/
-*.tsbuildinfo
+public/w.js
+public/w.js.map
+*.log
 .DS_Store
-test-results/
-playwright-report/
-coverage/
 .env
 .env.local
-.claude/worktrees/
-.gstack/
-
-# Local Netlify folder
-.netlify
+.vscode/
+.idea/

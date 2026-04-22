@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "demo",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": ["serve", "-l", "5174", "public"],
+      "port": 5174
+    }
+  ]
+}

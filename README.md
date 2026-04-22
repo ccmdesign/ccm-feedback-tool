@@ -1,220 +1,106 @@
 <div align="center">
 
-<h1>CCM Feedback</h1>
+<h1>CCM Feedback — MVP</h1>
 
-**Client feedback, pinned to the pixel.**
+**One script tag. Pin comments. Export JSON.**
 
-A self-hosted feedback widget for ccmdesign. Clients draw rectangles, leave comments, and flag bugs directly on the live site. Supabase-backed. Deployed on Netlify.
-
-![Demo](./demo.gif)
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://www.typescriptlang.org/)
-
-[Getting Started](#getting-started) &middot; [Configuration](#configuration) &middot; [API Reference](#api-reference) &middot; [CLI](#cli) &middot; [Architecture](#architecture)
+A dead-simple feedback widget for reviewing web pages. No backend, no accounts, no multiplayer. Reviewer pins comments on any element, exports a JSON file, hands it to a developer.
 
 </div>
 
 ---
 
-## Why CCM Feedback?
+## Install
 
-Stop chasing client feedback across Slack threads, email chains, and Notion docs. CCM Feedback gives your clients a **contextual** way to leave feedback — anchored to the exact element they're looking at.
+Drop a single script tag in your HTML:
 
----
+```html
+<script src="https://ccm-feedback-582.netlify.app/w.js" data-project="my-project" defer></script>
+```
 
-## Features
+That's it. The FAB appears bottom-right on desktop (hidden below 768px).
 
-- **Rectangle annotations** — Clients draw directly on the page, with category + message
-- **DOM-anchored persistence** — Annotations are tied to elements, not pixels. They survive layout changes
-- **Shadow DOM isolation** — Widget CSS never leaks into your site, and your site CSS never breaks the widget
-- **Radial menu** — Clean FAB with expandable actions (chat, annotate, toggle)
-- **Feedback panel** — Searchable, filterable history with type chips and resolve/unresolve
-- **Smart tooltips** — Hover a marker to preview, click to open the panel
-- **Retry with backoff** — Failed submissions are queued in localStorage and retried automatically
-- **Zero config auth** — Clients identify once (name + email), persisted locally
-- **Full event system** — `onOpen`, `onClose`, `onFeedbackSent`, `onError`, `onAnnotationStart`, `onAnnotationEnd`
-- **CLI scaffold** — `npx @ccm-feedback/cli init` sets up Prisma schema + API route
-- **Monorepo** — Split into independent packages (`widget`, `adapter-prisma`, `adapter-memory`, `adapter-localstorage`, `cli`)
-- **Dev-only by default** — Widget auto-hides in production unless `forceShow: true`
-- **Lightweight** — ~23KB gzipped
+### Options
 
----
+Configure via `data-*` attributes on the script tag:
 
-## Getting Started
+| Attribute        | Purpose                                    | Default       |
+| ---------------- | ------------------------------------------ | ------------- |
+| `data-project`   | **Required.** `localStorage` namespace.    | —             |
+| `data-accent`    | Hex color (`#0066ff`, `#RGB`, `#RRGGBBAA`) | `#0066ff`     |
+| `data-theme`     | `light`, `dark`, or `auto`                 | `light`       |
+| `data-debug`     | Console-log lifecycle events               | off           |
 
-See [`docs/local-dev.md`](./docs/local-dev.md) for the full local runbook (memory store + Supabase paths).
+Or init manually:
 
-### Quick start
+```ts
+window.CcmFeedback.init({
+  projectName: "my-project",
+  accentColor: "#0066ff",
+  theme: "auto",
+});
+```
+
+## How it works
+
+1. Click the FAB → radial menu (pin / toggle / export).
+2. **Pin** → crosshair mode. Hover any element; it gets a blue outline. Click to drop a pin.
+3. **Textarea popover** opens anchored to that element. `⌘/Ctrl + Enter` to submit.
+4. Pins persist in `localStorage['ccm-feedback:<project>']` and re-render on page load.
+5. Click a pin → popover with the comment body + delete button.
+6. **Export** → downloads `ccm-feedback-<project>-<date>.json` with every annotation + DOM anchor.
+
+## DOM anchoring
+
+Each pin stores four resolution strategies so the anchor survives reasonable DOM changes:
+
+- CSS selector via `@medv/finder`
+- XPath
+- Text snippet + prefix/suffix + neighbor text
+- Structural fingerprint (tag chain)
+
+At render time the resolver walks the fallbacks and scores candidates — an anchor can be re-resolved even after class renames, minor text edits, or small structural refactors.
+
+## Data model
+
+```ts
+interface AnnotationRecord {
+  id: string;
+  projectName: string;
+  message: string;
+  url: string;
+  viewport: string;       // e.g. "1280x800"
+  userAgent: string;
+  createdAt: string;      // ISO-8601
+  // Anchor
+  cssSelector: string;
+  xpath: string;
+  textSnippet: string;
+  elementTag: string;
+  elementId: string | undefined;
+  textPrefix: string;
+  textSuffix: string;
+  fingerprint: string;
+  neighborText: string;
+  // Position as fractions of the anchor element's bounding box
+  xPct: number; yPct: number; wPct: number; hPct: number;
+}
+```
+
+## Develop
 
 ```bash
 bun install
-bun run build
+bun run dev            # esbuild watch → dist/w.js + public/w.js
+bun run serve          # build + serve public/ on :5173
+bun run check          # tsc --noEmit
+bun run lint:fix       # biome
 ```
 
-Run the demo locally (memory store, no database required):
+## Deploy
 
-```bash
-cd apps/demo
-bun run dev
-```
+Build → drop `dist/w.js` into the static hosting of your choice. The existing Netlify project serves it at `https://ccm-feedback-582.netlify.app/w.js`.
 
-To run against a Supabase Postgres:
+## Attribution
 
-1. Set `DATABASE_URL` + `DIRECT_URL` in `apps/demo/.env.local` (see `.env.example`)
-2. `bunx prisma generate --schema=prisma/schema.prisma`
-3. `bunx prisma db push --schema=prisma/schema.prisma`
-4. `cd apps/demo && bun run dev`
-
----
-
-## Configuration
-
-```ts
-initCcmFeedback({
-  // Required (one of endpoint or store)
-  endpoint: '/api/feedback',      // Your API route (HTTP mode)
-  // OR
-  store: new LocalStorageStore(), // Direct store (client-side mode, no server)
-  projectName: 'my-project',      // Scopes feedbacks to this project
-
-  // Optional
-  position: 'bottom-right',       // 'bottom-right' | 'bottom-left'
-  accentColor: '#0066ff',         // Widget accent color
-  theme: 'light',                 // 'light' | 'dark' | 'auto'
-  locale: 'en',                   // 'en' | 'fr' (default: 'en')
-  forceShow: false,               // Show in production? Default: false
-  debug: false,                   // Enable debug logging
-
-  // Events
-  onOpen: () => {},
-  onClose: () => {},
-  onFeedbackSent: (feedback) => {},
-  onError: (error) => {},
-  onAnnotationStart: () => {},
-  onAnnotationEnd: () => {},
-  onSkip: (reason) => {},
-})
-```
-
-### Return value
-
-```ts
-const widget = initCcmFeedback({ ... })
-
-widget.open()
-widget.close()
-widget.refresh()
-widget.destroy()
-
-// Event listeners (alternative to config callbacks)
-const unsub = widget.on('feedback:sent', (feedback) => { ... })
-unsub()
-widget.off('feedback:sent', handler)
-```
-
----
-
-## API Reference
-
-### Server adapter
-
-```ts
-// app/api/feedback/route.ts
-import { createCcmFeedbackHandler } from '@ccm-feedback/adapter-prisma'
-import { prisma } from '@/lib/prisma'
-
-export const { GET, POST, PATCH, DELETE, OPTIONS } = createCcmFeedbackHandler({ prisma })
-```
-
-| Method | Description | Status |
-|--------|-------------|--------|
-| `POST` | Create a feedback with annotations | `201` with full feedback object |
-| `GET` | List feedbacks (filterable by type, status, search) | `200` with `{ feedbacks, total }` |
-| `PATCH` | Resolve or unresolve a feedback | `200` with updated feedback |
-| `DELETE` | Delete a feedback or all feedbacks for a project | `200` with `{ deleted: true }` |
-
-### Prisma schema
-
-Schema lives at the repo root: [`prisma/schema.prisma`](./prisma/schema.prisma). Models: `FeedbackItem` and `FeedbackAnnotation`.
-
----
-
-## CLI
-
-```bash
-npx @ccm-feedback/cli init
-```
-
-Interactive setup that:
-
-1. Detects your `prisma/schema.prisma` file
-2. Merges the CCM Feedback models (idempotent — safe to run multiple times)
-3. Generates the Next.js App Router API route at `app/api/feedback/route.ts`
-
----
-
-## Architecture
-
-- **Shadow DOM (closed)** — Widget styles are fully isolated from the host page
-- **Overlay outside Shadow DOM** — The annotation overlay and markers live in the main DOM to avoid clipping from `overflow:hidden` containers
-- **Multi-selector anchoring** — Each annotation stores a CSS selector ([`@medv/finder`](https://github.com/antonmedv/finder)), XPath, and text snippet
-- **Percentage-relative rectangles** — Annotation positions are stored as fractions of the anchor element's bounding box, so they survive responsive layout changes
-- **Event bus with error isolation** — User callbacks (`onError`, etc.) cannot crash internal widget logic
-
-### Packages
-
-| Package | Platform | Description |
-|---------|----------|-------------|
-| `@ccm-feedback/widget` | Browser | Widget: `initCcmFeedback()` |
-| `@ccm-feedback/adapter-prisma` | Node.js | Server: `createCcmFeedbackHandler()` |
-| `@ccm-feedback/adapter-memory` | Any | In-memory store (testing, demos, serverless) |
-| `@ccm-feedback/adapter-localstorage` | Browser | Client-side localStorage store (demos, prototyping) |
-| `@ccm-feedback/cli` | CLI | Setup: `init`, `sync`, `status`, `doctor` |
-
-All adapters implement the `CcmFeedbackStore` interface — swap adapters without changing any other code.
-
----
-
-## Testing
-
-```bash
-# Unit tests (Vitest)
-bun run test:run
-
-# E2E tests (Playwright)
-bun run test:e2e
-
-# Type check
-bun run check
-```
-
----
-
-## Troubleshooting
-
-### Widget doesn't appear
-
-The widget is **dev-only by default**. It auto-hides when `NODE_ENV=production`.
-
-- **Fix:** Pass `forceShow: true` in the config to show it in production.
-- The widget also hides on viewports narrower than **768px** (mobile).
-
-### localStorage keys changed after the rebrand
-
-The CCM Feedback rebrand invalidates three previously-used localStorage keys:
-
-- `siteping_identity` → `ccm_feedback_identity`
-- `siteping_retry_queue` → `ccm_feedback_retry_queue`
-- `siteping_feedbacks` → `ccm_feedback_items`
-
-Existing users will be asked for name/email again on first interaction. Any in-flight retry-queue entries from the old key are abandoned. See [`docs/local-dev.md`](./docs/local-dev.md) for details.
-
----
-
-## License
-
-[MIT](./LICENSE)
-
-## Acknowledgements
-
-CCM Feedback is based on [SitePing](https://github.com/NeosiaNexus/SitePing) by [NeosiaNexus](https://github.com/NeosiaNexus), licensed under the [MIT License](./LICENSE). The original copyright notice is preserved in [`LICENSE`](./LICENSE) and attribution is documented in [`NOTICE`](./NOTICE).
+Forked from [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus (MIT). See `LICENSE` and `NOTICE`.
