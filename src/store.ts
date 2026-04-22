@@ -4,6 +4,7 @@ export interface SaveInput {
   projectName: string;
   message: string;
   url: string;
+  path: string;
   viewport: string;
   userAgent: string;
   anchor: AnchorData;
@@ -12,6 +13,18 @@ export interface SaveInput {
 
 function storageKey(projectName: string): string {
   return `ccm-feedback:${projectName}`;
+}
+
+/**
+ * Normalize a pathname for page scoping.
+ * - Strips trailing slash except root
+ * - Leaves case as-is (routes can be case-sensitive)
+ * - Ignores query + hash (caller should pass `location.pathname`)
+ */
+export function normalizePath(pathname: string): string {
+  if (!pathname) return "/";
+  if (pathname === "/") return "/";
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
 function generateId(): string {
@@ -50,6 +63,12 @@ export class Store {
     return load(this.projectName);
   }
 
+  /** Records scoped to a single page path. */
+  listForPath(path: string): AnnotationRecord[] {
+    const target = normalizePath(path);
+    return load(this.projectName).filter((r) => normalizePath(r.path) === target);
+  }
+
   save(input: SaveInput): AnnotationRecord {
     const items = load(this.projectName);
     const record: AnnotationRecord = {
@@ -57,6 +76,7 @@ export class Store {
       projectName: input.projectName,
       message: input.message,
       url: input.url,
+      path: normalizePath(input.path),
       viewport: input.viewport,
       userAgent: input.userAgent,
       createdAt: new Date().toISOString(),

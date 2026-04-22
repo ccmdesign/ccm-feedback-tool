@@ -8,3 +8,13 @@ public/w.js.map
 .env.local
 .vscode/
 .idea/
+
+# Local Netlify folder
+.netlify
+
+# Build caches & outputs
+.turbo/
+.next/
+
+# Claude agent worktrees
+.claude/worktrees/
