@@ -31,6 +31,10 @@ export class MarkerManager {
   private readonly onResize: () => void;
   private readonly onScroll: () => void;
   private readonly onDocClick: (e: MouseEvent) => void;
+  private readonly onPopState: () => void;
+  private readonly origPushState: typeof history.pushState;
+  private readonly origReplaceState: typeof history.replaceState;
+  private lastPath = window.location.pathname;
 
   constructor(
     private readonly colors: ThemeColors,
@@ -56,6 +60,26 @@ export class MarkerManager {
       this.closePopover();
     };
     document.addEventListener("click", this.onDocClick, true);
+
+    // SPA navigation: re-filter markers when pathname changes via the
+    // History API. Covers Nuxt, React Router, Vue Router, Next.js.
+    const checkPath = () => {
+      if (window.location.pathname === this.lastPath) return;
+      this.lastPath = window.location.pathname;
+      this.refresh();
+    };
+    this.onPopState = checkPath;
+    window.addEventListener("popstate", this.onPopState);
+    this.origPushState = history.pushState.bind(history);
+    this.origReplaceState = history.replaceState.bind(history);
+    history.pushState = (...args) => {
+      this.origPushState(...args);
+      checkPath();
+    };
+    history.replaceState = (...args) => {
+      this.origReplaceState(...args);
+      checkPath();
+    };
 
     this.bus.on("annotations:toggle", (visible) => this.setVisible(visible));
   }
@@ -253,7 +277,10 @@ export class MarkerManager {
   destroy(): void {
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("scroll", this.onScroll);
+    window.removeEventListener("popstate", this.onPopState);
     document.removeEventListener("click", this.onDocClick, true);
+    history.pushState = this.origPushState;
+    history.replaceState = this.origReplaceState;
     this.closePopover();
     this.container.remove();
     this.entries = [];
