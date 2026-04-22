@@ -1,44 +1,18 @@
-# Netlify build config for apps/demo.
-#
-# Netlify resolves `base` from the root of the deployed repo, so the build
-# command uses `cd ../..` to run the workspace-level build via Turborepo.
-#
-# `prisma generate` runs every build (not just once) — without it the Prisma
-# client ships default stubs and the first Prisma-mode request crashes with
-# "@prisma/client did not initialize yet".
-#
-# After the Next.js build, we copy the Prisma Linux query-engine binary into
-# `.next/standalone`. Next.js's file tracer resolves Prisma's native addon
-# relative to `process.platform` at build time (darwin on the CI builder) and
-# leaves the rhel `.so.node` out of the serverless payload. Without this copy,
-# the deployed function crashes with "Query Engine for rhel-openssl-3.0.x could
-# not be located" even though `binaryTargets` generated both binaries. See
-# `CCM-277` Netlify logs for the original failure trace.
-
 [build]
-base    = "apps/demo"
-command = "cd ../.. && bun install --frozen-lockfile && bunx prisma generate --schema=prisma/schema.prisma && bun run build --filter=@ccm-feedback/demo && node scripts/copy-prisma-rhel-engine.mjs"
-publish = ".next"
-
-# User-level Netlify Functions (CCM-279: dispatch-retry scheduled fn).
-# Configured alongside the Next.js plugin's internal functions — both are
-# discovered and bundled.
-[functions]
-directory = "netlify/functions"
-included_files = [
-  "../../node_modules/.prisma/client/**",
-  "../../node_modules/@prisma/client/**"
-]
-
-# `@netlify/plugin-nextjs` is pinned via a root-level devDependency on
-# `@netlify/plugin-nextjs` (see root `package.json`). When the plugin is
-# present in the repo's `node_modules`, Netlify uses that version instead of
-# auto-installing the latest. This keeps the build deterministic across
-# deploys and gives us a lockstep bump path for Next major upgrades.
-# v5.x is the current major that supports Next 15.
-[[plugins]]
-package = "@netlify/plugin-nextjs"
+  command = "bun install && bun run build"
+  publish = "public"
 
 [build.environment]
-NODE_VERSION            = "20"
-NEXT_TELEMETRY_DISABLED = "1"
+  BUN_VERSION = "1.3.11"
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/w.js"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/w.js.map"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
