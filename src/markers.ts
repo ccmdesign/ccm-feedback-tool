@@ -66,7 +66,7 @@ export class MarkerManager {
     for (const entry of this.entries) entry.node.remove();
     this.entries = [];
 
-    const records = this.store.list();
+    const records = this.store.listForPath(window.location.pathname);
     records.forEach((record, idx) => {
       const node = this.buildMarker(record, idx + 1);
       this.container.appendChild(node);

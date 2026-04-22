@@ -91,6 +91,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       projectName: config.projectName,
       message,
       url: sanitizeUrl(window.location.href),
+      path: window.location.pathname,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       userAgent: navigator.userAgent,
       anchor,

@@ -27,6 +27,8 @@ export interface AnnotationRecord extends AnchorData, RectData {
   projectName: string;
   message: string;
   url: string;
+  /** Normalized `window.location.pathname`. Used to scope markers to a page. */
+  path: string;
   viewport: string;
   userAgent: string;
   createdAt: string;
