@@ -1,0 +1,18 @@
+[build]
+  command = "bun install && bun run build"
+  publish = "public"
+
+[build.environment]
+  BUN_VERSION = "1.3.11"
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/w.js"
+  [headers.values]
+    Cache-Control = "public, max-age=300, must-revalidate"
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/w.js.map"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
