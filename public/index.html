@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CCM Feedback — MVP</title>
+    <meta name="description" content="One script tag. Pin comments on any element. Export as JSON." />
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --panel: #111827;
+        --border: #1f2937;
+        --text: #e5e7eb;
+        --dim: #9ca3af;
+        --accent: #0066ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 80px 24px 64px;
+      }
+      h1 {
+        font-size: 40px;
+        letter-spacing: -0.02em;
+        margin: 0 0 8px;
+      }
+      .tagline {
+        font-size: 18px;
+        color: var(--dim);
+        margin: 0 0 48px;
+      }
+      h2 {
+        font-size: 20px;
+        letter-spacing: -0.01em;
+        margin: 40px 0 12px;
+      }
+      p { color: var(--dim); }
+      pre {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 18px;
+        overflow-x: auto;
+        color: var(--text);
+        font-size: 13px;
+      }
+      code { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace; }
+      p code {
+        background: var(--panel);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: var(--text);
+      }
+      ul { padding-left: 18px; color: var(--dim); }
+      li { margin: 4px 0; }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .foot {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--dim);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CCM Feedback</h1>
+      <p class="tagline">One script tag. Pin comments on any element. Export as JSON.</p>
+
+      <h2>Install</h2>
+      <pre><code>&lt;script src="https://ccm-feedback-582.netlify.app/w.js"
+        data-project="my-project" defer&gt;&lt;/script&gt;</code></pre>
+      <p>That's it. The FAB appears bottom-right on desktop (hidden below 768&nbsp;px).</p>
+
+      <h2>What it does</h2>
+      <ul>
+        <li>Click the FAB → radial menu (pin / toggle / export).</li>
+        <li>Pin mode = crosshair. Click any element to leave a comment.</li>
+        <li>Pins persist in <code>localStorage</code> and re-render on reload.</li>
+        <li>Export downloads a JSON file with every annotation + its DOM anchor.</li>
+      </ul>
+
+      <h2>Options</h2>
+      <pre><code>data-project   (required)    localStorage namespace
+data-accent    (#0066ff)     hex color
+data-theme     (light)       light | dark | auto
+data-debug     (off)         "true" to console-log lifecycle</code></pre>
+
+      <h2>Try it</h2>
+      <p><a href="/demo.html">Open the demo page →</a></p>
+
+      <div class="foot">
+        <a href="https://github.com/ccmdesign/ccm-feedback-tool">Source on GitHub</a> ·
+        Forked from <a href="https://github.com/NeosiaNexus/SitePing">SitePing</a> (MIT)
+      </div>
+    </main>
+  </body>
+</html>
