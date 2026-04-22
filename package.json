@@ -1,8 +1,9 @@
 {
   "name": "ccm-feedback",
+  "version": "0.1.0-mvp",
   "private": true,
-  "description": "CCM Feedback — client feedback widget, self-hosted, DOM-anchored annotations",
-  "homepage": "https://feedback.ccmdesign.ca",
+  "description": "CCM Feedback — single-script-tag feedback widget. Pin comments on any element, export JSON.",
+  "homepage": "https://ccm-feedback-582.netlify.app",
   "type": "module",
   "author": "ccmdesign",
   "license": "MIT",
@@ -14,33 +15,23 @@
     "url": "https://github.com/ccmdesign/ccm-feedback-tool/issues"
   },
   "packageManager": "bun@1.3.11",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
-    "build": "turbo run build",
-    "check": "turbo run check",
-    "clean": "turbo run clean",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:e2e": "playwright test",
+    "build": "node esbuild.config.mjs",
+    "build:watch": "node esbuild.config.mjs --watch",
+    "check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "dev": "bun run build:watch",
+    "serve": "bun run build && bunx serve -l 5173 public",
     "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "verify:webhook": "bun scripts/verify-webhook-signature.mjs",
-    "backfill:project-id": "bun scripts/backfill-project-id.mjs"
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@medv/finder": "^4.0.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
-    "@netlify/plugin-nextjs": "^5.14.0",
-    "@playwright/test": "^1.59.1",
-    "@prisma/client": "^6.0.0",
     "@types/node": "^25.5.0",
-    "@vitest/coverage-istanbul": "^3.0.0",
-    "jsdom": "^29.0.1",
-    "tsup": "^8.5.0",
-    "turbo": "^2.9.3",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
   }
 }
