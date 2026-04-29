@@ -114,6 +114,15 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     exportAsJson(config.projectName, records);
   });
 
+  bus.on("clear:click", () => {
+    if (store.list().length === 0) return;
+    if (!window.confirm(t("fab.clearConfirm"))) return;
+    store.clear();
+    markers.refresh();
+    fab.updateCount(0);
+    log("Cleared all annotations");
+  });
+
   // `findAnchorElement` is re-exported so consumers that want to
   // programmatically add an annotation have access to the anchor logic.
   void findAnchorElement;

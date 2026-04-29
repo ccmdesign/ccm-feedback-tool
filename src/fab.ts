@@ -1,10 +1,10 @@
 import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
-import { ICON_CLOSE, ICON_EYE, ICON_EYE_OFF, ICON_PIN, ICON_SITEPING } from "./icons.js";
+import { ICON_CLOSE, ICON_EYE, ICON_EYE_OFF, ICON_PIN, ICON_SITEPING, ICON_TRASH } from "./icons.js";
 
 interface RadialItem {
-  id: "pin" | "toggle" | "export";
+  id: "pin" | "toggle" | "export" | "clear";
   icon: string;
   iconAlt?: string;
   label: string;
@@ -35,6 +35,7 @@ export class Fab {
       { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel") },
       { id: "toggle", icon: ICON_EYE, iconAlt: ICON_EYE_OFF, label: t("fab.toggleOn") },
       { id: "export", icon: EXPORT_ICON, label: t("fab.export") },
+      { id: "clear", icon: ICON_TRASH, label: t("fab.clear") },
     ];
 
     this.fab = document.createElement("button");
@@ -165,6 +166,9 @@ export class Fab {
       }
       case "export":
         this.bus.emit("export:click");
+        break;
+      case "clear":
+        this.bus.emit("clear:click");
         break;
     }
   }

@@ -9,6 +9,8 @@ const STRINGS: Record<string, string> = {
   "fab.toggleOn": "Hide comments",
   "fab.toggleOff": "Show comments",
   "fab.export": "Export JSON",
+  "fab.clear": "Clear all",
+  "fab.clearConfirm": "Delete all annotations for this project? This cannot be undone.",
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",

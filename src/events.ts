@@ -42,4 +42,5 @@ export interface WidgetEvents {
   "feedback:deleted": [string];
   "annotations:toggle": [boolean];
   "export:click": [];
+  "clear:click": [];
 }
