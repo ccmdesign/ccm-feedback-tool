@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -20,6 +20,7 @@
         --rule: oklch(0.88 0.01 250);
         --accent: #0066ff;
         --accent-soft: oklch(0.94 0.04 255);
+        --marker: #e63946;
       }
 
       *, *::before, *::after { box-sizing: border-box; }
@@ -124,55 +125,81 @@
         color: var(--accent);
       }
 
-      /* hand-drawn arrow — fixed at first viewport, fades on scroll */
-      .arrow-wrap {
+      /* marker annotation around the FAB — looks like a designer marked it up by hand */
+      .marker-wrap {
         position: fixed;
-        right: 96px;
-        bottom: 56px;
-        width: 240px;
-        height: 200px;
+        right: 0;
+        bottom: 0;
+        width: 260px;
+        height: 220px;
         pointer-events: none;
         z-index: 5;
-        transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .arrow-wrap[data-hidden="true"] { opacity: 0; }
-      @media (max-width: 900px) { .arrow-wrap { display: none; } }
-      .arrow-wrap svg { width: 100%; height: 100%; overflow: visible; }
-      .arrow-path {
+      .marker-wrap[data-hidden="true"] { opacity: 0; }
+      @media (max-width: 900px) { .marker-wrap { display: none; } }
+      .marker-wrap svg { width: 100%; height: 100%; overflow: visible; }
+      .marker-circle {
         fill: none;
-        stroke: var(--ink);
-        stroke-width: 2.4;
+        stroke: var(--marker);
+        stroke-width: 3;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 600;
-        stroke-dashoffset: 600;
-        animation: draw 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.6s forwards;
+        filter: url(#marker-rough);
       }
-      .arrow-head {
+      .marker-circle-2 {
         fill: none;
-        stroke: var(--ink);
-        stroke-width: 2.4;
+        stroke: var(--marker);
+        stroke-width: 2.6;
         stroke-linecap: round;
         stroke-linejoin: round;
-        opacity: 0;
-        animation: appear 0.3s ease-out 1.85s forwards;
+        opacity: 0.7;
+        filter: url(#marker-rough);
       }
-      .arrow-label {
-        font-family: "Fraunces", serif;
-        font-style: italic;
-        font-size: 24px;
-        fill: var(--ink);
-        opacity: 0;
-        animation: appear 0.4s ease-out 0.4s forwards;
+      .marker-label {
+        font-family: "Caveat", "Marker Felt", "Bradley Hand", cursive;
+        font-weight: 700;
+        font-size: 32px;
+        fill: var(--marker);
+        transform-origin: center;
+        transform: rotate(-6deg);
       }
-      .arrow-sub {
-        font-family: "JetBrains Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        fill: var(--ink-soft);
-        opacity: 0;
-        animation: appear 0.4s ease-out 0.55s forwards;
+      .marker-arrow {
+        fill: none;
+        stroke: var(--marker);
+        stroke-width: 2.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: url(#marker-rough);
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .marker-circle,
+        .marker-arrow {
+          stroke-dasharray: 540;
+          stroke-dashoffset: 540;
+          animation: marker-draw 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s forwards;
+        }
+        .marker-circle-2 {
+          stroke-dasharray: 560;
+          stroke-dashoffset: 560;
+          animation: marker-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) 1.2s forwards;
+        }
+        .marker-arrow {
+          animation-delay: 1.6s;
+          animation-duration: 0.5s;
+        }
+        .marker-label {
+          opacity: 0;
+          animation: marker-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+        }
+      }
+      @keyframes marker-draw {
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes marker-pop {
+        from { opacity: 0; transform: scale(0.6) rotate(-12deg); }
+        to { opacity: 1; transform: scale(1) rotate(-6deg); }
       }
       @keyframes draw {
         to { stroke-dashoffset: 0; }
@@ -392,18 +419,47 @@ Confirm once installed and tell me which file you edited.</span>
       </footer>
     </div>
 
-    <!-- hand-drawn arrow pointing at the FAB (fixed, bottom-right) -->
-    <div class="arrow-wrap" aria-hidden="true">
-      <svg viewBox="0 0 240 200" preserveAspectRatio="none">
-        <text class="arrow-label" x="6" y="34">try it</text>
-        <text class="arrow-sub" x="8" y="56">↓ pin a comment</text>
+    <!-- felt-tip marker annotation around the FAB (fixed, bottom-right) -->
+    <div class="marker-wrap" aria-hidden="true">
+      <svg viewBox="0 0 260 220" preserveAspectRatio="none">
+        <defs>
+          <filter id="marker-rough" x="-10%" y="-10%" width="120%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" />
+            <feDisplacementMap in="SourceGraphic" scale="2.4" />
+          </filter>
+        </defs>
+
+        <!-- handwritten label, rotated like a marker scribble in a printout margin -->
+        <text class="marker-label" x="40" y="80" transform="rotate(-6 80 80)">pin one!</text>
+
+        <!-- short squiggle arrow from label down toward the FAB area -->
         <path
-          class="arrow-path"
-          d="M 28 78 C 60 92, 92 96, 122 108 C 152 120, 178 138, 198 162 S 224 188, 230 196"
+          class="marker-arrow"
+          d="M 130 96 C 145 110, 160 122, 180 144"
         />
         <path
-          class="arrow-head"
-          d="M 218 178 L 232 198 L 210 196"
+          class="marker-arrow"
+          d="M 174 132 L 182 148 L 168 146"
+        />
+
+        <!-- rough circle around the FAB position (FAB sits at viewport bottom-right ~24px from each edge) -->
+        <!-- viewport-relative: FAB center ≈ (vw-48, vh-48); within this 260x220 svg anchored bottom-right (right:0 bottom:0), FAB center ≈ (260-48, 220-48) = (212, 172) -->
+        <path
+          class="marker-circle"
+          d="M 252 168
+             C 252 198, 226 208, 204 204
+             C 178 200, 162 184, 164 162
+             C 166 142, 184 130, 208 132
+             C 234 134, 252 144, 252 168 Z"
+        />
+        <!-- second loop, slightly offset, like a real marker double-pass -->
+        <path
+          class="marker-circle-2"
+          d="M 254 172
+             C 250 200, 224 212, 200 206
+             C 174 200, 156 182, 162 158
+             C 168 138, 188 128, 212 130
+             C 238 132, 256 146, 254 172 Z"
         />
       </svg>
     </div>
@@ -427,15 +483,15 @@ Confirm once installed and tell me which file you edited.</span>
         });
       })();
 
-      // arrow visible only while hero owns the viewport (no other content showing yet)
+      // marker annotation visible only while hero owns the viewport
       (function () {
-        var arrow = document.querySelector(".arrow-wrap");
+        var marker = document.querySelector(".marker-wrap");
         var hero = document.querySelector(".hero");
-        if (!arrow || !hero) return;
+        if (!marker || !hero) return;
         var update = function () {
           var rect = hero.getBoundingClientRect();
           var heroOwnsViewport = rect.bottom > window.innerHeight - 60;
-          arrow.dataset.hidden = heroOwnsViewport ? "false" : "true";
+          marker.dataset.hidden = heroOwnsViewport ? "false" : "true";
         };
         update();
         window.addEventListener("scroll", update, { passive: true });
