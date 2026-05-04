@@ -36,8 +36,12 @@ export class EventBus<E extends { [K in keyof E]: unknown[] }> {
 }
 
 export interface WidgetEvents {
+  "target:start": [];
+  "target:end": [];
   "pin:start": [];
   "pin:end": [];
+  "area:start": [];
+  "area:end": [];
   "feedback:saved": [AnnotationRecord];
   "feedback:deleted": [string];
   "annotations:toggle": [boolean];

@@ -56,23 +56,34 @@ export function buildStyles(colors: ThemeColors): string {
 
     .sp-fab {
       position: fixed;
-      width: 52px;
-      height: 52px;
+      /* Bumped to ensure visibility over third-party chat/widgets that
+         routinely sit at z-index 2147483600+ (Intercom, Drift, etc.). */
+      z-index: ${Z_INDEX_MAX};
+      width: 60px;
+      height: 60px;
       border-radius: var(--sp-radius-full);
       background: var(--sp-accent-gradient);
       color: #fff;
-      border: none;
+      border: 2px solid rgba(255, 255, 255, 0.85);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow:
-        0 4px 20px var(--sp-accent-glow),
-        0 2px 8px rgba(0, 0, 0, 0.08);
+        0 6px 28px var(--sp-accent-glow),
+        0 4px 12px rgba(0, 0, 0, 0.18),
+        0 0 0 1px rgba(0, 0, 0, 0.04);
       transition:
         transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
         box-shadow 0.3s ease;
       outline: none;
+      /* Gentle attention pulse on first paint — wears off after 3 cycles. */
+      animation: sp-fab-attn 1.6s ease-out 3;
+    }
+
+    @keyframes sp-fab-attn {
+      0%, 100% { box-shadow: 0 6px 28px var(--sp-accent-glow), 0 4px 12px rgba(0,0,0,0.18), 0 0 0 0 var(--sp-accent-glow); }
+      50%      { box-shadow: 0 6px 28px var(--sp-accent-glow), 0 4px 12px rgba(0,0,0,0.18), 0 0 0 14px transparent; }
     }
 
     .sp-fab:focus-visible {
@@ -103,8 +114,8 @@ export function buildStyles(colors: ThemeColors): string {
     }
 
     .sp-fab svg {
-      width: 22px;
-      height: 22px;
+      width: 26px;
+      height: 26px;
       fill: currentColor;
       transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }

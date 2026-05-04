@@ -3,9 +3,10 @@ import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
-import type { Store } from "./store.js";
+import { STATUS_COLORS } from "./popup.js";
+import type { AnnotationStore } from "./store.js";
 import type { ThemeColors } from "./styles/theme.js";
-import type { AnnotationRecord } from "./types.js";
+import type { AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
@@ -40,7 +41,7 @@ export class MarkerManager {
     private readonly colors: ThemeColors,
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
-    private readonly store: Store,
+    private readonly store: AnnotationStore,
   ) {
     this.container = el("div", {
       style: `position:absolute;top:0;left:0;width:0;height:0;z-index:${Z_INDEX_MAX - 2};pointer-events:none;`,
@@ -48,6 +49,18 @@ export class MarkerManager {
     this.container.setAttribute("aria-hidden", "false");
     this.container.setAttribute("data-ccm-markers", "true");
     document.body.appendChild(this.container);
+
+    if (!document.getElementById("ccm-marker-anim")) {
+      const styleEl = document.createElement("style");
+      styleEl.id = "ccm-marker-anim";
+      styleEl.textContent = `
+        @keyframes ccm-pulse {
+          0%, 100% { box-shadow: 0 2px 8px rgba(139,92,246,0.55), 0 0 0 0 rgba(139,92,246,0.55); }
+          50%      { box-shadow: 0 2px 8px rgba(139,92,246,0.55), 0 0 0 10px rgba(139,92,246,0); }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
 
     this.onResize = this.scheduleReposition.bind(this);
     this.onScroll = this.scheduleReposition.bind(this);
@@ -115,22 +128,29 @@ export class MarkerManager {
   }
 
   private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
+    const status: FeedbackStatus = record.status ?? "todo";
+    const sc = STATUS_COLORS[status];
     const node = el("button", {
       type: "button",
       "aria-label": this.t("marker.ariaLabel", { n: number }),
       style: `
         position:absolute;width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;
         border-radius:9999px;border:2px solid #fff;
-        background:${this.colors.accentGradient};color:#fff;
+        background:${sc.border};color:#fff;
         font-family:"Inter",system-ui,-apple-system,sans-serif;
         font-size:12px;font-weight:700;line-height:1;
         display:flex;align-items:center;justify-content:center;
-        box-shadow:0 2px 8px ${this.colors.accentGlow}, 0 1px 2px rgba(0,0,0,0.18);
+        box-shadow:0 2px 8px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.18);
         cursor:pointer;pointer-events:auto;
         transform:translate(-50%, -50%);transition:transform 0.15s ease;
       `,
     }) as HTMLButtonElement;
     node.dataset.annotationId = record.id;
+    node.dataset.status = status;
+    node.dataset.kind = record.kind ?? "target";
+    if (status === "question") {
+      node.style.animation = "ccm-pulse 1.6s ease-in-out infinite";
+    }
     setText(node, String(number));
     node.addEventListener("mouseenter", () => {
       node.style.transform = "translate(-50%, -50%) scale(1.12)";
@@ -178,7 +198,35 @@ export class MarkerManager {
     const meta = el("div", {
       style: `font-size:11px;color:${this.colors.textTertiary};margin-bottom:12px;`,
     });
-    setText(meta, new Date(record.createdAt).toLocaleString());
+    const author = record.authorName?.trim() || "Anonymous";
+    setText(meta, `${author} · ${new Date(record.createdAt).toLocaleString()}`);
+
+    const status: FeedbackStatus = record.status ?? "todo";
+    const sc = STATUS_COLORS[status];
+    const statusPill = el("span", {
+      style: `
+        display:inline-block;padding:2px 10px;border-radius:9999px;
+        font-size:10px;font-weight:600;letter-spacing:0.02em;
+        background:${sc.bg};color:${sc.fg};border:1px solid ${sc.border};
+        margin-right:6px;cursor:pointer;
+      `,
+    });
+    setText(statusPill, this.t(`status.${status}`).toUpperCase());
+    statusPill.addEventListener("click", () => this.cycleStatus(record));
+
+    const kindBadge = el("span", {
+      style: `
+        display:inline-block;padding:2px 8px;border-radius:9999px;
+        font-size:10px;font-weight:600;letter-spacing:0.02em;
+        background:${this.colors.glassBgHeavy};color:${this.colors.textTertiary};
+        border:1px solid ${this.colors.border};margin-right:6px;text-transform:uppercase;
+      `,
+    });
+    setText(kindBadge, record.kind ?? "target");
+
+    const tagsRow = el("div", { style: "margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;" });
+    tagsRow.appendChild(statusPill);
+    tagsRow.appendChild(kindBadge);
 
     const btnRow = el("div", { style: "display:flex;justify-content:flex-end;gap:8px;" });
 
@@ -203,6 +251,7 @@ export class MarkerManager {
     `;
     setText(deleteBtn, this.t("marker.popover.delete"));
     deleteBtn.addEventListener("click", () => {
+      if (!window.confirm(this.t("marker.popover.deleteConfirm"))) return;
       this.store.delete(record.id);
       this.bus.emit("feedback:deleted", record.id);
       this.closePopover();
@@ -211,6 +260,7 @@ export class MarkerManager {
 
     btnRow.appendChild(closeBtn);
     btnRow.appendChild(deleteBtn);
+    pop.appendChild(tagsRow);
     pop.appendChild(body);
     pop.appendChild(meta);
     pop.appendChild(btnRow);
@@ -226,6 +276,16 @@ export class MarkerManager {
 
     document.body.appendChild(pop);
     this.popover = pop;
+  }
+
+  private cycleStatus(record: AnnotationRecord): void {
+    const order: FeedbackStatus[] = ["todo", "done", "question"];
+    const cur = record.status ?? "todo";
+    const next = order[(order.indexOf(cur) + 1) % order.length] ?? "todo";
+    this.store.updateStatus?.(record.id, next);
+    record.status = next;
+    this.closePopover();
+    this.refresh();
   }
 
   private closePopover(): void {
@@ -244,6 +304,27 @@ export class MarkerManager {
 
   private reposition(): void {
     for (const entry of this.entries) {
+      const kind = entry.record.kind ?? "target";
+      if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) {
+        entry.node.style.display = this.visible ? "flex" : "none";
+        entry.node.style.top = `${entry.record.pinY}px`;
+        entry.node.style.left = `${entry.record.pinX}px`;
+        entry.anchorEl = null;
+        continue;
+      }
+      if (
+        kind === "area" &&
+        entry.record.areaX != null &&
+        entry.record.areaY != null &&
+        entry.record.areaW != null &&
+        entry.record.areaH != null
+      ) {
+        entry.node.style.display = this.visible ? "flex" : "none";
+        entry.node.style.top = `${entry.record.areaY}px`;
+        entry.node.style.left = `${entry.record.areaX + entry.record.areaW}px`;
+        entry.anchorEl = null;
+        continue;
+      }
       const resolved = resolveAnnotation(
         {
           cssSelector: entry.record.cssSelector,
@@ -265,7 +346,6 @@ export class MarkerManager {
       }
       entry.anchorEl = resolved.element;
       const rect = resolved.rect;
-      // Pin at top-right corner of the resolved rect.
       const top = rect.top + window.scrollY - MARKER_OFFSET;
       const left = rect.right + window.scrollX - MARKER_OFFSET;
       entry.node.style.display = this.visible ? "flex" : "none";

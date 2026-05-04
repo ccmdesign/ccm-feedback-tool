@@ -18,3 +18,7 @@ public/w.js.map
 
 # Claude agent worktrees
 .claude/worktrees/
+.gstack/
+
+# Supabase CLI local cache
+supabase/.temp/

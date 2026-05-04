@@ -70,7 +70,7 @@ export class PinMode {
     /** Excludes the widget host + descendants so pin doesn't outline itself. */
     private readonly shouldIgnoreElement: (element: Element) => boolean,
   ) {
-    this.unsubPinStart = this.bus.on("pin:start", () => this.activate());
+    this.unsubPinStart = this.bus.on("target:start", () => this.activate());
   }
 
   private activate(): void {
@@ -157,7 +157,7 @@ export class PinMode {
       }
     }
 
-    this.bus.emit("pin:end");
+    this.bus.emit("target:end");
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
