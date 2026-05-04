@@ -79,9 +79,8 @@
       /* ---------- hero ---------- */
       .hero {
         position: relative;
-        padding: 96px 0 140px;
+        padding: 72px 0 96px;
         max-width: 760px;
-        min-height: calc(100vh - 80px);
       }
       .eyebrow {
         font-family: "JetBrains Mono", monospace;
@@ -105,12 +104,19 @@
         font-weight: 400;
         color: var(--accent);
       }
+      .hero p.prose {
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--ink-soft);
+        max-width: 60ch;
+        margin: 0 0 32px;
+      }
       .hero p.lede {
         font-size: 20px;
         line-height: 1.5;
-        color: var(--ink-soft);
+        color: var(--ink);
         max-width: 56ch;
-        margin: 0 0 36px;
+        margin: 0 0 20px;
       }
       .hero .meta {
         font-family: "JetBrains Mono", monospace;
@@ -361,6 +367,11 @@
         <p class="lede">
           Pin feedback on any webpage. Hand the JSON to your agent.
         </p>
+        <p class="prose">
+          Drop a single script tag, and any reviewer can drop pinned comments on real DOM
+          elements and export the lot as a clean JSON file. This page is the demo. The button
+          is real.
+        </p>
         <div class="meta">
           <span>One script tag</span>
           <span>Zero config</span>
@@ -483,19 +494,15 @@ Confirm once installed and tell me which file you edited.</span>
         });
       })();
 
-      // marker annotation visible only while hero owns the viewport
+      // marker is a first-impression cue — fade out as soon as user scrolls
       (function () {
         var marker = document.querySelector(".marker-wrap");
-        var hero = document.querySelector(".hero");
-        if (!marker || !hero) return;
+        if (!marker) return;
         var update = function () {
-          var rect = hero.getBoundingClientRect();
-          var heroOwnsViewport = rect.bottom > window.innerHeight - 60;
-          marker.dataset.hidden = heroOwnsViewport ? "false" : "true";
+          marker.dataset.hidden = window.scrollY > 40 ? "true" : "false";
         };
         update();
         window.addEventListener("scroll", update, { passive: true });
-        window.addEventListener("resize", update, { passive: true });
       })();
     </script>
 
