@@ -1,3 +1,6 @@
+import { ensureAuthor } from "./author.js";
+import { AreaMode, CoordPinMode, type AreaCapture, type PinCapture } from "./capture-modes.js";
+import { CloudStore } from "./cloud-store.js";
 import { MOBILE_BREAKPOINT, Z_INDEX_MAX } from "./constants.js";
 import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anchor.js";
 import { EventBus, type WidgetEvents } from "./events.js";
@@ -7,10 +10,10 @@ import { createT } from "./i18n.js";
 import { MarkerManager } from "./markers.js";
 import { PinMode } from "./pin-mode.js";
 import { Popup } from "./popup.js";
-import { Store } from "./store.js";
+import { Store, type AnnotationStore } from "./store.js";
 import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
-import type { CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
+import type { AnchorData, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
 
 let instance: CcmFeedbackInstance | null = null;
 
@@ -54,7 +57,27 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   const colors = buildThemeColors(config.accentColor, config.theme);
   const t = createT();
   const bus = new EventBus<WidgetEvents>();
-  const store = new Store(config.projectName);
+
+  const useCloud = !!(config.supabaseUrl && config.supabaseKey);
+  let store: AnnotationStore;
+  let cloudStore: CloudStore | null = null;
+  if (useCloud) {
+    cloudStore = new CloudStore({
+      url: config.supabaseUrl as string,
+      apiKey: config.supabaseKey as string,
+      projectName: config.projectName,
+      log,
+      onChange: () => {
+        markers.refresh();
+        fab.updateCount(store.list().length);
+      },
+    });
+    store = cloudStore;
+    log("Cloud mode enabled", { url: config.supabaseUrl });
+  } else {
+    store = new Store(config.projectName);
+    log("LocalStorage mode");
+  }
 
   const host = document.createElement("ccm-feedback-widget");
   host.style.cssText = `position:fixed;z-index:${Z_INDEX_MAX};`;
@@ -80,22 +103,38 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
 
   const shouldIgnore = (element: Element) => element === host || host.contains(element);
 
+  const emptyAnchor = (): AnchorData => ({
+    cssSelector: "",
+    xpath: "",
+    textSnippet: "",
+    elementTag: "",
+    elementId: undefined,
+    textPrefix: "",
+    textSuffix: "",
+    fingerprint: "",
+    neighborText: "",
+  });
+
   const openPopupForElement = async (element: HTMLElement): Promise<void> => {
     const bounds = element.getBoundingClientRect();
-    const message = await popup.show(bounds);
-    if (!message) return;
+    const result = await popup.show(bounds);
+    if (!result) return;
+    const authorName = ensureAuthor();
     const anchor = generateAnchor(element);
     const anchorBounds = element.getBoundingClientRect();
     const rect = rectToPercentages(anchorBounds, anchorBounds);
     const record = store.save({
       projectName: config.projectName,
-      message,
+      message: result.message,
+      authorName,
       url: sanitizeUrl(window.location.href),
       path: window.location.pathname,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       userAgent: navigator.userAgent,
       anchor,
       rect,
+      status: result.status,
+      kind: "target",
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
@@ -103,7 +142,69 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     log("Saved", record.id);
   };
 
+  const onPinCapture = async (capture: PinCapture): Promise<void> => {
+    const anchorRect = new DOMRect(
+      capture.x - window.scrollX,
+      capture.y - window.scrollY,
+      0,
+      0,
+    );
+    const result = await popup.show(anchorRect);
+    if (!result) return;
+    const record = store.save({
+      projectName: config.projectName,
+      message: result.message,
+      authorName: ensureAuthor(),
+      url: sanitizeUrl(window.location.href),
+      path: window.location.pathname,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      userAgent: navigator.userAgent,
+      anchor: emptyAnchor(),
+      rect: { xPct: 0, yPct: 0, wPct: 0, hPct: 0 },
+      status: result.status,
+      kind: "pin",
+      pin: { x: capture.x, y: capture.y },
+      capturedElements: capture.elements,
+    });
+    bus.emit("feedback:saved", record);
+    markers.addOne(record);
+    fab.updateCount(store.list().length);
+    log("Saved pin", record.id);
+  };
+
+  const onAreaCapture = async (capture: AreaCapture): Promise<void> => {
+    const anchorRect = new DOMRect(
+      capture.x - window.scrollX,
+      capture.y - window.scrollY,
+      capture.w,
+      capture.h,
+    );
+    const result = await popup.show(anchorRect);
+    if (!result) return;
+    const record = store.save({
+      projectName: config.projectName,
+      message: result.message,
+      authorName: ensureAuthor(),
+      url: sanitizeUrl(window.location.href),
+      path: window.location.pathname,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      userAgent: navigator.userAgent,
+      anchor: emptyAnchor(),
+      rect: { xPct: 0, yPct: 0, wPct: 0, hPct: 0 },
+      status: result.status,
+      kind: "area",
+      area: { x: capture.x, y: capture.y, w: capture.w, h: capture.h },
+      capturedElements: capture.elements,
+    });
+    bus.emit("feedback:saved", record);
+    markers.addOne(record);
+    fab.updateCount(store.list().length);
+    log("Saved area", record.id);
+  };
+
   const pinMode = new PinMode(colors, bus, t, openPopupForElement, shouldIgnore);
+  const coordPinMode = new CoordPinMode(colors, bus, t, onPinCapture, shouldIgnore);
+  const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore);
 
   bus.on("export:click", () => {
     const records = store.list();
@@ -127,13 +228,24 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   // programmatically add an annotation have access to the anchor logic.
   void findAnchorElement;
 
+  // Initial render uses whatever is already in the store. For cloud mode,
+  // refresh once the network fetch completes so other reviewers' comments
+  // appear without requiring a page reload.
   markers.refresh();
   fab.updateCount(store.list().length);
+  if (cloudStore) {
+    void cloudStore.init().then(() => {
+      markers.refresh();
+      fab.updateCount(store.list().length);
+    });
+  }
 
   instance = {
     destroy: () => {
       log("Destroying widget");
       pinMode.destroy();
+      coordPinMode.destroy();
+      areaMode.destroy();
       markers.destroy();
       fab.destroy();
       popup.destroy();
@@ -175,16 +287,34 @@ declare global {
   }
 }
 
+function isLocalHost(hostname: string): boolean {
+  if (!hostname) return true;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (hostname.endsWith(".local") || hostname.endsWith(".localhost")) return true;
+  return false;
+}
+
+function deriveProjectFromHost(): string {
+  const { hostname, port } = window.location;
+  const host = hostname || "site";
+  const safe = host.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "site";
+  return port ? `${safe}-${port}` : safe;
+}
+
 if (typeof window !== "undefined") {
   window.CcmFeedback = { init: initCcmFeedback };
 
   const currentScript = document.currentScript as HTMLScriptElement | null;
-  if (currentScript?.dataset.project) {
+  if (currentScript) {
+    const projectName = currentScript.dataset.project || deriveProjectFromHost();
+    const local = isLocalHost(window.location.hostname);
     const cfg: CcmFeedbackConfig = {
-      projectName: currentScript.dataset.project,
+      projectName,
       ...(currentScript.dataset.accent ? { accentColor: currentScript.dataset.accent } : {}),
       ...(currentScript.dataset.theme ? { theme: currentScript.dataset.theme as CcmFeedbackConfig["theme"] } : {}),
       ...(currentScript.dataset.debug === "true" ? { debug: true } : {}),
+      ...(!local && currentScript.dataset.supabaseUrl ? { supabaseUrl: currentScript.dataset.supabaseUrl } : {}),
+      ...(!local && currentScript.dataset.supabaseKey ? { supabaseKey: currentScript.dataset.supabaseKey } : {}),
     };
     const boot = () => initCcmFeedback(cfg);
     if (document.readyState === "loading") {

@@ -2,9 +2,22 @@ import { Z_INDEX_MAX } from "./constants.js";
 import { el, setText } from "./dom-utils.js";
 import type { TFunction } from "./i18n.js";
 import type { ThemeColors } from "./styles/theme.js";
+import { FEEDBACK_STATUSES, type FeedbackStatus } from "./types.js";
+
+export interface PopupResult {
+  message: string;
+  status: FeedbackStatus;
+}
+
+/** Visual mapping for status pills. */
+export const STATUS_COLORS: Record<FeedbackStatus, { fg: string; bg: string; border: string }> = {
+  todo: { fg: "#a16207", bg: "#fef3c7", border: "#f59e0b" },
+  done: { fg: "#15803d", bg: "#dcfce7", border: "#22c55e" },
+  question: { fg: "#6d28d9", bg: "#ede9fe", border: "#8b5cf6" },
+};
 
 /**
- * Minimal comment composer — textarea + Cancel + Submit.
+ * Minimal comment composer — textarea + status selector + Cancel + Submit.
  * Positioned near an anchor element. Lives outside the Shadow DOM so it floats
  * above host content without clipping.
  */
@@ -12,9 +25,11 @@ export class Popup {
   private root: HTMLElement;
   private textarea: HTMLTextAreaElement;
   private submitBtn: HTMLButtonElement;
-  private resolve: ((message: string | null) => void) | null = null;
+  private resolve: ((result: PopupResult | null) => void) | null = null;
   private previouslyFocused: HTMLElement | null = null;
   private onKeydownTrap: ((e: KeyboardEvent) => void) | null = null;
+  private status: FeedbackStatus = "todo";
+  private statusButtons = new Map<FeedbackStatus, HTMLButtonElement>();
 
   constructor(
     private readonly colors: ThemeColors,
@@ -106,20 +121,62 @@ export class Popup {
     btnRow.appendChild(cancelBtn);
     btnRow.appendChild(this.submitBtn);
 
+    const statusRow = el("div", {
+      style: "display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap;",
+    });
+    const statusLabel = el("span", {
+      style: `font-size:11px;color:${this.colors.textTertiary};margin-right:4px;`,
+    });
+    setText(statusLabel, `${this.t("status.label")}:`);
+    statusRow.appendChild(statusLabel);
+    for (const s of FEEDBACK_STATUSES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.status = s;
+      btn.style.cssText = `
+        height:24px;padding:0 10px;border-radius:9999px;
+        font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;
+        transition:all 0.15s ease;
+      `;
+      setText(btn, this.t(`status.${s}`));
+      btn.addEventListener("click", () => this.setStatus(s));
+      this.statusButtons.set(s, btn);
+      statusRow.appendChild(btn);
+    }
+
     this.root.appendChild(this.textarea);
+    this.root.appendChild(statusRow);
     this.root.appendChild(hint);
     this.root.appendChild(btnRow);
     document.body.appendChild(this.root);
+    this.applyStatusStyles();
+  }
+
+  private setStatus(status: FeedbackStatus): void {
+    this.status = status;
+    this.applyStatusStyles();
+  }
+
+  private applyStatusStyles(): void {
+    for (const [s, btn] of this.statusButtons) {
+      const c = STATUS_COLORS[s];
+      const active = s === this.status;
+      btn.style.background = active ? c.bg : "transparent";
+      btn.style.color = active ? c.fg : this.colors.textTertiary;
+      btn.style.border = `1px solid ${active ? c.border : this.colors.border}`;
+    }
   }
 
   /**
    * Show the popup near `anchorRect` and resolve with the comment message,
    * or null if cancelled.
    */
-  show(anchorRect: DOMRect): Promise<string | null> {
+  show(anchorRect: DOMRect): Promise<PopupResult | null> {
     return new Promise((resolve) => {
       this.resolve = resolve;
       this.textarea.value = "";
+      this.status = "todo";
+      this.applyStatusStyles();
       this.updateSubmitState();
       this.previouslyFocused = document.activeElement as HTMLElement | null;
 
@@ -173,7 +230,7 @@ export class Popup {
   private submit(): void {
     const message = this.textarea.value.trim();
     if (!message) return;
-    this.resolve?.(message);
+    this.resolve?.({ message, status: this.status });
     this.resolve = null;
     this.hide();
   }

@@ -5,7 +5,9 @@
 
 const STRINGS: Record<string, string> = {
   "fab.aria": "Feedback",
-  "fab.pinLabel": "Comment on element",
+  "fab.targetLabel": "Target element",
+  "fab.pinLabel": "Drop pin",
+  "fab.areaLabel": "Capture area",
   "fab.toggleOn": "Hide comments",
   "fab.toggleOff": "Show comments",
   "fab.export": "Export JSON",
@@ -14,6 +16,12 @@ const STRINGS: Record<string, string> = {
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",
+  "coordPin.instruction": "Click anywhere to drop a pin",
+  "area.instruction": "Drag to capture an area",
+  "status.todo": "Todo",
+  "status.done": "Done",
+  "status.question": "Question",
+  "status.label": "Status",
   "popup.ariaLabel": "Comment composer",
   "popup.placeholder": "Leave a comment…",
   "popup.textareaAria": "Comment",
@@ -24,6 +32,7 @@ const STRINGS: Record<string, string> = {
   "marker.ariaLabel": "Comment #{n}",
   "marker.popover.delete": "Delete",
   "marker.popover.close": "Close",
+  "marker.popover.deleteConfirm": "Delete this comment? This cannot be undone.",
   "toast.exported": "Exported {n} annotation(s)",
   "toast.empty": "No annotations to export",
 };
