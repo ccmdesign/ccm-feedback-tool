@@ -287,18 +287,34 @@ declare global {
   }
 }
 
+function isLocalHost(hostname: string): boolean {
+  if (!hostname) return true;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (hostname.endsWith(".local") || hostname.endsWith(".localhost")) return true;
+  return false;
+}
+
+function deriveProjectFromHost(): string {
+  const { hostname, port } = window.location;
+  const host = hostname || "site";
+  const safe = host.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "site";
+  return port ? `${safe}-${port}` : safe;
+}
+
 if (typeof window !== "undefined") {
   window.CcmFeedback = { init: initCcmFeedback };
 
   const currentScript = document.currentScript as HTMLScriptElement | null;
-  if (currentScript?.dataset.project) {
+  if (currentScript) {
+    const projectName = currentScript.dataset.project || deriveProjectFromHost();
+    const local = isLocalHost(window.location.hostname);
     const cfg: CcmFeedbackConfig = {
-      projectName: currentScript.dataset.project,
+      projectName,
       ...(currentScript.dataset.accent ? { accentColor: currentScript.dataset.accent } : {}),
       ...(currentScript.dataset.theme ? { theme: currentScript.dataset.theme as CcmFeedbackConfig["theme"] } : {}),
       ...(currentScript.dataset.debug === "true" ? { debug: true } : {}),
-      ...(currentScript.dataset.supabaseUrl ? { supabaseUrl: currentScript.dataset.supabaseUrl } : {}),
-      ...(currentScript.dataset.supabaseKey ? { supabaseKey: currentScript.dataset.supabaseKey } : {}),
+      ...(!local && currentScript.dataset.supabaseUrl ? { supabaseUrl: currentScript.dataset.supabaseUrl } : {}),
+      ...(!local && currentScript.dataset.supabaseKey ? { supabaseKey: currentScript.dataset.supabaseKey } : {}),
     };
     const boot = () => initCcmFeedback(cfg);
     if (document.readyState === "loading") {
