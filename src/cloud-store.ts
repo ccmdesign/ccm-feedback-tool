@@ -1,11 +1,6 @@
 import { RealtimeClient } from "./realtime.js";
-import { buildRecord, normalizePath, type AnnotationStore, type SaveInput } from "./store.js";
-import type {
-  AnnotationKind,
-  AnnotationRecord,
-  CapturedElement,
-  FeedbackStatus,
-} from "./types.js";
+import { type AnnotationStore, buildRecord, normalizePath, type SaveInput } from "./store.js";
+import type { AnnotationKind, AnnotationRecord, CapturedElement, FeedbackStatus } from "./types.js";
 
 /**
  * Cloud-backed store using Supabase PostgREST. No SDK dependency — raw fetch.
@@ -170,9 +165,7 @@ export class CloudStore implements AnnotationStore {
   /** Fetch all records for the current project. Resolves on success or failure (logs on failure). */
   async init(): Promise<void> {
     try {
-      const url = `${this.endpoint}?project_name=eq.${encodeURIComponent(
-        this.projectName,
-      )}&order=created_at.desc`;
+      const url = `${this.endpoint}?project_name=eq.${encodeURIComponent(this.projectName)}&order=created_at.desc`;
       const res = await fetch(url, { headers: this.headers });
       if (!res.ok) {
         const body = await res.text();

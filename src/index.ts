@@ -1,5 +1,5 @@
 import { ensureAuthor } from "./author.js";
-import { AreaMode, CoordPinMode, type AreaCapture, type PinCapture } from "./capture-modes.js";
+import { type AreaCapture, AreaMode, CoordPinMode, type PinCapture } from "./capture-modes.js";
 import { CloudStore } from "./cloud-store.js";
 import { MOBILE_BREAKPOINT, Z_INDEX_MAX } from "./constants.js";
 import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anchor.js";
@@ -10,7 +10,7 @@ import { createT } from "./i18n.js";
 import { MarkerManager } from "./markers.js";
 import { PinMode } from "./pin-mode.js";
 import { Popup } from "./popup.js";
-import { Store, type AnnotationStore } from "./store.js";
+import { type AnnotationStore, Store } from "./store.js";
 import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
 import type { AnchorData, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
@@ -143,12 +143,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   };
 
   const onPinCapture = async (capture: PinCapture): Promise<void> => {
-    const anchorRect = new DOMRect(
-      capture.x - window.scrollX,
-      capture.y - window.scrollY,
-      0,
-      0,
-    );
+    const anchorRect = new DOMRect(capture.x - window.scrollX, capture.y - window.scrollY, 0, 0);
     const result = await popup.show(anchorRect);
     if (!result) return;
     const record = store.save({
@@ -173,12 +168,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   };
 
   const onAreaCapture = async (capture: AreaCapture): Promise<void> => {
-    const anchorRect = new DOMRect(
-      capture.x - window.scrollX,
-      capture.y - window.scrollY,
-      capture.w,
-      capture.h,
-    );
+    const anchorRect = new DOMRect(capture.x - window.scrollX, capture.y - window.scrollY, capture.w, capture.h);
     const result = await popup.show(anchorRect);
     if (!result) return;
     const record = store.save({
@@ -297,7 +287,11 @@ function isLocalHost(hostname: string): boolean {
 function deriveProjectFromHost(): string {
   const { hostname, port } = window.location;
   const host = hostname || "site";
-  const safe = host.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "site";
+  const safe =
+    host
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "site";
   return port ? `${safe}-${port}` : safe;
 }
 
