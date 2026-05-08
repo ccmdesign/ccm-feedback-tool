@@ -2,6 +2,7 @@ node_modules/
 dist/
 public/w.js
 public/w.js.map
+public/llms.txt
 *.log
 .DS_Store
 .env

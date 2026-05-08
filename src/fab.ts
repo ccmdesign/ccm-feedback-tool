@@ -83,9 +83,10 @@ export class Fab {
 
       const label = document.createElement("span");
       label.className = "sp-radial-label";
-      label.style.cssText = item.direction === "up"
-        ? "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;"
-        : "position:absolute;bottom:54px;left:50%;transform:translateX(-50%);white-space:nowrap;";
+      label.style.cssText =
+        item.direction === "up"
+          ? "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;"
+          : "position:absolute;bottom:54px;left:50%;transform:translateX(-50%);white-space:nowrap;";
       label.textContent = item.label;
       btn.appendChild(label);
 

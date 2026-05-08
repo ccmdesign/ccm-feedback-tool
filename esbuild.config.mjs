@@ -23,6 +23,8 @@ const options = {
 function mirrorToPublic() {
   if (!existsSync("public")) mkdirSync("public", { recursive: true });
   cpSync("dist/w.js", "public/w.js");
+  // Mirror llms.txt so Netlify (publish dir = public/) serves it at /llms.txt.
+  if (existsSync("llms.txt")) cpSync("llms.txt", "public/llms.txt");
 }
 
 if (watch) {

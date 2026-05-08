@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CCM Feedback — visual website reviews, one script tag</title>
-    <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent." />
+    <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent. Open source, MIT licensed." />
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt — agent-readable index" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -357,10 +358,15 @@
           <span class="mark-dot" aria-hidden="true"></span>
           <span>CCM Feedback</span>
         </a>
+        <nav>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool#readme" target="_blank" rel="noopener">Docs ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool/blob/main/docs/self-hosting.md" target="_blank" rel="noopener">Self-host ↗</a>
+        </nav>
       </header>
 
       <section class="hero">
-        <p class="eyebrow">A widget by CCM Design</p>
+        <p class="eyebrow">A widget by CCM Design · Open source · MIT</p>
         <h1>
           Simplifying <em>Website</em> Review.
         </h1>
@@ -390,30 +396,50 @@
             <p class="agent-eyebrow">02 — installation</p>
             <h2>Give this to your agent.</h2>
             <p class="desc">
-              Paste the prompt into Claude Code, Cursor, or whichever agent runs your repo.
-              The widget auto-namespaces by hostname — no project slug, no config, just one script tag.
+              Paste this prompt into Claude Code, Cursor, or whichever agent runs your repo.
+              The agent installs the widget, then asks whether you want cloud sync or RLS hardening
+              and fetches those sub-prompts from GitHub itself. You only ever paste one thing.
+            </p>
+            <p class="desc" style="margin-top: 14px;">
+              <a href="https://github.com/ccmdesign/ccm-feedback-tool/tree/main/prompts" target="_blank" rel="noopener" style="color: var(--accent);">See all agent prompts on GitHub ↗</a>
             </p>
           </div>
 
           <div class="prompt-wrap">
             <div class="prompt" id="prompt">
               <button type="button" class="copy-btn" id="copy" aria-label="Copy prompt">copy</button>
-<span>Add the CCM Feedback widget to my site so we can collect visual feedback on every page.
+<span>Add the CCM Feedback widget to my site. Run this end-to-end — don't make me paste another prompt.
 
-1. Drop this single script tag right before &lt;/body&gt; in the global layout
-   (e.g. _app.tsx, app.html, layout.astro, or whichever file renders
-   the page chrome for every route):
+STEP 1 — INSTALL (always)
 
-   &lt;script src="https://ccm-feedback-582.netlify.app/w.js" defer&gt;&lt;/script&gt;
+Find the global layout file (pages/_app.tsx, app/layout.tsx, app.vue, src/app.html, layouts/baseof.html, application.html.erb, base.html — whichever wraps every route). Add this right before &lt;/body&gt;:
 
-2. That's it. The widget auto-namespaces feedback by hostname,
-   so production and staging stay isolated automatically.
+  &lt;script src="https://ccm-feedback-582.netlify.app/w.js" defer&gt;&lt;/script&gt;
 
-3. Optional: pass data-accent="#hex" to match brand color and
-   data-theme="auto" if the site has a dark mode.
+Auto-namespaces by hostname (prod and staging stay isolated). Optional attrs: data-accent="#hex", data-theme="auto", data-debug="true".
 
-The widget is desktop-only and shows a floating button bottom-right.
-Confirm once installed and tell me which file you edited.</span>
+Verify by running the dev server and confirming a floating button appears bottom-right on desktop (≥768px).
+
+STEP 2 — ASK ME (after install verifies green)
+
+"The widget is installed in localStorage mode. Want me to also set up:
+ (a) Cloud sync via Supabase (multi-reviewer, multi-device)?
+ (b) If yes to (a) — production RLS hardening?"
+
+If I say no to (a), stop and report what you changed.
+
+STEP 3 — FETCH AND EXECUTE SUB-PROMPTS YOURSELF
+
+Don't ask me to paste them. WebFetch each, read cold, execute end-to-end:
+
+ (a) https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md
+ (b) https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harden-rls.md
+
+STEP 4 — REPORT
+
+Tell me which files you edited, whether (a) and (b) ran, and any failures.
+
+Notes: widget is desktop-only. If a Supabase key is needed later, ONLY the anon/publishable key is acceptable — never the service-role key.</span>
             </div>
           </div>
         </div>
@@ -425,6 +451,9 @@ Confirm once installed and tell me which file you edited.</span>
           <em>— streamlining website reviews.</em>
         </p>
         <div class="links">
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE" target="_blank" rel="noopener">MIT ↗</a>
+          <a href="/llms.txt">llms.txt ↗</a>
           <a href="https://www.ccm.design" target="_blank" rel="noopener">ccm.design ↗</a>
         </div>
       </footer>
@@ -432,7 +461,8 @@ Confirm once installed and tell me which file you edited.</span>
 
     <!-- felt-tip marker annotation around the FAB (fixed, bottom-right) -->
     <div class="marker-wrap" aria-hidden="true">
-      <svg viewBox="0 0 260 220" preserveAspectRatio="none">
+      <svg viewBox="0 0 260 220" preserveAspectRatio="none" role="presentation">
+        <title>Marker annotation pointing at the floating action button</title>
         <defs>
           <filter id="marker-rough" x="-10%" y="-10%" width="120%" height="120%">
             <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" />
@@ -477,16 +507,16 @@ Confirm once installed and tell me which file you edited.</span>
 
     <script>
       // copy-to-clipboard for the agent prompt
-      (function () {
+      (() => {
         var btn = document.getElementById("copy");
         var promptEl = document.getElementById("prompt");
         if (!btn || !promptEl) return;
-        btn.addEventListener("click", function () {
+        btn.addEventListener("click", () => {
           var text = promptEl.querySelector("span").innerText;
-          navigator.clipboard.writeText(text).then(function () {
+          navigator.clipboard.writeText(text).then(() => {
             btn.dataset.state = "copied";
             btn.textContent = "copied";
-            setTimeout(function () {
+            setTimeout(() => {
               delete btn.dataset.state;
               btn.textContent = "copy";
             }, 1800);
@@ -495,10 +525,10 @@ Confirm once installed and tell me which file you edited.</span>
       })();
 
       // marker is a first-impression cue — fade out as soon as user scrolls
-      (function () {
+      (() => {
         var marker = document.querySelector(".marker-wrap");
         if (!marker) return;
-        var update = function () {
+        var update = () => {
           marker.dataset.hidden = window.scrollY > 40 ? "true" : "false";
         };
         update();

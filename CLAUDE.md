@@ -1,37 +1,44 @@
-# @ccm-feedback/*
+# ccm-feedback
 
 ## Build & Test
-- `bun install` — install dependencies (bun workspaces)
-- `bun run build` — build all packages via Turborepo + tsup (cached)
-- `bun run check` — TypeScript type-checking via Turborepo (cached)
-- `bun run clean` — clean all dist/ directories
-- `bun run test` — run tests in watch mode
-- `bun run test:run` — run tests once
+- `bun install` — install dependencies
+- `bun run build` — esbuild → `dist/w.js` (also copied to `public/w.js` by config)
+- `bun run dev` — esbuild watch
+- `bun run serve` — build + serve `public/` on `:5173`
+- `bun run check` — `tsc --noEmit`
 - `bun run lint` — biome check
 - `bun run lint:fix` — biome auto-fix
 
+There is currently no test suite. Verification = `bun run check` + `bun run lint` + manual browser smoke test on the demo page.
+
 ## Architecture
-- **Monorepo** with bun workspaces — 6 packages in `packages/`:
-  - `@ccm-feedback/core` — shared types, schema, store errors + helpers (internal, not published)
-  - `@ccm-feedback/widget` — browser feedback widget (Shadow DOM, closed mode). Accepts `store` option for client-side mode (no server needed)
-  - `@ccm-feedback/adapter-prisma` — server-side Prisma request handlers
-  - `@ccm-feedback/adapter-memory` — in-memory adapter (testing, demos, serverless)
-  - `@ccm-feedback/adapter-localstorage` — client-side localStorage adapter (demos, prototyping)
-  - `@ccm-feedback/cli` — CLI tool for project setup (`ccm-feedback init/sync/status/doctor`)
-- Widget uses Shadow DOM (mode: closed), overlay lives outside Shadow DOM
-- DOM anchoring: @medv/finder CSS selector + XPath fallback + text snippet fallback
-- Annotations stored as % relative to anchor element bounding box
-- Core is an Internal Package (exports raw TS, no build step), bundled into consumers via `noExternal: ["@ccm-feedback/core"]` in tsup
-- Turborepo handles build orchestration, dependency ordering (`^build`), and local caching
-- Prisma schema lives at `prisma/schema.prisma` (repo root). Models: `FeedbackItem` + `FeedbackAnnotation`. Source of truth is `packages/core/src/schema.ts` (`CCM_FEEDBACK_MODELS`).
-- Demo app (`apps/demo`) uses `resolveStore()` in `src/lib/store.ts` — picks `PrismaStore` when `DATABASE_URL` is set, falls back to the memory store otherwise.
+Single-package, single-script-tag widget. `src/` → `dist/w.js` via `esbuild.config.mjs`. The built file is hosted (Netlify) and consumed via `<script src="…/w.js" data-project="…">`.
+
+- **Entry:** `src/index.ts` reads `data-*` attrs from its own `<script>` tag, then mounts.
+- **Shadow DOM:** widget UI lives in an open Shadow DOM (so host pages and test harnesses can introspect it; CSS isolation comes from the shadow root, not the closed mode). Markers/overlay live outside the shadow root so they hit-test against page elements.
+- **Stores:** common contract `AnnotationStore` in `src/store.ts` with two impls:
+  - `Store` (localStorage) — default, no infra. Key: `ccm-feedback:<projectName>`.
+  - `CloudStore` (`src/cloud-store.ts`) — Supabase PostgREST + Realtime. Activated when both `data-supabase-url` and `data-supabase-key` are set on the script tag (or passed to `init()`). Falls back to localStorage when either is empty. Auto-disabled on localhost / `*.local` so dev never writes to the production demo DB.
+- **DOM anchoring** (`src/dom/`): four-strategy resolver — `@medv/finder` CSS selector, XPath, text snippet w/ prefix/suffix + neighbor text, structural fingerprint (tag chain). Position stored as % of anchor element bounding box.
+- **Annotation kinds:** `target` (element anchor), `pin` (viewport coord), `area` (viewport rect). Schema in `src/types.ts`.
+- **i18n:** English (default) + French in `src/i18n.ts`.
+
+## Supabase (optional cloud mode)
+- Single table `ccm_widget_annotations`. Schema in `supabase/migrations/0001_init.sql`. Subsequent migrations: `0002_status_pin_area.sql`, `0003_realtime.sql`.
+- Widget speaks raw PostgREST + Realtime over `fetch` and native `WebSocket` — no `@supabase/supabase-js` dependency.
+- Self-hosters: create a Supabase project, run all migrations in order, paste the project URL + anon key into the script tag's `data-supabase-url` / `data-supabase-key`. Service role key is **never** used by the widget.
+- Local dev `.env` is for the maintainer's demo project only. `.env.example` documents the shape. The widget runtime never reads env vars.
 
 ## Code Style
-- TypeScript strict mode with exactOptionalPropertyTypes
+- TypeScript strict mode with `exactOptionalPropertyTypes`
 - Conventional Commits: `type(scope): description`
-- i18n: English (default) and French locales
+- Biome for formatting + linting
+
+## Branch flow
+- Work happens on `dev` or worktree branches off `dev`.
+- PRs target `dev`. Never merge to `main` without explicit user instruction.
 
 ## Attribution
-- CCM Feedback is a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus, MIT licensed.
-- `LICENSE` preserves the original copyright. `NOTICE` documents the attribution. The README footer and the demo's landing footer both link to the upstream repo.
+- ccm-feedback is a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus, MIT licensed.
+- `LICENSE` preserves the original copyright. `NOTICE` documents the attribution.
 - The `upstream` git remote points at `NeosiaNexus/SitePing` and must not be modified.

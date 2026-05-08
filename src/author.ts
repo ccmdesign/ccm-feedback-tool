@@ -6,7 +6,7 @@ const FALLBACK = "Anonymous";
 export function loadAuthor(): string | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v && v.trim() ? v.trim() : null;
+    return v?.trim() ? v.trim() : null;
   } catch {
     return null;
   }

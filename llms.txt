@@ -1,0 +1,70 @@
+# ccm-feedback
+
+> A single-script-tag feedback widget for visual website reviews. Reviewers pin comments on any element of any HTML page, then export a JSON file (or sync via Supabase) for handoff to a developer or AI coding agent. Browser-only. No SDK. localStorage by default; Supabase cloud mode is opt-in.
+
+ccm-feedback is a TypeScript widget bundled to a single static JS file (`dist/w.js`, ~30 KB minified). It self-installs from a `<script>` tag, mounts a floating action button on desktop viewports, and persists pinned comments locally or to Supabase. It is a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) (MIT) maintained by [CCM Design](https://ccm.design).
+
+Use this file as the index when reading the project as an AI agent. Each linked file is small enough to fetch in one read.
+
+## Docs
+
+- [README](README.md): install via script tag, options, modes (local vs cloud), data model summary, develop/deploy, attribution.
+- [docs/self-hosting.md](docs/self-hosting.md): how to host the widget script, the Supabase backend, and the demo page yourself. Migration order, RLS hardening, backups.
+- [docs/cloud-mode.md](docs/cloud-mode.md): how `CloudStore` works — PostgREST + Realtime, cache-and-sync writes, project scoping, conflict semantics, localhost auto-disable, failure-mode table.
+- [docs/anchoring.md](docs/anchoring.md): four-strategy DOM anchor resolver (id → CSS → XPath → smart scan with fingerprint + text + neighbors), confidence scoring, failure modes.
+- [docs/data-model.md](docs/data-model.md): full `AnnotationRecord` schema, three annotation kinds (target/pin/area), localStorage shape, Postgres shape, export JSON shape, URL sanitization.
+- [docs/architecture.md](docs/architecture.md): build pipeline, boot sequence, full module map of `src/`, store contract, event bus, performance notes, what's intentionally out of scope.
+
+## Source
+
+- [src/index.ts](src/index.ts): entry point. Reads `data-*` attrs, mounts widget, picks store (Cloud vs Local), wires events. `sanitizeUrl()` strips sensitive query params.
+- [src/types.ts](src/types.ts): `AnnotationRecord`, `CcmFeedbackConfig`, `FeedbackStatus`, `AnnotationKind`, `CapturedElement`. Source of truth for the data model.
+- [src/store.ts](src/store.ts): `AnnotationStore` interface + `Store` (localStorage). `buildRecord()`, `normalizePath()`.
+- [src/cloud-store.ts](src/cloud-store.ts): `CloudStore` against Supabase PostgREST. Cache-and-sync. Calls `RealtimeClient` for cross-browser updates.
+- [src/realtime.ts](src/realtime.ts): raw WebSocket client speaking the Supabase Realtime protocol. No `@supabase/supabase-js` dependency.
+- [src/dom/resolver.ts](src/dom/resolver.ts): four-level anchor resolver with confidence scoring (id 1.0 → css 0.95 → xpath 0.9 → scan ≤ 0.85).
+- [src/dom/anchor.ts](src/dom/anchor.ts): `generateAnchor()` capture + `rectToPercentages()` math.
+
+## Schema
+
+- [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql): baseline `ccm_widget_annotations` table + indexes + permissive anon RLS policies. **Required.**
+- [supabase/migrations/0002_status_pin_area.sql](supabase/migrations/0002_status_pin_area.sql): adds `status`, `kind`, `pin_x/pin_y`, `area_x/y/w/h`, `captured_elements`. **Required for current build.**
+- [supabase/migrations/0003_realtime.sql](supabase/migrations/0003_realtime.sql): enables `supabase_realtime` publication + `replica identity full`. **Required for cloud mode cross-browser sync.**
+
+## Agent prompts
+
+ccm-feedback's DX posture: **the user only ever pastes one prompt.** The orchestrator handles install and asks about cloud sync + RLS hardening; if the user wants either, the agent `WebFetch`es the corresponding sub-prompt from GitHub and executes it. Sub-prompts exist as files so the orchestrator can fetch them, not so users have to copy them.
+
+- [prompts/install-widget.md](prompts/install-widget.md): **the orchestrator.** This is what the user pastes. Inlines install (framework matrix for Next/Astro/Nuxt/SvelteKit/Remix/Hugo/Rails/Django/static), then routes to cloud / harden sub-flows by raw GitHub URL.
+- [prompts/self-host-supabase.md](prompts/self-host-supabase.md): sub-flow. Agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end. Refuses service-role key.
+- [prompts/harden-rls.md](prompts/harden-rls.md): sub-flow. Agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
+- [prompts/README.md](prompts/README.md): explains the one-prompt pattern. Most users skip this.
+- [scripts/apply-migrations.sh](scripts/apply-migrations.sh): plain-bash alternative for users who don't want an agent — `psql` against a Supabase connection string, applies all `supabase/migrations/*.sql` in order.
+
+Raw URLs the orchestrator uses (only the orchestrator fetches these — users don't):
+- `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md`
+- `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harden-rls.md`
+
+## Project meta
+
+- [LICENSE](LICENSE): MIT, original copyright preserved (SitePing upstream).
+- [NOTICE](NOTICE): attribution detail.
+- [CONTRIBUTING.md](CONTRIBUTING.md): dev setup, branch flow (`dev` only, never `main` without explicit instruction), Conventional Commits, verification checklist.
+- [SECURITY.md](SECURITY.md): vulnerability reporting → dev@ccmdesign.ca. Threat model and out-of-scope list.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): Contributor Covenant 2.1.
+- [CLAUDE.md](CLAUDE.md): build commands, architecture summary, branch flow, attribution. Equivalent of an AGENTS.md file for this repo.
+
+## Quick facts for agents
+
+- **Language:** TypeScript (strict + `exactOptionalPropertyTypes`).
+- **Runtime:** browser only. No Node runtime, no server.
+- **Bundler:** esbuild (`esbuild.config.mjs`). One IIFE bundle, no chunks.
+- **Package manager:** Bun 1.3+.
+- **Linter / formatter:** Biome.
+- **Tests:** none yet. Verification = `bun run check && bun run lint && bun run build` + manual browser smoke test.
+- **Mounting:** `<ccm-feedback-widget>` custom host element with open Shadow DOM. Markers/overlay live outside the shadow root so they hit-test against page elements.
+- **Mobile:** below 768px the widget is hidden by design; this is a desktop review tool.
+- **Cloud mode trigger:** both `data-supabase-url` AND `data-supabase-key` set, AND not running on localhost / `*.local`.
+- **localStorage key:** `ccm-feedback:<projectName>`.
+- **Postgres table:** `public.ccm_widget_annotations`.
+- **Demo:** https://ccm-feedback-582.netlify.app (the page itself runs the widget).
