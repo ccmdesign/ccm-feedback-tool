@@ -33,13 +33,17 @@ Use this file as the index when reading the project as an AI agent. Each linked 
 
 ## Agent prompts
 
-ccm-feedback ships ready-to-paste prompts for coding agents. Each is self-contained — paste into an agent (Claude Code, Cursor, Copilot) and it executes end-to-end.
+ccm-feedback's DX posture: **the user only ever pastes one prompt.** The orchestrator handles install and asks about cloud sync + RLS hardening; if the user wants either, the agent `WebFetch`es the corresponding sub-prompt from GitHub and executes it. Sub-prompts exist as files so the orchestrator can fetch them, not so users have to copy them.
 
-- [prompts/README.md](prompts/README.md): index — when to use which prompt.
-- [prompts/install-widget.md](prompts/install-widget.md): agent identifies the global layout file and adds the script tag. localStorage mode, no backend.
-- [prompts/self-host-supabase.md](prompts/self-host-supabase.md): agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end.
-- [prompts/harden-rls.md](prompts/harden-rls.md): agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
-- [scripts/apply-migrations.sh](scripts/apply-migrations.sh): plain-bash alternative — `psql` against a Supabase connection string, applies all `supabase/migrations/*.sql` in order.
+- [prompts/install-widget.md](prompts/install-widget.md): **the orchestrator.** This is what the user pastes. Inlines install (framework matrix for Next/Astro/Nuxt/SvelteKit/Remix/Hugo/Rails/Django/static), then routes to cloud / harden sub-flows by raw GitHub URL.
+- [prompts/self-host-supabase.md](prompts/self-host-supabase.md): sub-flow. Agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end. Refuses service-role key.
+- [prompts/harden-rls.md](prompts/harden-rls.md): sub-flow. Agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
+- [prompts/README.md](prompts/README.md): explains the one-prompt pattern. Most users skip this.
+- [scripts/apply-migrations.sh](scripts/apply-migrations.sh): plain-bash alternative for users who don't want an agent — `psql` against a Supabase connection string, applies all `supabase/migrations/*.sql` in order.
+
+Raw URLs the orchestrator uses (only the orchestrator fetches these — users don't):
+- `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md`
+- `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harden-rls.md`
 
 ## Project meta
 

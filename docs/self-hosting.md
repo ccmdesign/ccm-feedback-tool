@@ -1,6 +1,6 @@
 # Self-hosting ccm-feedback
 
-> **Hand this to an agent instead.** Three of the steps below are wrapped as ready-to-paste agent prompts in [`prompts/`](../prompts/). If you'd rather have Claude Code / Cursor / Copilot do the work, paste [`prompts/self-host-supabase.md`](../prompts/self-host-supabase.md) and skip the manual steps. This file is the longform reference for when you want to do it yourself.
+> **Hand this to an agent instead.** Paste [`prompts/install-widget.md`](../prompts/install-widget.md) (the orchestrator) into Claude Code / Cursor / Copilot — it installs the widget, asks if you want cloud sync, and fetches the cloud-setup sub-prompt from GitHub itself. You only paste once. This file is the longform reference for when you want to do it yourself.
 
 ccm-feedback ships as a single static JS file (`dist/w.js`) and an optional Postgres schema (`supabase/migrations/*.sql`). You can host either or both yourself.
 

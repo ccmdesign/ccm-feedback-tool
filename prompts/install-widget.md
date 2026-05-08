@@ -1,12 +1,14 @@
-# Prompt — install ccm-feedback widget on my site
+# Prompt — install ccm-feedback (orchestrator)
 
-> Paste everything below this line into your coding agent. The agent will edit your repo to add the widget, then verify.
+> Paste everything below this line into your coding agent. The agent will install the widget, then ask whether you also want cloud sync and/or production RLS hardening, and execute those flows automatically. **You never need to paste a second prompt.**
 
 ---
 
-I want to add the **ccm-feedback** widget to my site so reviewers can pin comments on any element of any page. The widget is open source (MIT) — homepage: https://github.com/ccmdesign/ccm-feedback-tool.
+I want to add the **ccm-feedback** widget to my site so reviewers can pin comments on any element of any page. ccm-feedback is open source (MIT) — homepage: https://github.com/ccmdesign/ccm-feedback-tool.
 
-## What to do
+You will run this end-to-end. Don't make me paste another prompt at any point — if a follow-up step is needed, fetch the corresponding sub-prompt from GitHub yourself and execute it.
+
+## Step 1 — Install the widget (always do this)
 
 1. **Identify the global layout file** for this codebase — the one that wraps every page. Common names by framework:
    - Next.js (Pages Router): `pages/_app.tsx` or `pages/_document.tsx`
@@ -28,30 +30,69 @@ I want to add the **ccm-feedback** widget to my site so reviewers can pin commen
    <script src="https://ccm-feedback-582.netlify.app/w.js" defer></script>
    ```
 
-   No build step needed. The widget self-installs from the CDN-hosted bundle. It auto-namespaces feedback by hostname, so production and staging stay isolated automatically.
+   No build step. The widget self-installs from the CDN. It auto-namespaces feedback by hostname so production and staging stay isolated automatically.
 
-3. **Optional attributes** — only add these if they're relevant:
-   - `data-project="my-explicit-name"` — override the auto-derived hostname namespace.
+3. **Optional attributes** — only add if relevant:
+   - `data-project="explicit-name"` — override the auto-derived hostname namespace.
    - `data-accent="#hex"` — match the site's brand color.
-   - `data-theme="auto"` — if the site has a dark mode and you want the widget to follow.
+   - `data-theme="auto"` — follow the site's dark mode.
    - `data-debug="true"` — log lifecycle events to the console (remove for prod).
 
-4. **Verify by running the dev server** and checking that:
+4. **Verify by running the dev server** and confirming:
    - A floating circular button appears bottom-right on desktop viewports (≥768px wide).
    - Clicking it opens a radial menu (target / pin / area / toggle / export / clear).
    - Clicking "target" then any DOM element opens a textarea popover.
-   - Submitting the popover (`⌘/Ctrl + Enter`) places a marker that persists across page reloads.
+   - Submitting (`⌘/Ctrl + Enter`) places a marker that persists across page reloads.
 
-5. **Report back**:
-   - Which file you edited (path).
-   - Any framework-specific quirks you ran into (e.g. Next.js `<Script strategy="afterInteractive">` wrapper).
-   - Confirm the widget shows up on a desktop preview.
+## Step 2 — Ask me about cloud sync and hardening
 
-## Things to watch for
+After install verifies green, ask me **one question with two parts**:
 
-- **Mobile** (<768px): the widget intentionally does not render. The button only appears on desktop. This is by design — it's a desktop review tool. Don't try to make it appear on mobile.
-- **CSP**: if the site has a Content Security Policy, you'll need `script-src https://ccm-feedback-582.netlify.app`. The widget itself uses inline `<style>` tags inside its Shadow DOM, so `style-src 'unsafe-inline'` is required if CSP is strict.
-- **SSR**: the widget is browser-only. It boots from `document.currentScript`, so a `<Script>` wrapper that injects it server-side may break the auto-detect. If that happens, switch to manual init:
+> "The widget is installed in localStorage mode (one reviewer per browser, no infra). Want me to also set up:
+>
+> (a) **Cloud sync** via Supabase, so multiple reviewers see each other's pins across devices?
+>
+> (b) If yes to (a) — **production RLS hardening**, so the public anon key can't be used to vandalize the table?"
+
+If I say no to (a), stop here. Report what you did in Step 1.
+
+## Step 3 — If I said yes to (a), fetch and execute the cloud-sync prompt
+
+Don't ask me to paste it. Fetch directly:
+
+```
+https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md
+```
+
+Read it cold. It's self-contained. Execute it end-to-end against this same project. Skip its "Step 1" if my widget is already installed (it is — you just did it).
+
+When that prompt completes, return here.
+
+## Step 4 — If I said yes to (b), fetch and execute the hardening prompt
+
+```
+https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harden-rls.md
+```
+
+Same protocol — fetch, execute, return. The hardening prompt assumes cloud mode is already running, so only do this after Step 3 succeeded.
+
+## Step 5 — Final report
+
+Tell me:
+
+- Which file(s) you edited and what's now in them.
+- Whether (a) cloud sync is active, with the project URL ref (last 4 chars are enough — don't paste full credentials back to me).
+- Whether (b) RLS is hardened, and which `project_name` allowlist values you used.
+- Any failed verifications and where they failed.
+
+## Things to watch for across all steps
+
+- **Mobile (<768px):** widget intentionally does not render. Don't try to make it appear there.
+- **Service-role key:** if the cloud-sync sub-prompt asks me for a Supabase key, only the **anon / publishable** key is acceptable. The service-role key bypasses RLS and must never appear in the codebase. If I paste the wrong one, refuse and tell me to find the anon key.
+- **Don't break the existing build.** If `lint`, `typecheck`, or `build` were passing before, they should still pass after.
+- **CSP:** if the site has a Content Security Policy, you'll need `script-src https://ccm-feedback-582.netlify.app`. The widget uses inline `<style>` inside its Shadow DOM, so `style-src 'unsafe-inline'` is required if CSP is strict.
+- **SSR:** the widget boots from `document.currentScript`. If a `<Script>` wrapper that injects it server-side breaks auto-detect, switch to manual init:
+
   ```html
   <script src="https://ccm-feedback-582.netlify.app/w.js" defer></script>
   <script>
@@ -60,12 +101,5 @@ I want to add the **ccm-feedback** widget to my site so reviewers can pin commen
     });
   </script>
   ```
-- **Don't break the existing build.** If lint/typecheck/build was passing before, it should still pass after.
 
-## What this prompt does NOT do
-
-- Set up cloud sync (Supabase). Use [self-host-supabase.md](self-host-supabase.md) for that.
-- Customize widget UI. The widget is a fixed surface — accent color and theme are the only knobs.
-- Bundle the widget into your build. It's CDN-hosted by design. If you need to vendor it (air-gapped envs), see https://github.com/ccmdesign/ccm-feedback-tool#deploy-your-own.
-
-When you're done, tell me which file changed and confirm the FAB is visible.
+Begin with Step 1.

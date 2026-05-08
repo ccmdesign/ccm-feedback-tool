@@ -144,13 +144,15 @@ The existing public build lives at `https://ccm-feedback-582.netlify.app/w.js` a
 
 ## Hand it to your agent
 
-ccm-feedback's DX posture is **anything a human would copy-paste from the README is also shippable as a prompt to an agent.** Three ready-to-paste prompts in [`prompts/`](prompts/):
+**One prompt. Zero further pasting.** ccm-feedback's DX posture is *anything a human would copy-paste from the README is also shippable as a prompt to an agent — and the user only ever pastes one prompt.*
 
-| Prompt                                                     | Use when…                                                  |
-| ---------------------------------------------------------- | ---------------------------------------------------------- |
-| [prompts/install-widget.md](prompts/install-widget.md)     | You want the widget on your site, no backend.              |
-| [prompts/self-host-supabase.md](prompts/self-host-supabase.md) | You want multi-reviewer cloud sync on your own infra.   |
-| [prompts/harden-rls.md](prompts/harden-rls.md)             | You're going to prod and need strict RLS.                  |
+Copy [`prompts/install-widget.md`](prompts/install-widget.md) (or the prompt block on the [demo page](https://ccm-feedback-582.netlify.app)) into your coding agent. The agent will:
+
+1. Install the widget in your global layout.
+2. Ask whether you also want cloud sync (Supabase) and/or production RLS hardening.
+3. **Fetch the sub-prompts from GitHub itself** (`self-host-supabase.md`, `harden-rls.md`) and execute them end-to-end. You don't paste anything else.
+
+Sub-prompts live in [`prompts/`](prompts/) — they exist as files so the orchestrator can `WebFetch` them, but most users will never read them directly.
 
 Plain-script alternative for CLI-comfortable users: [`scripts/apply-migrations.sh`](scripts/apply-migrations.sh).
 
