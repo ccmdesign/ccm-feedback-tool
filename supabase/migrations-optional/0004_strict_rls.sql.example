@@ -1,0 +1,54 @@
+-- OPTIONAL: tighter RLS for production self-hosting.
+--
+-- The baseline migration 0001_init.sql ships permissive policies: any anon
+-- client (anyone holding the anon key, which is in your HTML) can read,
+-- insert, update, or delete any row in ccm_widget_annotations.
+--
+-- This file replaces those policies with a stricter set:
+--   - anon can read + insert ONLY for project_name in an allowlist
+--   - anon can NEVER update or delete (operator does it via dashboard / SQL)
+--
+-- This is one reasonable production posture. There are others (signed JWT
+-- write tokens, per-author edit/delete with author_id check, time-windowed
+-- inserts via Postgres functions, etc.). Use this as a starting point.
+--
+-- Steps:
+--   1. Copy this file: `cp 0004_strict_rls.sql.example 0004_strict_rls.sql`
+--   2. Edit the array() literals below to list YOUR project_name values.
+--   3. Run it against your Supabase project (SQL editor or `supabase db push`).
+--   4. Verify with supabase/scripts/check-rls.sql.
+--
+-- Allowed projects — replace these with your own:
+--   array['my-site-prod', 'client-foo-staging']
+
+drop policy if exists "anon read"   on public.ccm_widget_annotations;
+drop policy if exists "anon insert" on public.ccm_widget_annotations;
+drop policy if exists "anon update" on public.ccm_widget_annotations;
+drop policy if exists "anon delete" on public.ccm_widget_annotations;
+
+create policy "anon read"
+  on public.ccm_widget_annotations
+  for select
+  to anon
+  using (
+    project_name = any(array['my-site-prod', 'client-foo-staging'])
+  );
+
+create policy "anon insert"
+  on public.ccm_widget_annotations
+  for insert
+  to anon
+  with check (
+    project_name = any(array['my-site-prod', 'client-foo-staging'])
+    and length(message) between 1 and 5000
+    and length(project_name) between 1 and 100
+  );
+
+-- No update / delete policies for anon — those are intentionally absent.
+-- Operators perform mutation via the Supabase dashboard, the service-role
+-- key (server-side only), or a custom signed-token endpoint.
+--
+-- If you need anon edits, add a column like author_token (uuid stored in
+-- localStorage) and gate update/delete on a match. Be aware that anon
+-- inspection of that token in DevTools is trivial — this is a UX guard,
+-- not a security boundary.
