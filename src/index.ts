@@ -13,7 +13,7 @@ import { Popup } from "./popup.js";
 import { type AnnotationStore, Store } from "./store.js";
 import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
-import type { AnchorData, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
+import type { AnchorData, AnnotationRecord, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
 
 let instance: CcmFeedbackInstance | null = null;
 
@@ -224,9 +224,15 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   markers.refresh();
   fab.updateCount(store.list().length);
   if (cloudStore) {
-    void cloudStore.init().then(() => {
+    const cs = cloudStore;
+    void cs.init().then(async () => {
       markers.refresh();
       fab.updateCount(store.list().length);
+      const migrated = await migrateLocalToCloud(cs, config.projectName, log);
+      if (migrated > 0) {
+        markers.refresh();
+        fab.updateCount(store.list().length);
+      }
     });
   }
 
@@ -251,6 +257,49 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     },
   };
   return instance;
+}
+
+/**
+ * One-shot migration: when cloud mode is enabled, push any leftover
+ * localStorage records into Supabase and clear the local key. Covers both
+ * the explicit project key and a legacy hostname-derived key (the auto-init
+ * default before `data-project` was set).
+ */
+async function migrateLocalToCloud(
+  cloudStore: CloudStore,
+  projectName: string,
+  log: (...args: unknown[]) => void,
+): Promise<number> {
+  const candidates = new Set<string>([projectName, deriveProjectFromHost()]);
+  let total = 0;
+  for (const project of candidates) {
+    const key = `ccm-feedback:${project}`;
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(key);
+    } catch {
+      continue;
+    }
+    if (!raw) continue;
+    let records: AnnotationRecord[] = [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed) || parsed.length === 0) continue;
+      records = (parsed as AnnotationRecord[]).map((r) => ({ ...r, projectName }));
+    } catch {
+      continue;
+    }
+    log("Migrating", records.length, "local records from", key);
+    const inserted = await cloudStore.migrateFromLocal(records);
+    total += inserted;
+    try {
+      localStorage.setItem(`${key}:migrated`, new Date().toISOString());
+      localStorage.removeItem(key);
+    } catch {
+      // ignore quota / privacy-mode failures
+    }
+  }
+  return total;
 }
 
 function sanitizeUrl(rawUrl: string): string {
