@@ -142,6 +142,18 @@ Architecture notes: [docs/architecture.md](docs/architecture.md).
 
 The existing public build lives at `https://ccm-feedback-582.netlify.app/w.js` and is fine for personal projects, but it's served as-is, no SLA. For production review workflows, host your own.
 
+## Hand it to your agent
+
+ccm-feedback's DX posture is **anything a human would copy-paste from the README is also shippable as a prompt to an agent.** Three ready-to-paste prompts in [`prompts/`](prompts/):
+
+| Prompt                                                     | Use when…                                                  |
+| ---------------------------------------------------------- | ---------------------------------------------------------- |
+| [prompts/install-widget.md](prompts/install-widget.md)     | You want the widget on your site, no backend.              |
+| [prompts/self-host-supabase.md](prompts/self-host-supabase.md) | You want multi-reviewer cloud sync on your own infra.   |
+| [prompts/harden-rls.md](prompts/harden-rls.md)             | You're going to prod and need strict RLS.                  |
+
+Plain-script alternative for CLI-comfortable users: [`scripts/apply-migrations.sh`](scripts/apply-migrations.sh).
+
 ## Documentation
 
 - [docs/self-hosting.md](docs/self-hosting.md) — bring your own Supabase

@@ -31,6 +31,16 @@ Use this file as the index when reading the project as an AI agent. Each linked 
 - [supabase/migrations/0002_status_pin_area.sql](supabase/migrations/0002_status_pin_area.sql): adds `status`, `kind`, `pin_x/pin_y`, `area_x/y/w/h`, `captured_elements`. **Required for current build.**
 - [supabase/migrations/0003_realtime.sql](supabase/migrations/0003_realtime.sql): enables `supabase_realtime` publication + `replica identity full`. **Required for cloud mode cross-browser sync.**
 
+## Agent prompts
+
+ccm-feedback ships ready-to-paste prompts for coding agents. Each is self-contained — paste into an agent (Claude Code, Cursor, Copilot) and it executes end-to-end.
+
+- [prompts/README.md](prompts/README.md): index — when to use which prompt.
+- [prompts/install-widget.md](prompts/install-widget.md): agent identifies the global layout file and adds the script tag. localStorage mode, no backend.
+- [prompts/self-host-supabase.md](prompts/self-host-supabase.md): agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end.
+- [prompts/harden-rls.md](prompts/harden-rls.md): agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
+- [scripts/apply-migrations.sh](scripts/apply-migrations.sh): plain-bash alternative — `psql` against a Supabase connection string, applies all `supabase/migrations/*.sql` in order.
+
 ## Project meta
 
 - [LICENSE](LICENSE): MIT, original copyright preserved (SitePing upstream).
