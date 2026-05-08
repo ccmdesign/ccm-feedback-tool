@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CCM Feedback — visual website reviews, one script tag</title>
-    <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent." />
+    <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent. Open source, MIT licensed." />
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt — agent-readable index" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -357,10 +358,15 @@
           <span class="mark-dot" aria-hidden="true"></span>
           <span>CCM Feedback</span>
         </a>
+        <nav>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool#readme" target="_blank" rel="noopener">Docs ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool/blob/main/docs/self-hosting.md" target="_blank" rel="noopener">Self-host ↗</a>
+        </nav>
       </header>
 
       <section class="hero">
-        <p class="eyebrow">A widget by CCM Design</p>
+        <p class="eyebrow">A widget by CCM Design · Open source · MIT</p>
         <h1>
           Simplifying <em>Website</em> Review.
         </h1>
@@ -425,6 +431,9 @@ Confirm once installed and tell me which file you edited.</span>
           <em>— streamlining website reviews.</em>
         </p>
         <div class="links">
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool" target="_blank" rel="noopener">GitHub ↗</a>
+          <a href="https://github.com/ccmdesign/ccm-feedback-tool/blob/main/LICENSE" target="_blank" rel="noopener">MIT ↗</a>
+          <a href="/llms.txt">llms.txt ↗</a>
           <a href="https://www.ccm.design" target="_blank" rel="noopener">ccm.design ↗</a>
         </div>
       </footer>
@@ -432,7 +441,8 @@ Confirm once installed and tell me which file you edited.</span>
 
     <!-- felt-tip marker annotation around the FAB (fixed, bottom-right) -->
     <div class="marker-wrap" aria-hidden="true">
-      <svg viewBox="0 0 260 220" preserveAspectRatio="none">
+      <svg viewBox="0 0 260 220" preserveAspectRatio="none" role="presentation">
+        <title>Marker annotation pointing at the floating action button</title>
         <defs>
           <filter id="marker-rough" x="-10%" y="-10%" width="120%" height="120%">
             <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" />
@@ -477,16 +487,16 @@ Confirm once installed and tell me which file you edited.</span>
 
     <script>
       // copy-to-clipboard for the agent prompt
-      (function () {
+      (() => {
         var btn = document.getElementById("copy");
         var promptEl = document.getElementById("prompt");
         if (!btn || !promptEl) return;
-        btn.addEventListener("click", function () {
+        btn.addEventListener("click", () => {
           var text = promptEl.querySelector("span").innerText;
-          navigator.clipboard.writeText(text).then(function () {
+          navigator.clipboard.writeText(text).then(() => {
             btn.dataset.state = "copied";
             btn.textContent = "copied";
-            setTimeout(function () {
+            setTimeout(() => {
               delete btn.dataset.state;
               btn.textContent = "copy";
             }, 1800);
@@ -495,10 +505,10 @@ Confirm once installed and tell me which file you edited.</span>
       })();
 
       // marker is a first-impression cue — fade out as soon as user scrolls
-      (function () {
+      (() => {
         var marker = document.querySelector(".marker-wrap");
         if (!marker) return;
-        var update = function () {
+        var update = () => {
           marker.dataset.hidden = window.scrollY > 40 ? "true" : "false";
         };
         update();
