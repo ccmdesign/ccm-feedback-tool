@@ -261,6 +261,44 @@ export class CloudStore implements AnnotationStore {
     void this.pushClear(ids);
   }
 
+  /**
+   * Bulk-import existing records (e.g. from a localStorage migration) into the
+   * cloud, skipping any rows whose primary key already exists. Returns the
+   * count of newly-inserted records. On any error, returns 0 and logs.
+   */
+  async migrateFromLocal(records: AnnotationRecord[]): Promise<number> {
+    if (records.length === 0) return 0;
+    const known = new Set(this.cache.map((r) => r.id));
+    const fresh = records.filter((r) => !known.has(r.id));
+    if (fresh.length === 0) return 0;
+    try {
+      const res = await fetch(this.endpoint, {
+        method: "POST",
+        headers: {
+          ...this.headers,
+          Prefer: "return=representation,resolution=ignore-duplicates",
+        },
+        body: JSON.stringify(fresh.map(recordToRow)),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(`[ccm-feedback] cloud migrate failed: ${res.status} ${body}`);
+        return 0;
+      }
+      const inserted = (await res.json()) as CloudRow[];
+      for (const row of inserted) {
+        const rec = rowToRecord(row);
+        if (!this.cache.some((r) => r.id === rec.id)) this.cache.unshift(rec);
+      }
+      this.log("cloud migrated", inserted.length, "of", fresh.length, "local annotations");
+      this.onChange();
+      return inserted.length;
+    } catch (err) {
+      console.warn("[ccm-feedback] cloud migrate error", err);
+      return 0;
+    }
+  }
+
   private async pushInsert(record: AnnotationRecord): Promise<void> {
     try {
       const res = await fetch(this.endpoint, {
