@@ -6,6 +6,17 @@
     <title>CCM Feedback — visual website reviews, one script tag</title>
     <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent. Open source, MIT licensed." />
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt — agent-readable index" />
+
+    <!-- Google Analytics — CCM Design property (matches ccmdesign.ca) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PWP8CD3WD7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      // biome-ignore lint/complexity/noArguments: canonical GA gtag snippet — arguments object is required by GA
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-PWP8CD3WD7');
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
