@@ -3,18 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CCM Feedback — visual website reviews, one script tag</title>
-    <meta name="description" content="A feedback widget by CCM Design. Pin comments on any element. Export JSON. Hand it to a developer or an agent. Open source, MIT licensed." />
+    <title>CCM Feedback — open-source feedback widget for the agent era</title>
+    <meta name="description" content="Open-source feedback widget. Client pins comments on real DOM elements, you export the JSON, paste it to Claude or Cursor — the agent has full context (selector, position, comment) to ship the edits. MIT, by CCM Design." />
+    <link rel="canonical" href="https://feedback.ccmdesign.ca/" />
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="llms.txt — agent-readable index" />
 
-    <!-- Google Analytics — CCM Design property (matches ccmdesign.ca) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PWP8CD3WD7"></script>
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://feedback.ccmdesign.ca/" />
+    <meta property="og:title" content="CCM Feedback — Client pins. Agent edits." />
+    <meta property="og:description" content="Open-source feedback widget for the agent era. Client pins comments on real elements, you export JSON, paste to Claude or Cursor — agent ships the edits." />
+    <meta property="og:image" content="https://feedback.ccmdesign.ca/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="CCM Feedback" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://feedback.ccmdesign.ca/" />
+    <meta name="twitter:title" content="CCM Feedback — Client pins. Agent edits." />
+    <meta name="twitter:description" content="Open-source feedback widget for the agent era. Client pins, you export JSON, agent ships the edits. MIT, by CCM Design." />
+    <meta name="twitter:image" content="https://feedback.ccmdesign.ca/og.png" />
+    <meta name="twitter:creator" content="@ccmdesign" />
+
+    <!-- Google Analytics 4 — ccm-feedback property (GA_ID in .env is source of truth) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-04P3R9QCVP"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       // biome-ignore lint/complexity/noArguments: canonical GA gtag snippet — arguments object is required by GA
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-PWP8CD3WD7');
+      gtag('config', 'G-04P3R9QCVP');
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -226,6 +245,114 @@
         to { opacity: 1; }
       }
 
+      /* ---------- the loop (client → JSON → agent) ---------- */
+      .loop {
+        padding: 64px 0 96px;
+        border-top: 1px solid var(--rule);
+      }
+      .loop-head {
+        max-width: 720px;
+        margin: 0 0 48px;
+      }
+      .loop-head h2 {
+        font-family: "Fraunces", serif;
+        font-weight: 400;
+        font-size: 32px;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        margin: 0 0 16px;
+        color: var(--ink);
+      }
+      .loop-head h2 em {
+        font-style: italic;
+        color: var(--accent);
+      }
+      .loop-head p {
+        color: var(--ink-soft);
+        font-size: 15px;
+        margin: 0;
+        max-width: 60ch;
+      }
+      .loop-steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 32px;
+      }
+      @media (max-width: 760px) {
+        .loop-steps { grid-template-columns: 1fr; gap: 24px; }
+      }
+      .step {
+        border-top: 2px solid var(--ink);
+        padding-top: 18px;
+      }
+      .step-num {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 10px;
+      }
+      .step h3 {
+        font-family: "Fraunces", serif;
+        font-weight: 500;
+        font-size: 20px;
+        letter-spacing: -0.01em;
+        margin: 0 0 10px;
+        color: var(--ink);
+      }
+      .step p {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ink-soft);
+        margin: 0;
+      }
+      .json-preview {
+        position: relative;
+        margin-top: 40px;
+        background: var(--paper);
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        padding: 28px 32px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.85;
+        color: var(--ink);
+        overflow-x: auto;
+      }
+      .json-preview::before {
+        content: "ccm-feedback-acme-2026-05-09.json";
+        position: absolute;
+        top: -10px;
+        left: 22px;
+        background: var(--bg);
+        padding: 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+      .json-preview .k { color: var(--ink-soft); }
+      .json-preview .hl {
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--ink);
+      }
+      .json-caption {
+        margin-top: 14px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--ink-soft);
+        line-height: 1.6;
+      }
+      .json-caption span {
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 3px;
+        color: var(--ink);
+      }
+
       /* ---------- give-to-agent section ---------- */
       .agent {
         padding: 64px 0 96px;
@@ -377,27 +504,85 @@
       </header>
 
       <section class="hero">
-        <p class="eyebrow">A widget by CCM Design · Open source · MIT</p>
+        <p class="eyebrow">Open source · MIT · Built for agents</p>
         <h1>
-          Simplifying <em>Website</em> Review.
+          Client pins. <em>Agent</em> edits.
         </h1>
         <p class="lede">
-          Pin feedback on any webpage. Hand the JSON to your agent.
+          An open-source feedback widget for the agent era.
         </p>
         <p class="prose">
-          Drop a single script tag, and any reviewer can drop pinned comments on real DOM
-          elements and export the lot as a clean JSON file. This page is the demo. The button
-          is real.
+          Drop one script tag. Reviewers pin comments on real DOM elements. You export
+          the lot as a clean JSON file and hand it to Claude, Cursor, or any coding agent —
+          which has every selector, position, and comment it needs to ship the edits without
+          you mediating. This page is the demo. The button is real.
         </p>
         <div class="meta">
           <span>One script tag</span>
-          <span>Zero config</span>
-          <span>Works on any site</span>
+          <span>JSON in, edits out</span>
+          <span>Self-host or use ours</span>
         </div>
 
         <p class="mobile-note">
           The widget is desktop-only (≥768px). Open this page on a wider screen to use the
           floating button.
+        </p>
+      </section>
+
+      <section class="loop">
+        <div class="loop-head">
+          <p class="agent-eyebrow">01 — the loop</p>
+          <h2>Client pins. You export. <em>Agent</em> ships.</h2>
+          <p>
+            The handoff is a JSON file. Every annotation carries a CSS selector, XPath, text
+            snippet, and structural fingerprint — enough context for an agent to find the
+            right component and apply the edit without you translating "the third button on
+            the second card."
+          </p>
+        </div>
+
+        <div class="loop-steps">
+          <div class="step">
+            <p class="step-num">Step 1</p>
+            <h3>Client pins on the live page</h3>
+            <p>
+              Floating action button, no login. Click any element, leave a comment.
+              Reviewer never installs anything.
+            </p>
+          </div>
+          <div class="step">
+            <p class="step-num">Step 2</p>
+            <h3>You export the JSON</h3>
+            <p>
+              One click downloads every annotation with full DOM anchor, viewport position,
+              status, and author.
+            </p>
+          </div>
+          <div class="step">
+            <p class="step-num">Step 3</p>
+            <h3>Paste it to your agent</h3>
+            <p>
+              Claude, Cursor, Copilot — any agent that reads JSON. It greps the codebase
+              for each selector, finds the component file, ships the edit.
+              <a href="https://github.com/ccmdesign/ccm-feedback-tool/blob/main/prompts/apply-feedback.md" target="_blank" rel="noopener" style="color: var(--accent); white-space: nowrap;">Use our prompt ↗</a>
+            </p>
+          </div>
+        </div>
+
+        <pre class="json-preview"><span class="k">{</span>
+  "message": "this CTA needs more contrast",
+  "cssSelector": <span class="hl">"main &gt; section.hero &gt; a.btn-primary"</span>,
+  "xpath": <span class="hl">"/html/body/main/section[1]/a"</span>,
+  "elementTag": "a",
+  "textSnippet": <span class="hl">"Get started →"</span>,
+  "fingerprint": <span class="hl">"html&gt;body&gt;main&gt;section&gt;a"</span>,
+  "xPct": 0.42, "yPct": 0.18,
+  "status": "todo", "kind": "target"
+<span class="k">}</span></pre>
+        <p class="json-caption">
+          The <span>highlighted fields</span> are what the agent uses to map the comment
+          back to your source code. Four anchor strategies survive class renames, text
+          edits, and small refactors.
         </p>
       </section>
 
