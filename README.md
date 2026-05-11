@@ -2,15 +2,15 @@
 
 <h1>ccm-feedback</h1>
 
-**One script tag. Pin comments on any element. Export JSON.**
+**Open-source feedback widget for the agent era. Client pins, agent edits, you ship.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/ccmdesign/ccm-feedback-tool?style=social)](https://github.com/ccmdesign/ccm-feedback-tool)
-[![Netlify](https://img.shields.io/badge/demo-live-success)](https://ccm-feedback-582.netlify.app)
+[![Demo](https://img.shields.io/badge/demo-live-success)](https://feedback.ccmdesign.ca)
 
 </div>
 
-A dead-simple feedback widget for reviewing web pages. Drop one `<script>` on any HTML page, click the floating button, pin comments on real elements, hand a JSON file to a developer. Works with no backend at all (localStorage). Optional Supabase backend turns it into a multi-reviewer, multi-device tool when you want it.
+Drop one `<script>` on any HTML page. A reviewer pins comments on real DOM elements. You export the lot as a clean JSON file and hand it to Claude, Cursor, or any coding agent — which has every selector, position, and comment it needs to ship the edits without you mediating "the third button on the second card." Works with no backend (localStorage) or with optional Supabase sync for multi-reviewer workflows.
 
 Built and used by [CCM Design](https://ccm.design) for client website reviews.
 

@@ -1,6 +1,6 @@
 {
   "name": "ccm-feedback",
-  "version": "0.1.0-mvp",
+  "version": "0.1.0",
   "private": true,
   "description": "CCM Feedback — single-script-tag feedback widget. Pin comments on any element, export JSON.",
   "homepage": "https://ccm-feedback-582.netlify.app",
