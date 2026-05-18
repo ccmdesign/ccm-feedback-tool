@@ -68,6 +68,29 @@ There's no merge logic. Last write wins:
 
 If you need real OT/CRDT semantics, ccm-feedback is the wrong tool.
 
+## Share endpoint (`/feedback`)
+
+Cloud mode unlocks a server-side share path so an agent can be handed a project's feedback by **URL** instead of a downloaded file.
+
+```http
+GET /feedback?project=<name>
+```
+
+This is the Netlify function `netlify/functions/feedback` (wired via `netlify.toml`: `[functions]` dir + a `/feedback` rewrite). It:
+
+- Reads `SUPABASE_URL` + `SUPABASE_ANON_KEY` from **server-side Netlify env vars only**. The anon key is never returned to the client and never inlined into `w.js` or any client asset. The **service-role key is never used.**
+- Queries `GET {SUPABASE_URL}/rest/v1/ccm_widget_annotations?project_name=eq.<name>&order=created_at.desc` with the anon key as `apikey` + `Authorization` headers.
+- Maps each row snake_case → camelCase (same field mapping as `rowToRecord()` in `src/cloud-store.ts`) and responds with the **exact `exportAsJson()` shape**: `{ projectName, exportedAt, count, annotations }`.
+- Is **read-only**: only `GET` (+ `OPTIONS` preflight). No `POST`/`PATCH`/`DELETE`; it never accepts a key from the client.
+- Returns generic errors — `400` (missing `?project`), `405` (non-GET), `5xx` (upstream/config). The upstream Supabase body is never forwarded (an auth-error body could echo the key).
+- Sends `Access-Control-Allow-Origin: *` for GET so an agent on any origin can `WebFetch` it.
+
+To deploy it on your own host, set `SUPABASE_URL` and `SUPABASE_ANON_KEY` (anon only) in your Netlify site's environment variables. `netlify.toml` documents this requirement in a comment; no secret is committed.
+
+The widget's FAB exposes a **"Copy feedback URL"** action in cloud mode that copies `<site>/feedback?project=<name>` (the reviewed site's own origin) to the clipboard. In localStorage mode that item is visibly disabled with a tooltip — there is no server-side data to serve — and Export JSON remains the always-available fallback.
+
+The `apply-ccm-feedback` skill consumes either the URL or a downloaded JSON file (identical shape) and, after applying each edit, sets the handled comment's status to `review` (via `bun run feedback set-status <id> review` or a PostgREST PATCH). It **never** sets `done` — a human verifies in the widget and flips `review` → `done`.
+
 ## Auth model
 
 The widget uses the **anon (publishable) key**. It's expected to be in the browser. Security comes from RLS, not key secrecy.

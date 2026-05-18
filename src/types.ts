@@ -1,9 +1,15 @@
 /** MVP data model — everything the widget stores or emits. */
 
-/** Comment lifecycle status. */
-export type FeedbackStatus = "todo" | "done" | "question";
+/**
+ * Comment lifecycle status.
+ *
+ * `review` = handled by an agent, pending human verification. The agent sets
+ * `review` (never `done`); a human verifies the edit in the widget and flips
+ * `review` → `done`. `done` is a human-only transition.
+ */
+export type FeedbackStatus = "todo" | "review" | "done" | "question";
 
-export const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["todo", "done", "question"] as const;
+export const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["todo", "review", "done", "question"] as const;
 
 /** Snapshot of a DOM element captured for agent context. */
 export interface CapturedElement {

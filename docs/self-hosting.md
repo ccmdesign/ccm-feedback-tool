@@ -63,9 +63,10 @@ In order, against your project's SQL editor (or via `supabase db push` if you ha
 supabase/migrations/0001_init.sql           -- creates ccm_widget_annotations + RLS
 supabase/migrations/0002_status_pin_area.sql -- adds status, kind, pin/area, captured_elements
 supabase/migrations/0003_realtime.sql       -- enables realtime publication
+supabase/migrations/0004_status_review.sql  -- adds the "review" status (agent loop)
 ```
 
-After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled.
+After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled. `0004` is required for the apply-feedback loop (an agent setting handled comments to `review`).
 
 ### Step 3 — wire it into the script tag
 

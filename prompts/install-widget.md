@@ -76,7 +76,24 @@ https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harde
 
 Same protocol — fetch, execute, return. The hardening prompt assumes cloud mode is already running, so only do this after Step 3 succeeded.
 
-## Step 5 — Final report
+## Step 5 — Set up the review → edit → review loop
+
+This is what makes ccm-feedback an *agent* tool, not just a comment widget. Install the apply skill so that, after review, the feedback comes back to a coding agent as a URL (or JSON file) and the loop closes:
+
+1. **Install the `apply-ccm-feedback` skill.** Fetch it and save it where this agent loads skills (e.g. `.claude/skills/apply-ccm-feedback/SKILL.md`, or the equivalent for the agent in use):
+
+   ```
+   https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/skills/apply-ccm-feedback/SKILL.md
+   ```
+
+2. **Explain the loop to me** in one short paragraph:
+   - A reviewer pins comments. In **cloud mode** they click the FAB's **"Copy feedback URL"** item to get `<site>/feedback?project=<name>`; in **local mode** they use **Export JSON** (the Copy-URL item is disabled — there's no server-side data to serve).
+   - They hand that URL (or the JSON file) to a coding agent. The `apply-ccm-feedback` skill auto-triggers, applies each edit, and sets every handled comment's status to **`review`**.
+   - **The agent sets `review`, never `done`.** A human opens the widget, verifies each edit, and flips `review` → `done` themselves. That human gate is the whole point of the `review` status — the agent does not auto-complete its own work.
+
+3. If cloud mode is active, note that the `/feedback` share endpoint is a Netlify function requiring `SUPABASE_URL` + `SUPABASE_ANON_KEY` env vars (anon key only — never the service-role key) set in the host's dashboard, and that the copied URL uses the reviewed site's own origin (so that site must deploy `netlify/functions/feedback`; the CCM-hosted demo already does).
+
+## Step 6 — Final report
 
 Tell me:
 

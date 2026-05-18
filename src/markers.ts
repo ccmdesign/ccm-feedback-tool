@@ -279,7 +279,7 @@ export class MarkerManager {
   }
 
   private cycleStatus(record: AnnotationRecord): void {
-    const order: FeedbackStatus[] = ["todo", "done", "question"];
+    const order: FeedbackStatus[] = ["todo", "review", "done", "question"];
     const cur = record.status ?? "todo";
     const next = order[(order.indexOf(cur) + 1) % order.length] ?? "todo";
     this.store.updateStatus?.(record.id, next);

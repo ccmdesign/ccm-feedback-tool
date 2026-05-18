@@ -21,6 +21,7 @@
     "check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "dev": "bun run build:watch",
+    "feedback": "bun run scripts/feedback.ts",
     "serve": "bun run build && bunx serve -l 5173 public",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."

@@ -38,9 +38,10 @@ For each of these files, in order, open the project's SQL editor in the Supabase
 supabase/migrations/0001_init.sql
 supabase/migrations/0002_status_pin_area.sql
 supabase/migrations/0003_realtime.sql
+supabase/migrations/0004_status_review.sql
 ```
 
-After all three run, verify that `public.ccm_widget_annotations` exists with these expected columns: `id`, `project_name`, `message`, `author_name`, `url`, `path`, `viewport`, `user_agent`, `css_selector`, `xpath`, `text_snippet`, `element_tag`, `element_id`, `text_prefix`, `text_suffix`, `fingerprint`, `neighbor_text`, `x_pct`, `y_pct`, `w_pct`, `h_pct`, `created_at`, `status`, `kind`, `pin_x`, `pin_y`, `area_x`, `area_y`, `area_w`, `area_h`, `captured_elements`.
+After all four run, verify that `public.ccm_widget_annotations` exists with these expected columns: `id`, `project_name`, `message`, `author_name`, `url`, `path`, `viewport`, `user_agent`, `css_selector`, `xpath`, `text_snippet`, `element_tag`, `element_id`, `text_prefix`, `text_suffix`, `fingerprint`, `neighbor_text`, `x_pct`, `y_pct`, `w_pct`, `h_pct`, `created_at`, `status`, `kind`, `pin_x`, `pin_y`, `area_x`, `area_y`, `area_w`, `area_h`, `captured_elements`.
 
 ### 3. Wire the widget script tag
 

@@ -6,6 +6,7 @@ import {
   ICON_CLOSE,
   ICON_EYE,
   ICON_EYE_OFF,
+  ICON_LINK,
   ICON_PIN,
   ICON_SITEPING,
   ICON_TARGET,
@@ -13,11 +14,15 @@ import {
 } from "./icons.js";
 
 interface RadialItem {
-  id: "target" | "pin" | "area" | "toggle" | "export" | "clear";
+  id: "target" | "pin" | "area" | "toggle" | "export" | "copyUrl" | "clear";
   icon: string;
   iconAlt?: string;
   label: string;
   direction: "up" | "left";
+  /** When true the item renders disabled (greyed, no bus emit) with a tooltip. */
+  disabled?: boolean;
+  /** `title`/tooltip text shown when the item is disabled. */
+  disabledTitle?: string;
 }
 
 const ITEM_GAP = 54;
@@ -42,6 +47,9 @@ export class Fab {
     shadowRoot: ShadowRoot,
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
+    /** True when the widget persists to Supabase. The Copy-URL item is only
+     * functional in cloud mode (the share endpoint serves cloud rows). */
+    private readonly cloudMode = false,
   ) {
     this.items = [
       { id: "target", icon: ICON_TARGET, label: t("fab.targetLabel"), direction: "up" },
@@ -49,6 +57,16 @@ export class Fab {
       { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel"), direction: "up" },
       { id: "area", icon: ICON_AREA, label: t("fab.areaLabel"), direction: "up" },
       { id: "export", icon: EXPORT_ICON, label: t("fab.export"), direction: "left" },
+      {
+        id: "copyUrl",
+        icon: ICON_LINK,
+        label: t("fab.copyUrl"),
+        direction: "left",
+        // Cloud mode only — in localStorage mode there is nothing server-side
+        // to serve, so the item is visibly disabled with an explanatory
+        // tooltip and Export JSON stays as the always-available fallback.
+        ...(this.cloudMode ? {} : { disabled: true, disabledTitle: t("fab.copyUrlLocalOnly") }),
+      },
       { id: "clear", icon: ICON_TRASH, label: t("fab.clear"), direction: "left" },
     ];
 
@@ -80,6 +98,13 @@ export class Fab {
       btn.setAttribute("aria-label", item.label);
       btn.dataset.itemId = item.id;
       btn.dataset.direction = item.direction;
+      if (item.disabled) {
+        btn.setAttribute("aria-disabled", "true");
+        btn.dataset.disabled = "true";
+        btn.style.opacity = "0.4";
+        btn.style.cursor = "not-allowed";
+        if (item.disabledTitle) btn.title = item.disabledTitle;
+      }
 
       const label = document.createElement("span");
       label.className = "sp-radial-label";
@@ -92,6 +117,7 @@ export class Fab {
 
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (item.disabled) return; // no bus emit, no close — inert
         this.handleItemClick(item.id);
       });
       this.radialContainer.appendChild(btn);
@@ -213,6 +239,9 @@ export class Fab {
       }
       case "export":
         this.bus.emit("export:click");
+        break;
+      case "copyUrl":
+        this.bus.emit("copyUrl:click");
         break;
       case "clear":
         this.bus.emit("clear:click");

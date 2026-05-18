@@ -75,7 +75,8 @@ To self-host the backend, see [docs/self-hosting.md](docs/self-hosting.md). Quic
 3. A textarea popover opens anchored to that element. `⌘/Ctrl + Enter` submits.
 4. Pins persist (localStorage or Supabase) and re-render on page load.
 5. Click an existing pin → popover with comment, status, delete.
-6. **Export** → downloads `ccm-feedback-<project>-<date>.json` with every annotation + DOM anchor.
+6. **Hand off:** in cloud mode, **Copy feedback URL** → `<site>/feedback?project=<name>`; in local mode, **Export** → `ccm-feedback-<project>-<date>.json`. Same shape either way.
+7. Agent applies the edits and marks each handled comment **`review`**; you verify in the widget and flip `review` → `done` (the agent never sets `done`).
 
 ## DOM anchoring
 
@@ -101,7 +102,7 @@ interface AnnotationRecord {
   viewport: string;       // e.g. "1280x800"
   userAgent: string;
   createdAt: string;      // ISO-8601
-  status?: "todo" | "done" | "question";
+  status?: "todo" | "review" | "done" | "question";  // agent sets "review", human flips to "done"
   kind?: "target" | "pin" | "area";
   // DOM anchor
   cssSelector: string;
@@ -151,8 +152,22 @@ Copy [`prompts/install-widget.md`](prompts/install-widget.md) (or the prompt blo
 1. Install the widget in your global layout.
 2. Ask whether you also want cloud sync (Supabase) and/or production RLS hardening.
 3. **Fetch the sub-prompts from GitHub itself** (`self-host-supabase.md`, `harden-rls.md`) and execute them end-to-end. You don't paste anything else.
+4. Install the [`apply-ccm-feedback`](skills/apply-ccm-feedback/SKILL.md) skill so the loop closes.
 
 Sub-prompts live in [`prompts/`](prompts/) — they exist as files so the orchestrator can `WebFetch` them, but most users will never read them directly.
+
+### The review → edit → review loop
+
+ccm-feedback is built for the agent era: review comes back to a coding agent as a **URL** (cloud) or **JSON file** (local), the agent applies each edit, and it marks each handled comment **`review`** — never `done`.
+
+```
+reviewer pins → Copy feedback URL (cloud) / Export JSON (local)
+             → agent runs apply-ccm-feedback skill
+             → agent applies edit, sets status = review   ◄── NEVER done
+             → human verifies in the widget, flips review → done
+```
+
+The `review` status exists precisely so the agent doesn't auto-complete its own work — a human is always the gate between `review` and `done`. The [`apply-ccm-feedback` skill](skills/apply-ccm-feedback/SKILL.md) auto-triggers on a feedback URL or JSON; [`scripts/feedback.ts`](scripts/feedback.ts) (`bun run feedback set-status <id> review`) is the CLI it uses. The `/feedback?project=` share endpoint serves Supabase rows server-side with the **anon key only** — see [docs/cloud-mode.md](docs/cloud-mode.md).
 
 Plain-script alternative for CLI-comfortable users: [`scripts/apply-migrations.sh`](scripts/apply-migrations.sh).
 

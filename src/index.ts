@@ -4,7 +4,7 @@ import { CloudStore } from "./cloud-store.js";
 import { MOBILE_BREAKPOINT, Z_INDEX_MAX } from "./constants.js";
 import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anchor.js";
 import { EventBus, type WidgetEvents } from "./events.js";
-import { exportAsJson } from "./export-utils.js";
+import { copyToClipboard, exportAsJson } from "./export-utils.js";
 import { Fab } from "./fab.js";
 import { createT } from "./i18n.js";
 import { MarkerManager } from "./markers.js";
@@ -99,7 +99,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
 
   const popup = new Popup(colors, t);
   const markers = new MarkerManager(colors, bus, t, store);
-  const fab = new Fab(shadow, bus, t);
+  const fab = new Fab(shadow, bus, t, useCloud);
 
   const shouldIgnore = (element: Element) => element === host || host.contains(element);
 
@@ -203,6 +203,22 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       return;
     }
     exportAsJson(config.projectName, records);
+  });
+
+  // Cloud-mode only. The Fab disables this item in localStorage mode, so this
+  // handler only fires when the share endpoint can actually resolve. The URL
+  // is the current site's origin + /feedback?project=<encoded> — the site
+  // must deploy the netlify/functions/feedback function for it to resolve
+  // (the CCM-hosted demo always does; self-hosters deploy their own).
+  bus.on("copyUrl:click", () => {
+    const shareUrl = `${window.location.origin}/feedback?project=${encodeURIComponent(config.projectName)}`;
+    void copyToClipboard(shareUrl).then((ok) => {
+      if (ok) {
+        console.info(`[ccm-feedback] ${t("toast.urlCopied")}: ${shareUrl}`);
+      } else {
+        console.warn(`[ccm-feedback] ${t("toast.urlCopyFailed")} — ${shareUrl}`);
+      }
+    });
   });
 
   bus.on("clear:click", () => {
