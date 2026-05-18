@@ -46,6 +46,10 @@ export class Drawer {
     this.root.setAttribute("role", "dialog");
     this.root.setAttribute("aria-label", t("drawer.aria"));
     this.root.setAttribute("aria-hidden", "true");
+    // Panel starts closed: it is hidden via a CSS transform (not display:none),
+    // so without `inert` its controls would stay in the page tab order and
+    // aria-hidden would wrap focusable descendants (an ARIA violation).
+    this.root.inert = true;
 
     const header = el("div", { class: "sp-panel-header" });
     const title = el("div", { class: "sp-panel-title" });
@@ -107,6 +111,7 @@ export class Drawer {
     this.render();
     this.root.classList.add("sp-panel--open");
     this.root.setAttribute("aria-hidden", "false");
+    this.root.inert = false;
     document.addEventListener("click", this.onDocumentClick);
     document.addEventListener("keydown", this.onKeydown, true);
     requestAnimationFrame(() => {
@@ -122,6 +127,7 @@ export class Drawer {
     this.isOpen = false;
     this.root.classList.remove("sp-panel--open");
     this.root.setAttribute("aria-hidden", "true");
+    this.root.inert = true;
     document.removeEventListener("click", this.onDocumentClick);
     document.removeEventListener("keydown", this.onKeydown, true);
     this.bus.emit("navigator:close");
