@@ -13,7 +13,7 @@
 -- inserts via Postgres functions, etc.). Use this as a starting point.
 --
 -- Steps:
---   1. Copy this file: `cp 0004_strict_rls.sql.example 0004_strict_rls.sql`
+--   1. Copy this file: `cp 0005_strict_rls.sql.example 0005_strict_rls.sql`
 --   2. Edit the array() literals below to list YOUR project_name values.
 --   3. Run it against your Supabase project (SQL editor or `supabase db push`).
 --   4. Verify with supabase/scripts/check-rls.sql.

@@ -121,8 +121,8 @@ A more complete pattern (rate limiting, signed write tokens, per-author edit/del
 For a common production posture (read + insert allowed for an explicit project allowlist; update + delete forbidden for anon), copy and edit the template:
 
 ```bash
-cp supabase/migrations-optional/0004_strict_rls.sql.example \
-   supabase/migrations-optional/0004_strict_rls.sql
+cp supabase/migrations-optional/0005_strict_rls.sql.example \
+   supabase/migrations-optional/0005_strict_rls.sql
 # edit the project_name allowlist inside the file, then apply:
 supabase db push   # or paste into the SQL editor
 ```

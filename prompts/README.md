@@ -38,7 +38,7 @@ If you'd rather not involve an agent at all and you have `psql` on your PATH:
 scripts/apply-migrations.sh "postgresql://postgres:<password>@db.YOURREF.supabase.co:5432/postgres"
 ```
 
-That applies all `supabase/migrations/*.sql` to a Supabase project. RLS hardening is still your call after — see `supabase/migrations-optional/0004_strict_rls.sql.example`.
+That applies all `supabase/migrations/*.sql` to a Supabase project. RLS hardening is still your call after — see `supabase/migrations-optional/0005_strict_rls.sql.example`.
 
 ## Why prompts as files
 

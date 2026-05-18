@@ -94,6 +94,6 @@ delete from public.ccm_widget_annotations where project_name = '__rls_probe__';
 --   - All 4 ops succeed for anon  -> permissive (default 0001 baseline). OK
 --     for staging, NOT OK for public production.
 --   - Read+insert succeed, update+delete blocked  -> good production posture
---     for review-only workflow (e.g. 0004_strict_rls).
+--     for review-only workflow (e.g. 0005_strict_rls).
 --   - All 4 ops blocked for anon  -> table is unreachable from the widget;
 --     check that your project_name matches the allowlist.

@@ -41,7 +41,7 @@ If I don't know what value the widget is currently sending, find it: search for 
 
 ### 3. Generate the strict migration
 
-Copy `supabase/migrations-optional/0004_strict_rls.sql.example` to `supabase/migrations-optional/0004_strict_rls.sql` (drop the `.example` suffix), then edit:
+Copy `supabase/migrations-optional/0005_strict_rls.sql.example` to `supabase/migrations-optional/0005_strict_rls.sql` (drop the `.example` suffix), then edit:
 
 - Replace **both** occurrences of `array['my-site-prod', 'client-foo-staging']` with the actual allowlist I gave you in step 2.
 
