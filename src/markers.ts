@@ -127,6 +127,70 @@ export class MarkerManager {
     if (!visible) this.closePopover();
   }
 
+  /**
+   * Read-only locatability probe used by the comment navigator drawer.
+   * True when an entry exists for `id` and its marker resolved on the
+   * current page (pin/area are coordinate-anchored → always locatable;
+   * target is locatable only when `reposition()` resolved its anchor).
+   * Never throws — a missing entry or orphaned anchor is a normal state.
+   */
+  canLocate(id: string): boolean {
+    const entry = this.entries.find((e) => e.record.id === id);
+    if (!entry) return false;
+    return this.isEntryLocatable(entry);
+  }
+
+  /**
+   * Read-only navigator hook: scroll the page so the marker for `id` is in
+   * view and flash it. Returns false (no-op, no throw) when the entry is
+   * missing or its anchor can't be located on the current page so the
+   * drawer can render the passive "can't locate" row state instead.
+   */
+  scrollToAndFlash(id: string): boolean {
+    const entry = this.entries.find((e) => e.record.id === id);
+    if (!entry || !this.isEntryLocatable(entry)) return false;
+
+    const top = Number.parseFloat(entry.node.style.top);
+    if (Number.isFinite(top)) {
+      window.scrollTo({ top: Math.max(0, top - window.innerHeight / 3), behavior: "smooth" });
+    }
+
+    // Skip the flash when markers are toggled off — nothing visible to
+    // flash, and we deliberately do not force the global toggle back on.
+    if (this.visible) {
+      const node = entry.node;
+      node.style.animation = "ccm-pulse 0.6s ease-in-out 1";
+      window.setTimeout(() => {
+        const status = node.dataset.status;
+        // Restore the perpetual pulse for `question` markers; clear otherwise.
+        node.style.animation = status === "question" ? "ccm-pulse 1.6s ease-in-out infinite" : "";
+      }, 650);
+    }
+    return true;
+  }
+
+  private isEntryLocatable(entry: MarkerEntry): boolean {
+    const kind = entry.record.kind ?? "target";
+    if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) return true;
+    if (
+      kind === "area" &&
+      entry.record.areaX != null &&
+      entry.record.areaY != null &&
+      entry.record.areaW != null &&
+      entry.record.areaH != null
+    ) {
+      return true;
+    }
+    // target: `reposition()` sets `anchorEl` to the resolved element (or null
+    // when the four-strategy resolver fails) independent of `this.visible`.
+    // Locatability tracks anchor *resolution* only — NOT the global
+    // markers-visible toggle. Gating on `display !== "none"` here would make
+    // every resolvable target read as unlocatable while comments are hidden
+    // via the FAB eye, breaking the drawer's hide-then-jump flow.
+    // `scrollToAndFlash` still scrolls (and just skips the flash) when hidden.
+    return entry.anchorEl != null;
+  }
+
   private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];

@@ -15,6 +15,7 @@ const STRINGS: Record<string, string> = {
   "fab.copyUrlLocalOnly": "Cloud mode only — use Export JSON", // FR: "Mode cloud uniquement — utilisez Export JSON"
   "fab.clear": "Clear all",
   "fab.clearConfirm": "Delete all annotations for this project? This cannot be undone.",
+  "fab.navigatorLabel": "Comments", // FR: "Commentaires"
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",
@@ -40,6 +41,17 @@ const STRINGS: Record<string, string> = {
   "toast.empty": "No annotations to export",
   "toast.urlCopied": "Feedback URL copied to clipboard", // FR: "URL des retours copiée dans le presse-papiers"
   "toast.urlCopyFailed": "Could not copy URL — clipboard unavailable", // FR: "Impossible de copier l'URL — presse-papiers indisponible"
+  "drawer.title": "Comments", // FR: "Commentaires"
+  "drawer.aria": "Comments navigator", // FR: "Navigateur de commentaires"
+  "drawer.close": "Close comments", // FR: "Fermer les commentaires"
+  "drawer.filterAll": "All", // FR: "Tous"
+  "drawer.empty": "No comments yet", // FR: "Aucun commentaire"
+  "drawer.emptyFiltered": "No comments match this filter", // FR: "Aucun commentaire ne correspond à ce filtre"
+  "drawer.thisPage": "This page", // FR: "Cette page"
+  "drawer.otherPages": "Other pages ({n})", // FR: "Autres pages ({n})"
+  "drawer.cantLocate": "Can't locate on this page", // FR: "Introuvable sur cette page"
+  "drawer.rowAria": "Comment {n}: {message}", // FR: "Commentaire {n} : {message}"
+  "drawer.rowAriaDisabled": "Comment {n} ({message}) — can't locate on this page", // FR: "Commentaire {n} ({message}) — introuvable sur cette page"
 };
 
 export type TFunction = (key: string, vars?: Record<string, string | number>) => string;
