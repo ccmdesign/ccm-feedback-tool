@@ -3,6 +3,7 @@ import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import {
   ICON_AREA,
+  ICON_CHAT,
   ICON_CLOSE,
   ICON_EYE,
   ICON_EYE_OFF,
@@ -14,7 +15,7 @@ import {
 } from "./icons.js";
 
 interface RadialItem {
-  id: "target" | "pin" | "area" | "toggle" | "export" | "copyUrl" | "clear";
+  id: "target" | "pin" | "area" | "toggle" | "navigator" | "export" | "copyUrl" | "clear";
   icon: string;
   iconAlt?: string;
   label: string;
@@ -56,6 +57,7 @@ export class Fab {
       { id: "toggle", icon: ICON_EYE, iconAlt: ICON_EYE_OFF, label: t("fab.toggleOn"), direction: "up" },
       { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel"), direction: "up" },
       { id: "area", icon: ICON_AREA, label: t("fab.areaLabel"), direction: "up" },
+      { id: "navigator", icon: ICON_CHAT, label: t("fab.navigatorLabel"), direction: "up" },
       { id: "export", icon: EXPORT_ICON, label: t("fab.export"), direction: "left" },
       {
         id: "copyUrl",
@@ -237,6 +239,9 @@ export class Fab {
         }
         break;
       }
+      case "navigator":
+        this.bus.emit("navigator:open");
+        break;
       case "export":
         this.bus.emit("export:click");
         break;

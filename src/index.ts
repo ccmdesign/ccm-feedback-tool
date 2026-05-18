@@ -3,6 +3,7 @@ import { type AreaCapture, AreaMode, CoordPinMode, type PinCapture } from "./cap
 import { CloudStore } from "./cloud-store.js";
 import { MOBILE_BREAKPOINT, Z_INDEX_MAX } from "./constants.js";
 import { findAnchorElement, generateAnchor, rectToPercentages } from "./dom/anchor.js";
+import { Drawer } from "./drawer.js";
 import { EventBus, type WidgetEvents } from "./events.js";
 import { copyToClipboard, exportAsJson } from "./export-utils.js";
 import { Fab } from "./fab.js";
@@ -70,6 +71,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       onChange: () => {
         markers.refresh();
         fab.updateCount(store.list().length);
+        drawer.refreshIfOpen();
       },
     });
     store = cloudStore;
@@ -100,6 +102,17 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   const popup = new Popup(colors, t);
   const markers = new MarkerManager(colors, bus, t, store);
   const fab = new Fab(shadow, bus, t, useCloud);
+  const drawer = new Drawer(
+    shadow,
+    bus,
+    t,
+    store,
+    colors,
+    (id) => markers.scrollToAndFlash(id),
+    (id) => markers.canLocate(id),
+  );
+
+  bus.on("navigator:open", () => drawer.open());
 
   const shouldIgnore = (element: Element) => element === host || host.contains(element);
 
@@ -227,8 +240,15 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     store.clear();
     markers.refresh();
     fab.updateCount(0);
+    drawer.refreshIfOpen();
     log("Cleared all annotations");
   });
+
+  // Keep an open drawer live on local create/delete (cloud Realtime is
+  // covered by the CloudStore onChange callback above). Additive — does
+  // not change existing marker/fab behavior.
+  bus.on("feedback:saved", () => drawer.refreshIfOpen());
+  bus.on("feedback:deleted", () => drawer.refreshIfOpen());
 
   // `findAnchorElement` is re-exported so consumers that want to
   // programmatically add an annotation have access to the anchor logic.
@@ -261,6 +281,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       markers.destroy();
       fab.destroy();
       popup.destroy();
+      drawer.destroy();
       bus.removeAll();
       host.remove();
       instance = null;

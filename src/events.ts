@@ -48,4 +48,6 @@ export interface WidgetEvents {
   "export:click": [];
   "copyUrl:click": [];
   "clear:click": [];
+  "navigator:open": [];
+  "navigator:close": [];
 }
