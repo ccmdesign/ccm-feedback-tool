@@ -12,7 +12,7 @@ Use this file as the index when reading the project as an AI agent. Each linked 
 - [docs/self-hosting.md](docs/self-hosting.md): how to host the widget script, the Supabase backend, and the demo page yourself. Migration order, RLS hardening, backups.
 - [docs/cloud-mode.md](docs/cloud-mode.md): how `CloudStore` works — PostgREST + Realtime, cache-and-sync writes, project scoping, conflict semantics, localhost auto-disable, failure-mode table.
 - [docs/anchoring.md](docs/anchoring.md): four-strategy DOM anchor resolver (id → CSS → XPath → smart scan with fingerprint + text + neighbors), confidence scoring, failure modes.
-- [docs/data-model.md](docs/data-model.md): full `AnnotationRecord` schema, three annotation kinds (target/pin/area), localStorage shape, Postgres shape, export JSON shape, URL sanitization.
+- [docs/data-model.md](docs/data-model.md): full `AnnotationRecord` schema, the four-status lifecycle (`todo`/`review`/`done`/`question` — agent sets `review`, human flips to `done`), three annotation kinds (target/pin/area), localStorage shape, Postgres shape, export JSON shape, the `/feedback` URL handoff, URL sanitization.
 - [docs/architecture.md](docs/architecture.md): build pipeline, boot sequence, full module map of `src/`, store contract, event bus, performance notes, what's intentionally out of scope.
 
 ## Source
@@ -24,12 +24,15 @@ Use this file as the index when reading the project as an AI agent. Each linked 
 - [src/realtime.ts](src/realtime.ts): raw WebSocket client speaking the Supabase Realtime protocol. No `@supabase/supabase-js` dependency.
 - [src/dom/resolver.ts](src/dom/resolver.ts): four-level anchor resolver with confidence scoring (id 1.0 → css 0.95 → xpath 0.9 → scan ≤ 0.85).
 - [src/dom/anchor.ts](src/dom/anchor.ts): `generateAnchor()` capture + `rectToPercentages()` math.
+- [scripts/feedback.ts](scripts/feedback.ts): Bun CLI — `list`/`get`/`create`/`set-status`/`delete` against Supabase via raw PostgREST (no SDK). Primary: `bun run feedback set-status <id> review` (the agent-loop close). `set-status` accepts `done` for human use; agent-facing surfaces only pass `review`.
+- [netlify/functions/feedback.mts](netlify/functions/feedback.mts): `GET /feedback?project=<name>` → `exportAsJson()`-shaped JSON. Anon key from server-side env only, never leaked; read-only; CORS GET. Row→record mapping duplicates `rowToRecord()`.
 
 ## Schema
 
 - [supabase/migrations/0001_init.sql](supabase/migrations/0001_init.sql): baseline `ccm_widget_annotations` table + indexes + permissive anon RLS policies. **Required.**
 - [supabase/migrations/0002_status_pin_area.sql](supabase/migrations/0002_status_pin_area.sql): adds `status`, `kind`, `pin_x/pin_y`, `area_x/y/w/h`, `captured_elements`. **Required for current build.**
 - [supabase/migrations/0003_realtime.sql](supabase/migrations/0003_realtime.sql): enables `supabase_realtime` publication + `replica identity full`. **Required for cloud mode cross-browser sync.**
+- [supabase/migrations/0004_status_review.sql](supabase/migrations/0004_status_review.sql): widens the `status` CHECK constraint to add `review` (the agent-loop status). Idempotent, guarded, applied after `0003`. **Required for the apply-feedback loop in cloud mode.**
 
 ## Agent prompts
 
@@ -38,7 +41,9 @@ ccm-feedback's DX posture: **the user only ever pastes one prompt.** The orchest
 - [prompts/install-widget.md](prompts/install-widget.md): **the orchestrator.** This is what the user pastes. Inlines install (framework matrix for Next/Astro/Nuxt/SvelteKit/Remix/Hugo/Rails/Django/static), then routes to cloud / harden sub-flows by raw GitHub URL.
 - [prompts/self-host-supabase.md](prompts/self-host-supabase.md): sub-flow. Agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end. Refuses service-role key.
 - [prompts/harden-rls.md](prompts/harden-rls.md): sub-flow. Agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
-- [prompts/README.md](prompts/README.md): explains the one-prompt pattern. Most users skip this.
+- [skills/apply-ccm-feedback/SKILL.md](skills/apply-ccm-feedback/SKILL.md): installable skill. Auto-triggers on a `…/feedback?project=…` share URL, a raw PostgREST URL, or an exported `ccm-feedback-*.json` payload. Maps each comment to a source file, applies the edit, then sets the handled comment's status to **`review`** via `bun run feedback set-status <id> review` (PostgREST PATCH fallback). **Never sets `done`** — a human verifies in the widget and flips `review`→`done`. `question`/`pin`/`area` items are surfaced, not edited.
+- [prompts/apply-feedback.md](prompts/apply-feedback.md): thin human-facing pointer to the skill above (single source of the apply steps, no drift).
+- [prompts/README.md](prompts/README.md): explains the one-prompt pattern + the review→edit→review loop. Most users skip this.
 - [scripts/apply-migrations.sh](scripts/apply-migrations.sh): plain-bash alternative for users who don't want an agent — `psql` against a Supabase connection string, applies all `supabase/migrations/*.sql` in order.
 
 Raw URLs the orchestrator uses (only the orchestrator fetches these — users don't):

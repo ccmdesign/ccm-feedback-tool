@@ -15,13 +15,20 @@ This file is the routing index. Users never copy from this README — they copy 
 
 | File | Fetched when… | What the agent does |
 |------|---------------|---------------------|
-| [self-host-supabase.md](self-host-supabase.md) | Operator says yes to cloud sync | Provisions Supabase project (or uses existing), runs migrations 0001+0002+0003, wires `data-supabase-*` attrs, validates cross-browser sync end-to-end. Refuses service-role key. |
-| [harden-rls.md](harden-rls.md) | Operator says yes to hardening | Runs `supabase/scripts/check-rls.sql` diagnostic, collects `project_name` allowlist, generates `0004_strict_rls.sql`, applies it, re-verifies. |
+| [self-host-supabase.md](self-host-supabase.md) | Operator says yes to cloud sync | Provisions Supabase project (or uses existing), runs migrations 0001+0002+0003+0004, wires `data-supabase-*` attrs, validates cross-browser sync end-to-end. Refuses service-role key. |
+| [harden-rls.md](harden-rls.md) | Operator says yes to hardening | Runs `supabase/scripts/check-rls.sql` diagnostic, collects `project_name` allowlist, generates a strict-RLS migration, applies it, re-verifies. |
+| [../skills/apply-ccm-feedback/SKILL.md](../skills/apply-ccm-feedback/SKILL.md) | Reviewer hands back a feedback URL or JSON | Auto-triggers on a `…/feedback?project=…` URL or exported JSON. Maps each comment to a source file, applies the edit, sets the handled comment to **`review`** (never `done` — a human verifies and flips `review`→`done`). |
+| [apply-feedback.md](apply-feedback.md) | Agent has no skill system | Thin pointer to the skill above (single source of the apply steps — no drift). |
+
+The closed loop: reviewer pins → **Copy feedback URL** (cloud) or **Export JSON** (local) → agent runs the `apply-ccm-feedback` skill → agent sets each handled comment to `review` → a human verifies in the widget and flips `review`→`done`. **The agent never sets `done`** — that human gate is the entire reason the `review` status exists.
+
+The `/feedback?project=<name>` share endpoint is a Netlify function (`netlify/functions/feedback`) that serves a project's annotations as the same `exportAsJson()` shape, querying Supabase server-side with the **anon key only** (from env — never committed, never the service-role key). See [docs/cloud-mode.md](../docs/cloud-mode.md).
 
 Raw GitHub URLs the orchestrator uses:
 
 - `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md`
 - `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/harden-rls.md`
+- `https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/skills/apply-ccm-feedback/SKILL.md`
 
 ## Plain-script alternative
 
