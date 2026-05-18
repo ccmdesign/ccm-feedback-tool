@@ -11,6 +11,8 @@ const STRINGS: Record<string, string> = {
   "fab.toggleOn": "Hide comments",
   "fab.toggleOff": "Show comments",
   "fab.export": "Export JSON",
+  "fab.copyUrl": "Copy feedback URL", // FR: "Copier l'URL des retours"
+  "fab.copyUrlLocalOnly": "Cloud mode only — use Export JSON", // FR: "Mode cloud uniquement — utilisez Export JSON"
   "fab.clear": "Clear all",
   "fab.clearConfirm": "Delete all annotations for this project? This cannot be undone.",
   "pin.ariaLabel": "Pin mode toolbar",
@@ -19,6 +21,7 @@ const STRINGS: Record<string, string> = {
   "coordPin.instruction": "Click anywhere to drop a pin",
   "area.instruction": "Drag to capture an area",
   "status.todo": "Todo",
+  "status.review": "Review", // FR: "À vérifier"
   "status.done": "Done",
   "status.question": "Question",
   "status.label": "Status",
@@ -35,6 +38,8 @@ const STRINGS: Record<string, string> = {
   "marker.popover.deleteConfirm": "Delete this comment? This cannot be undone.",
   "toast.exported": "Exported {n} annotation(s)",
   "toast.empty": "No annotations to export",
+  "toast.urlCopied": "Feedback URL copied to clipboard", // FR: "URL des retours copiée dans le presse-papiers"
+  "toast.urlCopyFailed": "Could not copy URL — clipboard unavailable", // FR: "Impossible de copier l'URL — presse-papiers indisponible"
 };
 
 export type TFunction = (key: string, vars?: Record<string, string | number>) => string;

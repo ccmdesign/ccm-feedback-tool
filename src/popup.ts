@@ -12,6 +12,8 @@ export interface PopupResult {
 /** Visual mapping for status pills. */
 export const STATUS_COLORS: Record<FeedbackStatus, { fg: string; bg: string; border: string }> = {
   todo: { fg: "#a16207", bg: "#fef3c7", border: "#f59e0b" },
+  // Blue/indigo reads as "handled, pending human verification".
+  review: { fg: "#1d4ed8", bg: "#dbeafe", border: "#3b82f6" },
   done: { fg: "#15803d", bg: "#dcfce7", border: "#22c55e" },
   question: { fg: "#6d28d9", bg: "#ede9fe", border: "#8b5cf6" },
 };
