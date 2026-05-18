@@ -11,6 +11,11 @@ import type { AnnotationRecord, FeedbackStatus } from "./types.js";
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
 const REPOSITION_DEBOUNCE_MS = 200;
+const POPOVER_ANCHOR_NAME = "--ccm-popover-anchor";
+
+/** True when the browser supports CSS anchor positioning (Chrome 125+). */
+const SUPPORTS_ANCHOR =
+  typeof CSS !== "undefined" && CSS.supports("anchor-name: --a") && CSS.supports("position-area: bottom");
 
 interface MarkerEntry {
   record: AnnotationRecord;
@@ -28,6 +33,7 @@ export class MarkerManager {
   private entries: MarkerEntry[] = [];
   private visible = true;
   private popover: HTMLElement | null = null;
+  private anchoredMarker: HTMLElement | null = null;
   private repositionTimer: number | null = null;
   private readonly onResize: () => void;
   private readonly onScroll: () => void;
@@ -175,10 +181,9 @@ export class MarkerManager {
 
   private openPopover(record: AnnotationRecord, marker: HTMLElement): void {
     this.closePopover();
-    const rect = marker.getBoundingClientRect();
     const pop = el("div", {
       style: `
-        position:fixed;z-index:${Z_INDEX_MAX};max-width:300px;min-width:220px;padding:14px;
+        z-index:${Z_INDEX_MAX};max-width:300px;min-width:220px;padding:14px;
         border-radius:12px;background:${this.colors.glassBg};
         backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
         border:1px solid ${this.colors.glassBorder};
@@ -265,14 +270,27 @@ export class MarkerManager {
     pop.appendChild(meta);
     pop.appendChild(btnRow);
 
-    let top = rect.bottom + 8;
-    let left = rect.left - 10;
-    if (top + 180 > window.innerHeight) top = rect.top - 180 - 8;
-    if (left + 300 > window.innerWidth) left = window.innerWidth - 300 - 8;
-    top = Math.max(8, top);
-    left = Math.max(8, left);
-    pop.style.top = `${top}px`;
-    pop.style.left = `${left}px`;
+    if (SUPPORTS_ANCHOR) {
+      marker.style.setProperty("anchor-name", POPOVER_ANCHOR_NAME);
+      this.anchoredMarker = marker;
+      pop.style.position = "absolute";
+      pop.style.setProperty("position-anchor", POPOVER_ANCHOR_NAME);
+      pop.style.setProperty("position-area", "bottom span-right");
+      pop.style.setProperty("position-try-fallbacks", "flip-block, flip-inline, flip-block flip-inline");
+      pop.style.setProperty("position-try-order", "most-height");
+      pop.style.margin = "8px 0 0 -10px";
+    } else {
+      const rect = marker.getBoundingClientRect();
+      pop.style.position = "fixed";
+      let top = rect.bottom + 8;
+      let left = rect.left - 10;
+      if (top + 180 > window.innerHeight) top = rect.top - 180 - 8;
+      if (left + 300 > window.innerWidth) left = window.innerWidth - 300 - 8;
+      top = Math.max(8, top);
+      left = Math.max(8, left);
+      pop.style.top = `${top}px`;
+      pop.style.left = `${left}px`;
+    }
 
     document.body.appendChild(pop);
     this.popover = pop;
@@ -292,6 +310,10 @@ export class MarkerManager {
     if (!this.popover) return;
     this.popover.remove();
     this.popover = null;
+    if (this.anchoredMarker) {
+      this.anchoredMarker.style.removeProperty("anchor-name");
+      this.anchoredMarker = null;
+    }
   }
 
   private scheduleReposition(): void {
