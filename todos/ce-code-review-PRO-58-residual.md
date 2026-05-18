@@ -20,7 +20,14 @@ Artifact: `/tmp/compound-engineering/ce-code-review/20260518-115036-e3d7600c/`
 
 ## Residual actionable work (NOT auto-applied — gated_auto, owner: downstream-resolver)
 
-### #1 [P2][gated_auto] Toggling comments off makes every target row "can't locate"
+### #1 [P2][gated_auto] Toggling comments off makes every target row "can't locate" — RESOLVED (fixed)
+
+> Status: RESOLVED — `isEntryLocatable` target branch now judges locatability
+> on `entry.anchorEl != null` alone (markers.ts:~186), decoupled from the
+> global markers-visible toggle. `scrollToAndFlash` already guards the flash
+> with `if (this.visible)`, so a hidden-but-locatable jump scrolls without
+> flashing and does not force the global toggle back on. `bun run check` +
+> `bun run lint` + `bun run build` green.
 
 - **File:** `src/markers.ts:186` (`isEntryLocatable`)
 - **Confidence:** 75 (correctness reviewer)
@@ -68,11 +75,20 @@ auto-applied.
   across `buildCard` / `buildSectionLabel` / Other-pages toggle; project keeps
   presentation in the `.sp-*` stylesheet. Advisory only — promote the repeated
   blocks to `src/styles/base.ts` if/when the drawer is themed further.
+  → WON'T-FIX (deferred per the todo's own condition). Promoting presentation
+  into the shared `src/styles/base.ts` stylesheet is a theming change outside
+  this PR's view+navigate scope and speculative until the drawer is themed
+  further; no behavior benefit, so deferred as the todo itself prescribes.
 - **adversarial P3 — drawer.ts:110** `onDocumentClick` correctness relies on an
   undocumented timing assumption (listener attached mid-dispatch +
   `composedPath()` excluding the widget host). Behavior is correct today;
   advisory only — add a clarifying comment or defer the listener attach to a
   microtask if the open path is ever made async.
+  → RESOLVED (fixed): added a clarifying comment at the `onDocumentClick`
+  definition documenting both timing assumptions (synchronous `open()` adds
+  the listener after the opening click dispatches; `composedPath()` includes
+  the shadow host for widget-internal clicks). Zero behavior change — the
+  lower-risk of the two options the todo offered.
 
 ## Notes
 

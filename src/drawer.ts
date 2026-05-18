@@ -84,6 +84,15 @@ export class Drawer {
     shadowRoot.appendChild(this.root);
 
     const host = shadowRoot.host;
+    // Outside-click-to-close. Two assumptions keep this correct, both held by
+    // the synchronous `open()` path:
+    //   1. The listener is added in `open()` *after* the click that opened the
+    //      drawer has finished dispatching, so that opening click never reaches
+    //      this handler. If `open()` is ever made async, defer the
+    //      `addEventListener` to a microtask to preserve this.
+    //   2. `composedPath()` includes the shadow `host` for any click that
+    //      originated inside the widget (drawer, FAB, popover live under it),
+    //      so only genuinely-outside clicks close the drawer.
     this.onDocumentClick = (e) => {
       if (!this.isOpen) return;
       if (!e.composedPath().includes(host)) this.close();
