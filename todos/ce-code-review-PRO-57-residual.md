@@ -8,9 +8,40 @@ Verdict: Ready to merge (no P0/P1/P2 after confidence gate; 0 safe_auto fixes; c
 No `safe_auto` fixes were applicable — nothing was changed or committed by the review.
 All residual items below are advisory/low-severity; none block the merge.
 
+## Resolution pass — ce-resolve-pr-feedback (2026-05-18)
+
+Each residual item was re-evaluated for validity, risk, and PRO-57 scope.
+Verdict: **0 fixed · 5 won't-fix**. No code changes. `bun run check` +
+`bun run lint` re-confirmed green (tree unchanged). Per-item rationale inline
+below (lines prefixed `RESOLVE:`).
+
+- R1 — WON'T-FIX. The item itself says "do NOT auto-apply — it's a
+  migration/behavior change", and the task's hard constraint requires 0004 to
+  stay idempotent/guarded/non-destructive as-is. Plan U1 explicitly accepts the
+  name assumption; the only constraint source in-repo (0002 inline) yields the
+  matched name deterministically. Introspection rewrite is speculative
+  hardening for non-standard out-of-band self-host setups, out-of-scope for
+  PRO-57, and would expand the migration diff.
+- P3 rowToRecord duplication — WON'T-FIX. Deliberate + documented in the fn
+  header and plan U7; no test suite by design. A shared module needs
+  restructuring browser/IIFE source for Netlify import = architecture change,
+  out-of-scope, diff-expanding.
+- P3 copyUrl:click unconditional registration — WON'T-FIX. Provably inert in
+  localStorage mode (Fab item disabled, event never emitted) and already
+  documented in a clear inline comment. A guard would be dead defensive code
+  with zero behavioral effect.
+- P3 no fetch timeout — WON'T-FIX. Read-only share endpoint; Netlify platform
+  function duration cap is a real hard backstop. AbortController plumbing is
+  speculative hardening, diff-expanding.
+- P3 CLI parseArgs `--flag --value` — WON'T-FIX. Narrow edge; no real flag
+  value starts with `--` (ids/statuses are positionals), and the documented
+  `--flag=value` form is the robust mitigation. Changing parser behavior risks
+  masking genuine missing-value mistakes.
+
 ## Residual actionable work (downstream-resolver / human discretion)
 
 ### R1 — Migration 0004 hard-codes the constraint name `ccm_widget_annotations_status_check`
+- RESOLVE: WON'T-FIX (explicitly do-not-auto-apply migration/behavior change; out-of-scope for PRO-57; conflicts with "0004 stays idempotent/guarded/non-destructive" hold-steady constraint).
 - Severity: P2 · autofix_class: manual · owner: human · confidence: 50 · pre_existing: false
 - File: supabase/migrations/0004_status_review.sql:18-41
 - Issue: 0004 drops/re-adds the status CHECK by the literal name
@@ -35,20 +66,20 @@ All residual items below are advisory/low-severity; none block the merge.
 
 ## Advisory / suppressed by confidence gate or mode-aware demotion (Coverage)
 
-- P3 maintainability — `rowToRecord` is duplicated between
+- RESOLVE WON'T-FIX (deliberate+documented U7; shared module = out-of-scope architecture change). P3 maintainability — `rowToRecord` is duplicated between
   `netlify/functions/feedback.mts` and `src/cloud-store.ts` (~25-field
   snake_case→camelCase map) with no drift guard. Deliberate + documented in
   the function header and plan U7 ("widget source is browser/IIFE, not cleanly
   importable"). Project has no test suite by design. If a shared module or a
   drift-check is ever wanted, this is the place. Demoted (autofix suppressed).
-- P3 maintainability — `bus.on("copyUrl:click", …)` is registered
+- RESOLVE WON'T-FIX (provably inert in localStorage mode + documented; guard would be dead defensive code). P3 maintainability — `bus.on("copyUrl:click", …)` is registered
   unconditionally in `src/index.ts`; inert in localStorage mode because the
   Fab item is disabled there and never emits. Harmless; commented. Suppressed
   (below anchor-75 gate).
-- P3 reliability — no explicit `fetch` timeout in
+- RESOLVE WON'T-FIX (read-only endpoint; Netlify duration cap is the backstop; AbortController = speculative diff-expansion). P3 reliability — no explicit `fetch` timeout in
   `netlify/functions/feedback.mts`; relies on the Netlify platform function
   duration cap. Acceptable for a read-only share endpoint. Suppressed.
-- P3 correctness — CLI `parseArgs` in `scripts/feedback.ts` misparses a
+- RESOLVE WON'T-FIX (narrow edge; no real flag value starts with `--`; documented `--flag=value` mitigation; parser change risks masking missing-value errors). P3 correctness — CLI `parseArgs` in `scripts/feedback.ts` misparses a
   `--flag <value>` whose value starts with `--` (treats the flag as `"true"`).
   Mitigated by the supported `--flag=value` form. Suppressed.
 
