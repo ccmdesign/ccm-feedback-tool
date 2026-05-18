@@ -181,9 +181,14 @@ export class MarkerManager {
     ) {
       return true;
     }
-    // target: `reposition()` sets display:none + anchorEl=null when the
-    // four-strategy resolver returns null. Reuse that exact signal.
-    return entry.anchorEl != null && entry.node.style.display !== "none";
+    // target: `reposition()` sets `anchorEl` to the resolved element (or null
+    // when the four-strategy resolver fails) independent of `this.visible`.
+    // Locatability tracks anchor *resolution* only — NOT the global
+    // markers-visible toggle. Gating on `display !== "none"` here would make
+    // every resolvable target read as unlocatable while comments are hidden
+    // via the FAB eye, breaking the drawer's hide-then-jump flow.
+    // `scrollToAndFlash` still scrolls (and just skips the flash) when hidden.
+    return entry.anchorEl != null;
   }
 
   private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
