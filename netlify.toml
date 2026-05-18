@@ -6,6 +6,23 @@
   BUN_VERSION = "1.3.11"
   NODE_VERSION = "20"
 
+[functions]
+  directory = "netlify/functions"
+
+# Public /feedback share endpoint → the feedback function. status=200 so the
+# path stays /feedback (rewrite, not redirect).
+#
+# The feedback function requires two Netlify dashboard env vars (anon key
+# ONLY — never the service-role key, never committed here):
+#   SUPABASE_URL        — your Supabase project URL
+#   SUPABASE_ANON_KEY   — the browser-safe anon/publishable key
+# Set them in Site settings → Environment variables. The function reads them
+# server-side; they are never shipped to any client asset.
+[[redirects]]
+  from = "/feedback"
+  to = "/.netlify/functions/feedback"
+  status = 200
+
 [[headers]]
   for = "/w.js"
   [headers.values]
