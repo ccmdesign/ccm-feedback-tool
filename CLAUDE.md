@@ -39,6 +39,6 @@ Single-package, single-script-tag widget. `src/` → `dist/w.js` via `esbuild.co
 - PRs target `dev`. Never merge to `main` without explicit user instruction.
 
 ## Attribution
-- ccm-feedback is a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus, MIT licensed.
+- ccm-feedback originated as a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) by NeosiaNexus, MIT licensed.
 - `LICENSE` preserves the original copyright. `NOTICE` documents the attribution.
-- The `upstream` git remote points at `NeosiaNexus/SitePing` and must not be modified.
+- The codebase has diverged architecturally (monorepo → single-script-tag widget) and is maintained independently. The `upstream` git remote has been removed; no upstream sync path remains.
