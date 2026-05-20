@@ -28,6 +28,8 @@ export class Drawer {
   private otherPagesExpanded = false;
   private previouslyFocused: HTMLElement | null = null;
   private readonly chipButtons = new Map<StatusFilter, HTMLButtonElement>();
+  private readonly chipCounts = new Map<StatusFilter, HTMLElement>();
+  private readonly chipLabels = new Map<StatusFilter, string>();
   private readonly onDocumentClick: (e: MouseEvent) => void;
   private readonly onKeydown: (e: KeyboardEvent) => void;
 
@@ -67,11 +69,20 @@ export class Drawer {
     for (const value of filterValues) {
       const chip = el("button", { class: "sp-chip", type: "button" }) as HTMLButtonElement;
       const label = value === "all" ? t("drawer.filterAll") : t(`status.${value}`);
-      setText(chip, label);
+      // Two children: a label span + a separate count badge so render() can
+      // refresh just the count without re-parsing the chip's text content.
+      const labelEl = el("span", { class: "sp-chip-label" });
+      setText(labelEl, label);
+      const countEl = el("span", { class: "sp-chip-count" });
+      countEl.setAttribute("aria-hidden", "true");
+      chip.appendChild(labelEl);
+      chip.appendChild(countEl);
       chip.dataset.filter = value;
       chip.setAttribute("aria-pressed", value === this.filter ? "true" : "false");
       chip.addEventListener("click", () => this.setFilter(value));
       this.chipButtons.set(value, chip);
+      this.chipCounts.set(value, countEl);
+      this.chipLabels.set(value, label);
       chips.appendChild(chip);
     }
     this.filtersEl.appendChild(chips);
@@ -170,10 +181,35 @@ export class Drawer {
     }
   }
 
+  /**
+   * Refresh the per-tab count badge using the full annotation list (not the
+   * filtered subset) so each tab always shows its own total. Also rewrites
+   * the chip's `aria-label` so screen readers announce the count alongside
+   * the status name — the visible badge has `aria-hidden="true"` to avoid
+   * a double-readout.
+   */
+  private updateChipCounts(all: readonly AnnotationRecord[]): void {
+    const counts = new Map<StatusFilter, number>();
+    counts.set("all", all.length);
+    for (const status of FEEDBACK_STATUSES) counts.set(status, 0);
+    for (const r of all) {
+      const status = (r.status ?? "todo") as FeedbackStatus;
+      counts.set(status, (counts.get(status) ?? 0) + 1);
+    }
+    for (const [value, chip] of this.chipButtons) {
+      const n = counts.get(value) ?? 0;
+      const countEl = this.chipCounts.get(value);
+      const label = this.chipLabels.get(value) ?? value;
+      if (countEl) setText(countEl, String(n));
+      chip.setAttribute("aria-label", `${label} — ${n}`);
+    }
+  }
+
   private render(): void {
     this.listEl.replaceChildren();
 
     const all = this.store.list();
+    this.updateChipCounts(all);
     const filtered = this.filter === "all" ? all : all.filter((r) => (r.status ?? "todo") === this.filter);
 
     if (all.length === 0) {

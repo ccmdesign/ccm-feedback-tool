@@ -43,6 +43,7 @@ export interface WidgetEvents {
   "area:start": [];
   "area:end": [];
   "feedback:saved": [AnnotationRecord];
+  "feedback:updated": [AnnotationRecord];
   "feedback:deleted": [string];
   "annotations:toggle": [boolean];
   "export:click": [];

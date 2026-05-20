@@ -383,6 +383,35 @@ export function buildStyles(colors: ThemeColors): string {
       transition: all 0.2s ease;
       white-space: nowrap;
       letter-spacing: 0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sp-chip-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: var(--sp-radius-full);
+      background: var(--sp-border);
+      color: var(--sp-text-tertiary);
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .sp-chip--active .sp-chip-count {
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+
+    .sp-chip:hover:not(.sp-chip--active) .sp-chip-count {
+      background: var(--sp-accent-light);
+      color: var(--sp-accent);
     }
 
     .sp-chip:hover {

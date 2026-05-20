@@ -64,6 +64,17 @@ export class MarkerManager {
           0%, 100% { box-shadow: 0 2px 8px rgba(139,92,246,0.55), 0 0 0 0 rgba(139,92,246,0.55); }
           50%      { box-shadow: 0 2px 8px rgba(139,92,246,0.55), 0 0 0 10px rgba(139,92,246,0); }
         }
+        @keyframes ccm-anchor-flash {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(139,92,246,0); outline-color: rgba(139,92,246,0); }
+          30%      { box-shadow: 0 0 0 6px rgba(139,92,246,0.35); outline-color: rgba(139,92,246,0.95); }
+          70%      { box-shadow: 0 0 0 10px rgba(139,92,246,0); outline-color: rgba(139,92,246,0.4); }
+        }
+        .ccm-anchor-flash {
+          outline: 2px solid rgba(139,92,246,0);
+          outline-offset: 3px;
+          animation: ccm-anchor-flash 1.2s ease-in-out 1;
+          border-radius: 2px;
+        }
       `;
       document.head.appendChild(styleEl);
     }
@@ -172,7 +183,34 @@ export class MarkerManager {
         node.style.animation = status === "question" ? "ccm-pulse 1.6s ease-in-out infinite" : "";
       }, 650);
     }
+
+    // Also flash the underlying anchored DOM element so the reviewer sees
+    // *what* was pinned, not just the marker. Only "target" kinds carry a
+    // resolved anchor element; "pin" / "area" comments are coordinate-based
+    // and the marker itself is the visual cue.
+    this.flashAnchorElement(entry);
     return true;
+  }
+
+  /**
+   * Briefly outline + glow the live DOM element that this annotation was
+   * anchored to. Uses a transient class so the page's own CSS isn't
+   * mutated. No-op for non-target kinds and for entries whose anchor
+   * couldn't be resolved on the current page.
+   */
+  private flashAnchorElement(entry: MarkerEntry): void {
+    const kind = entry.record.kind ?? "target";
+    if (kind !== "target") return;
+    const target = entry.anchorEl;
+    if (!target || !(target instanceof HTMLElement)) return;
+    target.classList.remove("ccm-anchor-flash");
+    // Force a reflow so re-adding the class re-triggers the animation
+    // when the same element is targeted twice in a row.
+    void target.offsetWidth;
+    target.classList.add("ccm-anchor-flash");
+    window.setTimeout(() => {
+      target.classList.remove("ccm-anchor-flash");
+    }, 1250);
   }
 
   private isEntryLocatable(entry: MarkerEntry): boolean {
@@ -366,6 +404,7 @@ export class MarkerManager {
     const next = order[(order.indexOf(cur) + 1) % order.length] ?? "todo";
     this.store.updateStatus?.(record.id, next);
     record.status = next;
+    this.bus.emit("feedback:updated", record);
     this.closePopover();
     this.refresh();
   }

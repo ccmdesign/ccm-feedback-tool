@@ -16,6 +16,16 @@ import { buildStyles } from "./styles/base.js";
 import { buildThemeColors } from "./styles/theme.js";
 import type { AnchorData, AnnotationRecord, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
 
+/**
+ * Count "active" annotations — everything except `done`. Used for the FAB
+ * badge so the visible counter reflects work still pending review/action,
+ * not historical resolved items. `done` records remain visible in the
+ * drawer (and as markers) but stop inflating the headline count.
+ */
+function countActive(records: readonly AnnotationRecord[]): number {
+  return records.reduce((n, r) => n + ((r.status ?? "todo") !== "done" ? 1 : 0), 0);
+}
+
 let instance: CcmFeedbackInstance | null = null;
 
 function noopInstance(): CcmFeedbackInstance {
@@ -70,7 +80,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       log,
       onChange: () => {
         markers.refresh();
-        fab.updateCount(store.list().length);
+        fab.updateCount(countActive(store.list()));
         drawer.refreshIfOpen();
       },
     });
@@ -151,7 +161,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(store.list().length);
+    fab.updateCount(countActive(store.list()));
     log("Saved", record.id);
   };
 
@@ -176,7 +186,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(store.list().length);
+    fab.updateCount(countActive(store.list()));
     log("Saved pin", record.id);
   };
 
@@ -201,7 +211,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(store.list().length);
+    fab.updateCount(countActive(store.list()));
     log("Saved area", record.id);
   };
 
@@ -244,11 +254,18 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     log("Cleared all annotations");
   });
 
-  // Keep an open drawer live on local create/delete (cloud Realtime is
-  // covered by the CloudStore onChange callback above). Additive — does
-  // not change existing marker/fab behavior.
-  bus.on("feedback:saved", () => drawer.refreshIfOpen());
-  bus.on("feedback:deleted", () => drawer.refreshIfOpen());
+  // Keep an open drawer live on local create/update/delete (cloud Realtime
+  // is covered by the CloudStore onChange callback above). Also refresh
+  // the FAB count on update/delete — `done` status drops out of the active
+  // count and a delete shrinks the total, neither of which the per-save
+  // call sites cover.
+  const syncUi = () => {
+    fab.updateCount(countActive(store.list()));
+    drawer.refreshIfOpen();
+  };
+  bus.on("feedback:saved", syncUi);
+  bus.on("feedback:updated", syncUi);
+  bus.on("feedback:deleted", syncUi);
 
   // `findAnchorElement` is re-exported so consumers that want to
   // programmatically add an annotation have access to the anchor logic.
@@ -258,16 +275,16 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   // refresh once the network fetch completes so other reviewers' comments
   // appear without requiring a page reload.
   markers.refresh();
-  fab.updateCount(store.list().length);
+  fab.updateCount(countActive(store.list()));
   if (cloudStore) {
     const cs = cloudStore;
     void cs.init().then(async () => {
       markers.refresh();
-      fab.updateCount(store.list().length);
+      fab.updateCount(countActive(store.list()));
       const migrated = await migrateLocalToCloud(cs, config.projectName, log);
       if (migrated > 0) {
         markers.refresh();
-        fab.updateCount(store.list().length);
+        fab.updateCount(countActive(store.list()));
       }
     });
   }
