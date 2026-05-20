@@ -9,8 +9,14 @@ import { type AnnotationRecord, FEEDBACK_STATUSES, type FeedbackStatus } from ".
 
 const MESSAGE_TRUNCATE = 140;
 
-/** Status filter value — either a concrete status or the "all" sentinel. */
-type StatusFilter = FeedbackStatus | "all";
+/** Status filter value — one concrete status. The drawer always filters by
+ * exactly one status (no "all" sentinel): the chips become the canonical
+ * way to switch between work-buckets. */
+type StatusFilter = FeedbackStatus;
+
+/** Default chip selected on widget boot — kept off `done` so resolved
+ * comments stay hidden by default per the "done = out of sight" rule. */
+const DEFAULT_FILTER: StatusFilter = "todo";
 
 /**
  * Read-only comment navigator drawer. Lives inside the widget's open Shadow
@@ -24,7 +30,7 @@ export class Drawer {
   private listEl: HTMLElement;
   private filtersEl: HTMLElement;
   private isOpen = false;
-  private filter: StatusFilter = "all";
+  private filter: StatusFilter = DEFAULT_FILTER;
   private otherPagesExpanded = false;
   private previouslyFocused: HTMLElement | null = null;
   private readonly chipButtons = new Map<StatusFilter, HTMLButtonElement>();
@@ -43,6 +49,10 @@ export class Drawer {
     private readonly jump: (id: string) => boolean,
     /** Whether an annotation's marker can be located on the current page. */
     private readonly canLocate: (id: string) => boolean,
+    /** Notify the marker layer that the drawer's status filter changed. The
+     * marker layer uses this to gate `done`-marker visibility: done markers
+     * stay hidden unless the drawer's current filter is `done`. */
+    private readonly onFilterChange: (filter: StatusFilter) => void = () => {},
   ) {
     this.root = el("div", { class: "sp-panel" });
     this.root.setAttribute("role", "dialog");
@@ -65,10 +75,10 @@ export class Drawer {
 
     this.filtersEl = el("div", { class: "sp-filters" });
     const chips = el("div", { class: "sp-chips" });
-    const filterValues: StatusFilter[] = ["all", ...FEEDBACK_STATUSES];
+    const filterValues: StatusFilter[] = [...FEEDBACK_STATUSES];
     for (const value of filterValues) {
       const chip = el("button", { class: "sp-chip", type: "button" }) as HTMLButtonElement;
-      const label = value === "all" ? t("drawer.filterAll") : t(`status.${value}`);
+      const label = t(`status.${value}`);
       // Two children: a label span + a separate count badge so render() can
       // refresh just the count without re-parsing the chip's text content.
       const labelEl = el("span", { class: "sp-chip-label" });
@@ -168,9 +178,19 @@ export class Drawer {
   }
 
   private setFilter(filter: StatusFilter): void {
+    if (this.filter === filter) return;
     this.filter = filter;
     this.applyChipStyles();
+    // Notify before render so the marker layer can refresh its visible set
+    // first — render() calls canLocate() per row, which depends on which
+    // markers are currently rendered.
+    this.onFilterChange(filter);
     this.render();
+  }
+
+  /** Current chip filter — read-only for callers wiring marker visibility. */
+  getFilter(): StatusFilter {
+    return this.filter;
   }
 
   private applyChipStyles(): void {
@@ -190,7 +210,6 @@ export class Drawer {
    */
   private updateChipCounts(all: readonly AnnotationRecord[]): void {
     const counts = new Map<StatusFilter, number>();
-    counts.set("all", all.length);
     for (const status of FEEDBACK_STATUSES) counts.set(status, 0);
     for (const r of all) {
       const status = (r.status ?? "todo") as FeedbackStatus;
@@ -210,7 +229,7 @@ export class Drawer {
 
     const all = this.store.list();
     this.updateChipCounts(all);
-    const filtered = this.filter === "all" ? all : all.filter((r) => (r.status ?? "todo") === this.filter);
+    const filtered = all.filter((r) => (r.status ?? "todo") === this.filter);
 
     if (all.length === 0) {
       this.listEl.appendChild(this.buildEmpty(this.t("drawer.empty")));

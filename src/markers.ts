@@ -32,6 +32,11 @@ export class MarkerManager {
   private container: HTMLElement;
   private entries: MarkerEntry[] = [];
   private visible = true;
+  /** When false, markers for records with `status === "done"` are filtered
+   * out of the rendered set. Flipped to true only while the drawer is
+   * actively focused on the Done tab so resolved work doesn't clutter the
+   * page. */
+  private includeDone = false;
   private popover: HTMLElement | null = null;
   private anchoredMarker: HTMLElement | null = null;
   private repositionTimer: number | null = null;
@@ -120,7 +125,7 @@ export class MarkerManager {
     for (const entry of this.entries) entry.node.remove();
     this.entries = [];
 
-    const records = this.store.listForPath(window.location.pathname);
+    const records = this.store.listForPath(window.location.pathname).filter((r) => this.shouldRender(r));
     records.forEach((record, idx) => {
       const node = this.buildMarker(record, idx + 1);
       this.container.appendChild(node);
@@ -130,12 +135,32 @@ export class MarkerManager {
   }
 
   addOne(record: AnnotationRecord): void {
+    if (!this.shouldRender(record)) return;
     const idx = this.entries.length + 1;
     const node = this.buildMarker(record, idx);
     this.container.appendChild(node);
     this.entries.unshift({ record, node, anchorEl: null });
     this.renumber();
     this.reposition();
+  }
+
+  /** Gate for whether a record should appear in the marker layer. */
+  private shouldRender(record: AnnotationRecord): boolean {
+    const status = record.status ?? "todo";
+    if (status === "done" && !this.includeDone) return false;
+    return true;
+  }
+
+  /**
+   * Toggle whether `done` markers participate in the rendered set. Called
+   * by the drawer when its filter chip changes — the drawer is the only
+   * UI surface that exposes done comments, so its filter is the source of
+   * truth for marker visibility. No-op when the flag is unchanged.
+   */
+  setIncludeDone(include: boolean): void {
+    if (this.includeDone === include) return;
+    this.includeDone = include;
+    this.refresh();
   }
 
   setVisible(visible: boolean): void {

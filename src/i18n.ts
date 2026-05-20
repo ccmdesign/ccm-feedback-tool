@@ -44,7 +44,6 @@ const STRINGS: Record<string, string> = {
   "drawer.title": "Comments", // FR: "Commentaires"
   "drawer.aria": "Comments navigator", // FR: "Navigateur de commentaires"
   "drawer.close": "Close comments", // FR: "Fermer les commentaires"
-  "drawer.filterAll": "All", // FR: "Tous"
   "drawer.empty": "No comments yet", // FR: "Aucun commentaire"
   "drawer.emptyFiltered": "No comments match this filter", // FR: "Aucun commentaire ne correspond à ce filtre"
   "drawer.thisPage": "This page", // FR: "Cette page"

@@ -120,6 +120,9 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     colors,
     (id) => markers.scrollToAndFlash(id),
     (id) => markers.canLocate(id),
+    // Drawer chip is the source of truth for whether done markers render.
+    // Done is hidden everywhere by default; only the Done tab surfaces it.
+    (filter) => markers.setIncludeDone(filter === "done"),
   );
 
   bus.on("navigator:open", () => drawer.open());
