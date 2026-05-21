@@ -1130,7 +1130,23 @@ export class MarkerManager {
       }
     });
 
-    this.popoverDisposers.push(offReplied, offDeleted);
+    // PRO-68 §6 — drawer-driven status changes for the same record must
+    // refresh the open popover's pill. The dropdown survives outside-tab
+    // updates the same way, so this subscriber is the single source of
+    // truth for "an update for THIS record arrived".
+    const offUpdated = this.bus.on("feedback:updated", (updated) => {
+      if (updated.id !== record.id) return;
+      const next: FeedbackStatus = updated.status ?? "todo";
+      // Defensive — popoverStatusDropdown may already be torn down if the
+      // popover is mid-close.
+      this.popoverStatusDropdown?.setCurrent(next);
+      // Keep the in-flight record reference and the marker visual aligned
+      // with the new status so closing + reopening renders identical state.
+      record.status = next;
+      this.repositionAndRecolor(record.id);
+    });
+
+    this.popoverDisposers.push(offReplied, offDeleted, offUpdated);
   }
 
   /**
