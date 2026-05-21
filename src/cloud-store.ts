@@ -56,6 +56,25 @@ interface CloudRow {
 
 const TABLE = "ccm_widget_annotations";
 
+/**
+ * Parse a PostgREST `Content-Range` response header like "0-0/1", "*\/0", or
+ * "0-2/3" and return the affected-row count from the slash-N suffix.
+ *
+ * Returns null when the header is absent or unparseable; returns the integer
+ * count otherwise (including 0 for "*\/0"). Used by UPDATE/DELETE/CLEAR paths
+ * to detect silent zero-row writes that PostgREST otherwise reports as 200 OK
+ * (e.g. when an RLS policy blocks the row). See PRO-65.
+ */
+function parseContentRangeCount(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const slash = headerValue.lastIndexOf("/");
+  if (slash === -1) return null;
+  const tail = headerValue.slice(slash + 1).trim();
+  if (tail === "" || tail === "*") return null;
+  const n = Number(tail);
+  return Number.isFinite(n) ? n : null;
+}
+
 function rowToRecord(row: CloudRow): AnnotationRecord {
   const record: AnnotationRecord = {
     id: row.id,
@@ -319,12 +338,17 @@ export class CloudStore implements AnnotationStore {
     try {
       const res = await fetch(`${this.endpoint}?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
-        headers: this.headers,
+        headers: { ...this.headers, Prefer: "return=representation, count=exact" },
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
         const body = await res.text();
         console.warn(`[ccm-feedback] cloud update failed: ${res.status} ${body}`);
+        return;
+      }
+      const count = parseContentRangeCount(res.headers.get("content-range"));
+      if (count === 0) {
+        console.error(`[ccm-feedback] cloud update no-op for id=${id} — possible RLS misconfiguration or stale id`);
       }
     } catch (err) {
       console.warn("[ccm-feedback] cloud update error", err);
@@ -335,11 +359,16 @@ export class CloudStore implements AnnotationStore {
     try {
       const res = await fetch(`${this.endpoint}?id=eq.${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: this.headers,
+        headers: { ...this.headers, Prefer: "return=representation, count=exact" },
       });
       if (!res.ok) {
         const body = await res.text();
         console.warn(`[ccm-feedback] cloud delete failed: ${res.status} ${body}`);
+        return;
+      }
+      const count = parseContentRangeCount(res.headers.get("content-range"));
+      if (count === 0) {
+        console.error(`[ccm-feedback] cloud delete no-op for id=${id} — possible RLS misconfiguration or stale id`);
       }
     } catch (err) {
       console.warn("[ccm-feedback] cloud delete error", err);
@@ -353,11 +382,16 @@ export class CloudStore implements AnnotationStore {
       const inList = ids.map((i) => `"${i}"`).join(",");
       const res = await fetch(`${this.endpoint}?id=in.(${inList})`, {
         method: "DELETE",
-        headers: this.headers,
+        headers: { ...this.headers, Prefer: "return=representation, count=exact" },
       });
       if (!res.ok) {
         const body = await res.text();
         console.warn(`[ccm-feedback] cloud clear failed: ${res.status} ${body}`);
+        return;
+      }
+      const count = parseContentRangeCount(res.headers.get("content-range"));
+      if (count !== null && count < ids.length) {
+        console.warn(`[ccm-feedback] cloud clear partial: expected ${ids.length} deleted ${count}`);
       }
     } catch (err) {
       console.warn("[ccm-feedback] cloud clear error", err);
