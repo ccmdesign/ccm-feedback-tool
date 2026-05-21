@@ -21,16 +21,17 @@ const REPOSITION_DEBOUNCE_MS = 200;
 // existing synthesized `click` path so tap-to-open still works on mobile.
 const DRAG_LONGPRESS_MS = 250;
 const DRAG_MOVE_THRESHOLD_PX = 6;
-// Popover dimensions used by the placement fallback to flip the popover
-// above the marker (or anchor it to the viewport edge) when the natural
-// below-right position would overflow the viewport.
-const POPOVER_NOMINAL_HEIGHT = 180;
+// Popover width (matches max-width / min-width on the popover root) — used
+// by the manual placement code to clamp horizontally inside the viewport.
 const POPOVER_NOMINAL_WIDTH = 300;
 // Cap on rendered popover height — long reply threads scroll inside the
 // popover rather than off-screen. Pairs with `overflow-y: auto`.
-const POPOVER_MAX_HEIGHT_PX = 480;
-// Safety inset against viewport edges during the measured re-placement
-// pass; matches the 8px gap used elsewhere on the marker side.
+// Formula: min(70vh, 540 px). 540 = nominal-180 * 3 from PRO-66's heuristic;
+// the 70vh ceiling keeps the popover from dominating short-viewport setups.
+const POPOVER_MAX_VH = 0.7;
+const POPOVER_MAX_HEIGHT_CEIL_PX = 540;
+// Safety inset against viewport edges during placement; matches the 8px
+// gap used elsewhere on the marker side.
 const POPOVER_VIEWPORT_MARGIN = 16;
 
 interface MarkerEntry {
@@ -116,6 +117,26 @@ export class MarkerManager {
         }
       `;
       document.head.appendChild(styleEl);
+    }
+
+    // Scoped scrollbar styling for the popover (PRO-67). Lives outside the
+    // shadow root so the WebKit `::-webkit-scrollbar` pseudo-selectors apply
+    // to the popover (which is mounted directly under document.body, not
+    // inside the widget host shadow). The selector is scoped to .ccm-popover
+    // so host-page scrollbars stay untouched.
+    if (!document.getElementById("ccm-popover-scroll")) {
+      const scrollStyle = document.createElement("style");
+      scrollStyle.id = "ccm-popover-scroll";
+      scrollStyle.textContent = `
+        .ccm-popover::-webkit-scrollbar { width: 6px; }
+        .ccm-popover::-webkit-scrollbar-track { background: transparent; }
+        .ccm-popover::-webkit-scrollbar-thumb {
+          background: ${this.colors.glassBorder};
+          border-radius: 3px;
+        }
+        .ccm-popover { scrollbar-width: thin; scrollbar-color: ${this.colors.glassBorder} transparent; }
+      `;
+      document.head.appendChild(scrollStyle);
     }
 
     this.onResize = this.scheduleReposition.bind(this);
@@ -782,6 +803,7 @@ export class MarkerManager {
     });
     pop.setAttribute("role", "dialog");
     pop.setAttribute("aria-label", this.t("marker.ariaLabel", { n: "" }));
+    pop.classList.add("ccm-popover");
     pop.addEventListener("click", (e) => e.stopPropagation());
 
     const body = el("div", { style: "white-space:pre-wrap;word-break:break-word;margin-bottom:10px;" });
@@ -955,7 +977,11 @@ export class MarkerManager {
     pop.appendChild(btnRow);
 
     // ---- Sizing: cap height + scroll inside ----
-    pop.style.maxHeight = `${POPOVER_MAX_HEIGHT_PX}px`;
+    // PRO-67: cap at min(70vh, 540 px). 540 = legacy nominal-180 * 3 — a
+    // ceiling so the popover doesn't dominate tall viewports even when
+    // 70vh would allow more height.
+    const maxHeight = Math.min(window.innerHeight * POPOVER_MAX_VH, POPOVER_MAX_HEIGHT_CEIL_PX);
+    pop.style.maxHeight = `${maxHeight}px`;
     pop.style.overflowY = "auto";
 
     // Manual `position: fixed` placement. We used to feature-detect CSS
@@ -967,46 +993,33 @@ export class MarkerManager {
     // prevent off-viewport pins from growing host scrollWidth, the bug
     // hits every host page. Manual placement sidesteps the anchor-paint
     // bug entirely and gives us explicit control over edge-flip behavior.
+    //
+    // PRO-67: single-pass placement using off-screen pre-render. Append the
+    // popover at top: -10000 / left: -10000 first so it lays out (and the
+    // max-height clamp applies), read the real height, then position it.
+    // The legacy first-paint nominal-180 estimate + measured re-placement
+    // pass are gone — one pass with the real height gives the same UX with
+    // less code.
     const rect = marker.getBoundingClientRect();
     pop.style.position = "fixed";
-    let top = rect.bottom + 8;
-    let left = rect.left - 10;
-    // First-paint placement uses POPOVER_NOMINAL_HEIGHT as the upper-bound
-    // estimate so the popover doesn't briefly flash at top:0 before the
-    // measured pass below corrects it. PRO-64 semantics intact: this is
-    // the only placement the user ever perceives for empty-thread popovers.
-    if (top + POPOVER_NOMINAL_HEIGHT > window.innerHeight) {
-      top = rect.top - POPOVER_NOMINAL_HEIGHT - 8;
-    }
-    // Pull horizontally inside the viewport when the popover would extend
-    // past the right edge (common for markers clamped to the right edge by
-    // reposition()). POPOVER_NOMINAL_WIDTH is exact — popover width is
-    // fixed at max-width:300px;min-width:220px.
-    if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
-      left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
-    }
-    top = Math.max(8, top);
-    left = Math.max(8, left);
-    pop.style.top = `${top}px`;
-    pop.style.left = `${left}px`;
-
+    pop.style.top = "-10000px";
+    pop.style.left = "-10000px";
     document.body.appendChild(pop);
     this.popover = pop;
 
-    // ---- Measured re-placement (replies make height variable) ----
-    // Read the actual rendered height and re-run the flip+clamp. The
-    // nominal-height pass above is the first-paint estimate; this corrects
-    // it before the user perceives the gap (browsers batch layout + paint
-    // between the appendChild above and the next paint frame).
-    const actualHeight = Math.min(pop.offsetHeight, POPOVER_MAX_HEIGHT_PX);
-    let measuredTop = rect.bottom + 8;
-    if (measuredTop + actualHeight > window.innerHeight - POPOVER_VIEWPORT_MARGIN) {
-      measuredTop = rect.top - actualHeight - 8;
+    const actualHeight = Math.min(pop.offsetHeight, maxHeight);
+    let top = rect.bottom + 8;
+    let left = rect.left - 10;
+    if (top + actualHeight > window.innerHeight - POPOVER_VIEWPORT_MARGIN) {
+      top = rect.top - actualHeight - 8;
     }
-    measuredTop = Math.max(POPOVER_VIEWPORT_MARGIN, measuredTop);
-    if (measuredTop !== top) {
-      pop.style.top = `${measuredTop}px`;
+    if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
+      left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
     }
+    top = Math.max(POPOVER_VIEWPORT_MARGIN, top);
+    left = Math.max(8, left);
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
 
     // ---- Realtime: wire bus subscriptions for the open popover ----
     const offReplied = this.bus.on("feedback:replied", (reply) => {
