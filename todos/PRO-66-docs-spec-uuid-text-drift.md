@@ -2,7 +2,7 @@
 
 **Severity:** P3
 **File:** `docs/replies.md:134`, `docs/plans/PRO-66-comment-replies.md:151`
-**Status:** open
+**Status:** resolved — type drift is already documented in `supabase/migrations/0006_replies.sql`'s top comment (now expanded as part of the Option B fix) and in the PR body. Per task brief, presence in any of {migration top comment, docs/replies.md preamble, PR body} is sufficient. No additional doc patch required; the spec code block intentionally retains the `uuid` form because the migration now adapts to whichever live type is present.
 
 ## Observation
 
