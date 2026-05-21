@@ -2,7 +2,7 @@
 
 **Severity:** P3
 **File:** `src/cloud-store.ts:259-269`
-**Status:** open
+**Status:** resolved — adopted Option B (refresh cache entry, skip `onChange()`) for reply UPDATEs. Replies are immutable in v1, but external SQL edits or future v2 edit-reply rows now no longer trigger a wasteful marker refresh. Behavior documented in a code comment on the new branch.
 
 ## Observation
 

@@ -265,6 +265,13 @@ export class CloudStore implements AnnotationStore {
         } else {
           this.cache[idx] = next;
         }
+        // Replies are immutable in v1 — the widget never PATCHes a reply row.
+        // An UPDATE here means an external operator edited a reply via SQL or
+        // a future v2 edit-reply feature is in flight. Refresh the cache entry
+        // (already done above) but skip onChange(): replies aren't markers and
+        // aren't in the drawer's top-level list, so a marker refresh would
+        // flicker the page for no visual gain.
+        if (next.parentId) return;
         this.onChange();
       },
       onDelete: (raw) => {
