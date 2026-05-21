@@ -4,6 +4,7 @@
 **File:** `src/i18n.ts`
 **Lines:** 22–23, 42–43 (new keys)
 **Discovered by:** ce-code-review autofix (PRO-67, PR #32)
+**Status:** resolved — added `// FR: "…"` inline-comment translations for the four PRO-67 keys (`relocate.instruction`, `relocate.cancel`, `marker.popover.statusAria`, `marker.popover.statusMenuAria`) matching the existing convention used for other multilingual keys in the file. Runtime `STRINGS` map remains English-only (file-wide convention since PRO-65); the FR comments give the future EN→FR migration ready strings to lift.
 
 ## Problem
 

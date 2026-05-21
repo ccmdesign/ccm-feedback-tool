@@ -19,8 +19,8 @@ const STRINGS: Record<string, string> = {
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",
-  "relocate.instruction": "Drop on a new target. ESC to cancel.",
-  "relocate.cancel": "Cancel relocate",
+  "relocate.instruction": "Drop on a new target. ESC to cancel.", // FR: "Déposer sur une nouvelle cible. ESC pour annuler."
+  "relocate.cancel": "Cancel relocate", // FR: "Annuler le déplacement"
   "coordPin.instruction": "Click anywhere to drop a pin",
   "area.instruction": "Drag to capture an area",
   "status.todo": "Todo",
@@ -39,8 +39,8 @@ const STRINGS: Record<string, string> = {
   "marker.popover.delete": "Delete",
   "marker.popover.close": "Close",
   "marker.popover.deleteConfirm": "Delete this comment? This cannot be undone.",
-  "marker.popover.statusAria": "Change status",
-  "marker.popover.statusMenuAria": "Statuses",
+  "marker.popover.statusAria": "Change status", // FR: "Changer le statut"
+  "marker.popover.statusMenuAria": "Statuses", // FR: "Statuts"
   "marker.replies.heading": "Replies",
   "marker.reply.delete": "Delete reply",
   "marker.reply.placeholder": "Write a reply…",
