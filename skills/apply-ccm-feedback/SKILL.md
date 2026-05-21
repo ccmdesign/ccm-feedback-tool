@@ -88,9 +88,52 @@ Validate:
 - Filter out anything with `status === "done"` (already shipped and verified).
 - Keep `todo` **and** `review` items (a `review` item may have been re-opened
   or only partially handled — re-apply and re-set it to `review`).
-- Group remaining annotations by `path` — work one route at a time.
+- **Partition by `parentId`** (camelCase from JSON / share URL; `parent_id`
+  from raw PostgREST). See "Replies (`parentId`)" below — this is the
+  load-bearing rule for this skill, not a nicety.
+- Group remaining **top-level** annotations by `path` — work one route at
+  a time.
 
 If the input is malformed or empty, stop and tell the user.
+
+### Replies (`parentId`) — partition this BEFORE everything else
+
+A reply row is an `AnnotationRecord` where `parentId` is set. Replies are
+degenerate: empty anchor fields, zero rect, no `status`/`kind`. If you treat
+a reply as a standalone work item you'll fail source-mapping (it has no
+anchor to mapping back to source) and false-escalate it as "couldn't locate."
+
+> **Reply rows are never standalone work items.** Apply these four rules on
+> every run.
+
+1. **Partition rows by `parentId`.** `parentId` undefined / null → a comment
+   (a work item, mapped to source as today). `parentId` set → a reply,
+   folded into its parent's thread. **Never source-map or status a reply
+   row directly.**
+2. **Fold replies into the parent as conversation context.** When reading a
+   comment's `message`, append its replies in `createdAt` ascending order
+   (oldest → newest). Treat the **latest human reply as the current
+   directive** — it supersedes the original `message` where they conflict
+   (the reviewer is clarifying or redirecting).
+3. **`question` items with a human reply are re-openable.** The standing
+   rule ("agents don't act on `question`, don't re-status it") holds *until*
+   a human reply arrives on it. A reply on a `question` is the human
+   answering their own question / redirecting — re-read the thread as a
+   directive and proceed as for a `todo`. Without this exception, the
+   escalate → reply → re-engage loop is inert.
+4. **Re-apply + re-`review` as normal.** A comment already at `review` with
+   a newer human reply means "your edit wasn't right, here's more" —
+   re-apply against the latest reply, set back to `review`. (`review` and
+   `todo` are already kept above; `done` is still filtered out.)
+
+### Claude-authored replies (convention, not schema)
+
+If you post a reply back (e.g. "couldn't locate — point me at the component"
+or a one-liner explaining what you changed), set `authorName = "Claude"`
+(or the configured agent name). There is **no `authorRole` column** —
+identify your own prior replies by author-name convention when re-reading
+a thread. Posting a reply is optional; your primary response is still the
+code edit + `review` status + the Claude Code chat report.
 
 ## Step 2 — For each annotation, find the source file
 
