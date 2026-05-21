@@ -1,4 +1,5 @@
 import { Z_INDEX_MAX } from "./constants.js";
+import { createHoverOutline, type HoverOutlineHandle } from "./dom/hover-outline.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
@@ -30,26 +31,21 @@ import type { ThemeColors } from "./styles/theme.js";
  * - Payload shape is identical to area mode: full-bounds rect relative to the
  *   clicked element, `type` omitted (defaults to `"rectangle"` server-side).
  */
-/** Defensive inset so the badge never renders flush against the viewport edge. */
-const BADGE_INSET = 8;
-
 export class PinMode {
   private overlay: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
-  private badge: HTMLElement | null = null;
-  private hoveredElement: HTMLElement | null = null;
   private isActive = false;
   private savedOverflow = "";
   private previouslyFocused: HTMLElement | null = null;
   /**
-   * Snapshot of the hovered element's pre-hover inline outline styles so
-   * `clearHoverOutline` restores exactly what the host page had set rather
-   * than wiping it. See CCM-291 P2 todo "preserve-host-inline-outline".
+   * Shared hover-outline helper — owns the outline + tag badge snapshot/restore
+   * state. Extracted in PRO-67 so the marker-relocate drag overlay reuses the
+   * same implementation. Snapshot fields live inside the helper closure.
    */
-  private previousOutline: string | null = null;
-  private previousOutlineOffset: string | null = null;
-  private previousOutlinePriority = "";
-  private previousOutlineOffsetPriority = "";
+  private readonly hoverOutline: HoverOutlineHandle;
+  /** Last element passed to `hoverOutline.apply` — used to dedupe successive
+   * mousemoves over the same target without churning the helper. */
+  private hoveredElement: HTMLElement | null = null;
   /**
    * Unsubscribe handle for the `pin:start` bus listener registered in the
    * constructor. Called from `destroy()` so the closure doesn't outlive the
@@ -70,6 +66,7 @@ export class PinMode {
     /** Excludes the widget host + descendants so pin doesn't outline itself. */
     private readonly shouldIgnoreElement: (element: Element) => boolean,
   ) {
+    this.hoverOutline = createHoverOutline(this.colors);
     this.unsubPinStart = this.bus.on("target:start", () => this.activate());
   }
 
@@ -234,80 +231,13 @@ export class PinMode {
   }
 
   private applyHoverOutline(target: HTMLElement): void {
-    // Snapshot any pre-existing inline outline styling so unhover restores it
-    // rather than nuking host-page outline (CCM-291 P2 preserve-host-inline-outline).
-    this.previousOutline = target.style.outline || null;
-    this.previousOutlineOffset = target.style.outlineOffset || null;
-    this.previousOutlinePriority = target.style.getPropertyPriority("outline");
-    this.previousOutlineOffsetPriority = target.style.getPropertyPriority("outline-offset");
-
-    // Solid 2px outline — distinguishes from text-edit's dashed outline.
-    target.style.setProperty("outline", `2px solid ${this.colors.accent}`, "important");
-    target.style.setProperty("outline-offset", "2px", "important");
-
-    // Floating tag-name badge near the element's bottom-right corner.
-    const bounds = target.getBoundingClientRect();
-    if (bounds.width > 0 && bounds.height > 0) {
-      this.badge = document.createElement("div");
-      const tagName = target.tagName.toLowerCase();
-      this.badge.textContent = tagName;
-      this.badge.setAttribute("aria-hidden", "true");
-      // Clamp both axes to a defensive inset. Without Math.max the badge
-      // renders off-screen when the target is partially off the top/left
-      // (negative bounds). CCM-291 P3 badge-position-clamp.
-      const left = Math.max(BADGE_INSET, Math.min(bounds.right - 4, window.innerWidth - 60));
-      const top = Math.max(BADGE_INSET, Math.min(bounds.bottom + 4, window.innerHeight - 24));
-      this.badge.style.cssText = `
-        position:fixed;
-        left:${left}px;
-        top:${top}px;
-        transform:translateX(-100%);
-        z-index:${Z_INDEX_MAX};
-        padding:2px 8px;border-radius:6px;
-        background:${this.colors.glassBg};
-        backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-        border:1px solid ${this.colors.accent};
-        color:${this.colors.accent};
-        font-family:"Inter",system-ui,-apple-system,sans-serif;
-        font-size:11px;font-weight:500;
-        letter-spacing:0.02em;
-        pointer-events:none;
-        white-space:nowrap;
-      `;
-      document.body.appendChild(this.badge);
-    }
+    this.hoverOutline.apply(target);
+    this.hoveredElement = target;
   }
 
   private clearHoverOutline(): void {
-    if (this.hoveredElement) {
-      // Restore the snapshot captured in applyHoverOutline. If the element had
-      // no inline outline pre-hover, the snapshot is null and we removeProperty
-      // (original behaviour). If it did, we re-apply it with its original
-      // !important priority. CCM-291 P2 preserve-host-inline-outline.
-      if (this.previousOutline !== null) {
-        this.hoveredElement.style.setProperty("outline", this.previousOutline, this.previousOutlinePriority);
-      } else {
-        this.hoveredElement.style.removeProperty("outline");
-      }
-      if (this.previousOutlineOffset !== null) {
-        this.hoveredElement.style.setProperty(
-          "outline-offset",
-          this.previousOutlineOffset,
-          this.previousOutlineOffsetPriority,
-        );
-      } else {
-        this.hoveredElement.style.removeProperty("outline-offset");
-      }
-      this.hoveredElement = null;
-      this.previousOutline = null;
-      this.previousOutlineOffset = null;
-      this.previousOutlinePriority = "";
-      this.previousOutlineOffsetPriority = "";
-    }
-    if (this.badge) {
-      this.badge.remove();
-      this.badge = null;
-    }
+    this.hoverOutline.clear();
+    this.hoveredElement = null;
   }
 
   destroy(): void {

@@ -56,8 +56,9 @@ src/
 │
 ├─ fab.ts                ← floating button + radial menu
 ├─ popup.ts              ← textarea popover (status + message)
-├─ markers.ts            ← MarkerManager: render pins, click handlers
+├─ markers.ts            ← MarkerManager: render pins, click + drag-relocate
 ├─ pin-mode.ts           ← target-element capture (hover outline, click)
+├─ status-dropdown.ts    ← createStatusDropdown — shared combobox for popover + drawer
 ├─ capture-modes.ts      ← coord pin + drag-rect area capture
 │
 ├─ dom-utils.ts          ← misc DOM helpers
@@ -65,6 +66,7 @@ src/
 │
 ├─ dom/
 │   ├─ anchor.ts         ← generateAnchor, rectToPercentages, findAnchorElement
+│   ├─ hover-outline.ts  ← createHoverOutline — shared element-hover affordance
 │   ├─ resolver.ts       ← resolveAnchor (4-level), resolveAnnotation
 │   ├─ fingerprint.ts    ← tag-chain signature + scoring
 │   ├─ fuzzy.ts          ← fuzzyIncludes, similarity
@@ -84,6 +86,11 @@ src/
 - **No build-time config injection.** The bundle is environment-agnostic. All config comes from `data-*` attrs at runtime.
 - **One global side effect:** `window.CcmFeedback`. The host element is named `<ccm-feedback-widget>`; localStorage keys are namespaced `ccm-feedback:*`.
 
+## Shared UI affordances
+
+- **Hover outline.** `src/dom/hover-outline.ts` exports `createHoverOutline(colors)` — a factory that returns `{ apply, clear, destroy }`. The marker-relocate drag overlay (PRO-67) reuses the same helper `PinMode` (CCM-291) uses for its hover affordance: solid 2-px outline + floating tag-name badge near the target's bottom-right corner, with the same snapshot-and-restore semantics for the host page's pre-existing inline outline. One implementation, byte-identical visuals across both surfaces.
+- **Status dropdown.** `src/status-dropdown.ts` exports `createStatusDropdown(opts)` — a combobox + listbox factory shared by the marker popover (today) and the navigator drawer (PRO-68). The module owns DOM construction, ARIA wiring, keyboard nav, and dropdown-scoped outside-click; callers own the store write, the `feedback:updated` emit, and any marker recolor.
+
 ## Store contract
 
 Both stores implement `AnnotationStore`:
@@ -96,6 +103,9 @@ interface AnnotationStore {
   delete(id: string): boolean;
   clear(): void;
   updateStatus?(id: string, status: FeedbackStatus): boolean;
+  updateAnchor?(id: string, input: UpdateAnchorInput): boolean; // PRO-67 drag-relocate
+  listReplies(parentId: string): AnnotationRecord[];
+  addReply(input: ReplyInput): AnnotationRecord;
 }
 ```
 

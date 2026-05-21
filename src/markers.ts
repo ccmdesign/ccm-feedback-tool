@@ -1,27 +1,38 @@
 import { ensureAuthor } from "./author.js";
 import { Z_INDEX_MAX } from "./constants.js";
+import { generateAnchor } from "./dom/anchor.js";
+import { createHoverOutline } from "./dom/hover-outline.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import { STATUS_COLORS } from "./popup.js";
-import type { AnnotationStore } from "./store.js";
+import { createStatusDropdown, type StatusDropdownHandle } from "./status-dropdown.js";
+import type { AnnotationStore, UpdateAnchorInput } from "./store.js";
 import type { ThemeColors } from "./styles/theme.js";
-import type { AnnotationRecord, FeedbackStatus } from "./types.js";
+import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
 const REPOSITION_DEBOUNCE_MS = 200;
-// Popover dimensions used by the placement fallback to flip the popover
-// above the marker (or anchor it to the viewport edge) when the natural
-// below-right position would overflow the viewport.
-const POPOVER_NOMINAL_HEIGHT = 180;
+// Drag-or-click watcher thresholds (PRO-67). A mousedown promotes to drag
+// when the cursor moves ≥ DRAG_MOVE_THRESHOLD_PX OR the press lasts longer
+// than DRAG_LONGPRESS_MS. Otherwise it's treated as a click and opens the
+// popover. The watcher binds mouse events only; touch falls through to the
+// existing synthesized `click` path so tap-to-open still works on mobile.
+const DRAG_LONGPRESS_MS = 250;
+const DRAG_MOVE_THRESHOLD_PX = 6;
+// Popover width (matches max-width / min-width on the popover root) — used
+// by the manual placement code to clamp horizontally inside the viewport.
 const POPOVER_NOMINAL_WIDTH = 300;
 // Cap on rendered popover height — long reply threads scroll inside the
 // popover rather than off-screen. Pairs with `overflow-y: auto`.
-const POPOVER_MAX_HEIGHT_PX = 480;
-// Safety inset against viewport edges during the measured re-placement
-// pass; matches the 8px gap used elsewhere on the marker side.
+// Formula: min(70vh, 540 px). 540 = nominal-180 * 3 from PRO-66's heuristic;
+// the 70vh ceiling keeps the popover from dominating short-viewport setups.
+const POPOVER_MAX_VH = 0.7;
+const POPOVER_MAX_HEIGHT_CEIL_PX = 540;
+// Safety inset against viewport edges during placement; matches the 8px
+// gap used elsewhere on the marker side.
 const POPOVER_VIEWPORT_MARGIN = 16;
 
 interface MarkerEntry {
@@ -45,6 +56,10 @@ export class MarkerManager {
    * page. */
   private includeDone = false;
   private popover: HTMLElement | null = null;
+  /** Status dropdown handle for the currently open popover. Null when no
+   * popover is open (or the open popover suppressed the dropdown because
+   * the store doesn't expose updateStatus). */
+  private popoverStatusDropdown: StatusDropdownHandle | null = null;
   /** Off-handlers for bus subscriptions opened during openPopover. */
   private popoverDisposers: Array<() => void> = [];
   private repositionTimer: number | null = null;
@@ -55,12 +70,34 @@ export class MarkerManager {
   private readonly origPushState: typeof history.pushState;
   private readonly origReplaceState: typeof history.replaceState;
   private lastPath = window.location.pathname;
+  /** Cleanup fn for the active drag mode (PRO-67 P1). Set by `enterDragMode`,
+   * nulled inside its `cleanup()`. Invoked by `destroy()` to tear down an
+   * in-flight drag before disposing the manager so the overlay/toolbar DOM
+   * and the five global capture-phase listeners don't leak. */
+  private dragCleanup: (() => void) | null = null;
+  /** Cleanup fns for active drag-or-click watchers (PRO-67 P1). One entry
+   * per in-flight `mousedown` gesture that hasn't yet resolved to click or
+   * drag. Watchers self-remove via the existing `cleanup()` closure, but
+   * `destroy()` also drains the set so the window-level mousemove/mouseup
+   * capture listeners + the longpress timer can't outlive the manager. */
+  private watcherCleanups: Set<() => void> = new Set();
+  /** True while `enterDragMode` is active. The outer popstate handler
+   * (`checkPath`) reads this and skips `refresh()` so the entry being
+   * dragged isn't detached out from under the drag closure (PRO-67 P2). */
+  private dragInFlight = false;
 
   constructor(
     private readonly colors: ThemeColors,
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
     private readonly store: AnnotationStore,
+    /**
+     * Excludes the widget host + descendants from drag-relocate drop
+     * targeting (PRO-67). Defaults to "ignore nothing" so callers that
+     * don't construct via `index.ts` (tests, REPL) keep working. Mirrors
+     * the predicate `PinMode` already receives.
+     */
+    private readonly shouldIgnoreElement: (element: Element) => boolean = () => false,
   ) {
     // `overflow-x: clip` + `width: 100%` is a defensive guard: any pin that
     // accidentally lands past the viewport's right edge (stale capture from
@@ -102,6 +139,26 @@ export class MarkerManager {
       document.head.appendChild(styleEl);
     }
 
+    // Scoped scrollbar styling for the popover (PRO-67). Lives outside the
+    // shadow root so the WebKit `::-webkit-scrollbar` pseudo-selectors apply
+    // to the popover (which is mounted directly under document.body, not
+    // inside the widget host shadow). The selector is scoped to .ccm-popover
+    // so host-page scrollbars stay untouched.
+    if (!document.getElementById("ccm-popover-scroll")) {
+      const scrollStyle = document.createElement("style");
+      scrollStyle.id = "ccm-popover-scroll";
+      scrollStyle.textContent = `
+        .ccm-popover::-webkit-scrollbar { width: 6px; }
+        .ccm-popover::-webkit-scrollbar-track { background: transparent; }
+        .ccm-popover::-webkit-scrollbar-thumb {
+          background: ${this.colors.glassBorder};
+          border-radius: 3px;
+        }
+        .ccm-popover { scrollbar-width: thin; scrollbar-color: ${this.colors.glassBorder} transparent; }
+      `;
+      document.head.appendChild(scrollStyle);
+    }
+
     this.onResize = this.scheduleReposition.bind(this);
     this.onScroll = this.scheduleReposition.bind(this);
     window.addEventListener("resize", this.onResize, { passive: true });
@@ -116,8 +173,17 @@ export class MarkerManager {
 
     // SPA navigation: re-filter markers when pathname changes via the
     // History API. Covers Nuxt, React Router, Vue Router, Next.js.
+    //
+    // If a drag is in flight, defer the refresh — the drag's own
+    // `dragSpaNav` (capture-phase) handler cancels the gesture, and we
+    // don't want to tear down the active entry's DOM out from under the
+    // drag's `cleanup()` closure (PRO-67 P2). `lastPath` is left untouched
+    // so the next mutation re-evaluates against the original baseline; the
+    // resize/scroll listeners keep the rendered set in sync once the drag
+    // resolves.
     const checkPath = () => {
       if (window.location.pathname === this.lastPath) return;
+      if (this.dragInFlight) return;
       this.lastPath = window.location.pathname;
       this.refresh();
     };
@@ -282,7 +348,7 @@ export class MarkerManager {
         font-size:12px;font-weight:700;line-height:1;
         display:flex;align-items:center;justify-content:center;
         box-shadow:0 2px 8px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.18);
-        cursor:pointer;pointer-events:auto;
+        cursor:grab;pointer-events:auto;
         transform:translate(-50%, -50%);transition:transform 0.15s ease;
       `,
     }) as HTMLButtonElement;
@@ -299,11 +365,481 @@ export class MarkerManager {
     node.addEventListener("mouseleave", () => {
       node.style.transform = "translate(-50%, -50%) scale(1)";
     });
+    this.attachDragOrClickWatcher(node, record);
+    return node;
+  }
+
+  /**
+   * Drag-or-click watcher (PRO-67). Binds `mousedown` to the marker and
+   * promotes the gesture to drag if movement crosses `DRAG_MOVE_THRESHOLD_PX`
+   * OR the press lasts > `DRAG_LONGPRESS_MS`. Otherwise the synthesized
+   * `click` is treated as the canonical open-popover trigger. Mouse-only —
+   * touch synthesizes a `click` directly with no preceding `mousedown`, so
+   * the `click` fallback handler keeps tap-to-open working on touch devices.
+   *
+   * Suppression: when the watcher promotes to drag, the subsequent `click`
+   * event (synthesized by the browser on the same mouseup) is swallowed by
+   * a one-shot capture-phase listener so the popover doesn't open under the
+   * drop position.
+   */
+  private attachDragOrClickWatcher(node: HTMLElement, record: AnnotationRecord): void {
+    // Fallback path for synthesized clicks (touch + non-mouse pointer events).
+    // The watcher below promotes mouse-driven gestures via `mouseup`; this
+    // listener handles the touch case where there's no `mousedown` first.
+    // The `dragSuppressed` ref below short-circuits this for mouse drags.
+    const suppress = { value: false };
     node.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (suppress.value) {
+        suppress.value = false;
+        return;
+      }
       this.openPopover(record, node);
     });
-    return node;
+
+    node.addEventListener("mousedown", (downEvt: MouseEvent) => {
+      // Left-button only. Right-clicks and middle-clicks should not engage
+      // the drag-or-click watcher; let them bubble normally.
+      if (downEvt.button !== 0) return;
+      // Stop propagation so the document-level outside-click handler doesn't
+      // close any open popover while the gesture is still resolving.
+      downEvt.stopPropagation();
+
+      const startX = downEvt.clientX;
+      const startY = downEvt.clientY;
+      let promoted = false;
+      let longPressTimer: number | null = window.setTimeout(() => {
+        longPressTimer = null;
+        promote(downEvt);
+      }, DRAG_LONGPRESS_MS);
+
+      const onMove = (e: MouseEvent): void => {
+        if (promoted) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (dx * dx + dy * dy >= DRAG_MOVE_THRESHOLD_PX * DRAG_MOVE_THRESHOLD_PX) {
+          promote(e);
+        }
+      };
+
+      const onUp = (): void => {
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        cleanup();
+        // If we didn't promote, the synthesized `click` will reach the
+        // node's click listener above and open the popover. No-op here.
+      };
+
+      const cleanup = (): void => {
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", onUp, true);
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        this.watcherCleanups.delete(cleanup);
+      };
+
+      const promote = (currentEvt: MouseEvent): void => {
+        if (promoted) return;
+        promoted = true;
+        suppress.value = true;
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        // Drop the move/up listeners — drag mode owns its own globals.
+        // Use the shared `cleanup` so the watcherCleanups bookkeeping stays
+        // in sync (PRO-67 P1) — promotion is a handoff, not a leak.
+        cleanup();
+        const entry = this.entries.find((e) => e.record.id === record.id);
+        if (entry) this.enterDragMode(entry, currentEvt);
+      };
+
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", onUp, true);
+      // Track this watcher so `destroy()` can abort it if the host
+      // re-initializes the widget mid-gesture (PRO-67 P1).
+      this.watcherCleanups.add(cleanup);
+    });
+  }
+
+  /**
+   * Marker relocate via drag (PRO-67). Mounts a fixed full-viewport overlay
+   * + instruction strip, ghosts the marker (follows the cursor), uses the
+   * shared hover-outline helper to preview the drop target, and on mouseup
+   * runs the drop algorithm:
+   *
+   *   1. Drop on same anchor element (target only) → no-op, no write.
+   *   2. Drop on widget host / body / html / ignored → case B coord pin
+   *      (unless the marker's record.kind === "area", which goes to case C).
+   *   3. Drop on real element → case A target re-anchor (unless area → C).
+   *   4. case C — area translate-intact: drag-delta in document space,
+   *      areaX/areaY shift by delta, areaW/areaH unchanged, kind stays "area".
+   *      Marker anchor (rendered at areaX + areaW) is clamped horizontally
+   *      so it stays inside [8, scrollX + innerWidth - 8].
+   *
+   * ESC / right-click / SPA nav → cancel cleanup, no store write.
+   */
+  private enterDragMode(entry: MarkerEntry, startEvent: MouseEvent): void {
+    // Pin everything we need for restore so listener-removal in cleanup can
+    // run without re-deriving state.
+    const node = entry.node;
+    const originalOpacity = node.style.opacity;
+    const originalTransform = node.style.transform;
+    const originalCursor = node.style.cursor;
+    const originalTransition = node.style.transition;
+    const dragStartDocX = startEvent.clientX + window.scrollX;
+    const dragStartDocY = startEvent.clientY + window.scrollY;
+
+    const hoverOutline = createHoverOutline(this.colors);
+
+    // Fixed full-viewport overlay — transparent, sits just below the toolbar
+    // so the toolbar is still interactive (cancel) but elementFromPoint can
+    // still reach the host page beneath after we toggle pointer-events.
+    const overlay = el("div", {
+      style: `
+        position:fixed;inset:0;z-index:${Z_INDEX_MAX - 1};
+        background:transparent;cursor:grabbing;
+      `,
+    });
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.setAttribute("data-ccm-drag-overlay", "true");
+
+    // Toolbar strip — same visual family as PinMode's; shorter copy because
+    // there's only one possible action ("drop") plus cancel.
+    const toolbar = el("div", {
+      style: `
+        position:fixed;top:0;left:0;right:0;z-index:${Z_INDEX_MAX};
+        height:52px;background:${this.colors.glassBg};
+        backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+        border-bottom:1px solid ${this.colors.glassBorder};
+        display:flex;align-items:center;justify-content:center;gap:16px;
+        pointer-events:auto;
+        font-family:"Inter",system-ui,-apple-system,sans-serif;
+        font-size:14px;color:${this.colors.text};
+      `,
+    });
+    toolbar.setAttribute("data-ccm-drag-toolbar", "true");
+    const instruction = el("span", { style: "font-weight:500;letter-spacing:-0.01em;" });
+    setText(instruction, this.t("relocate.instruction"));
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.style.cssText = `
+      height:34px;padding:0 18px;border-radius:9999px;
+      border:1px solid ${this.colors.border};background:${this.colors.glassBg};
+      color:${this.colors.textTertiary};font-family:inherit;
+      font-size:13px;font-weight:500;cursor:pointer;
+    `;
+    setText(cancelBtn, this.t("relocate.cancel"));
+    toolbar.appendChild(instruction);
+    toolbar.appendChild(cancelBtn);
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(toolbar);
+
+    // Ghost the marker — keep it visible so the reviewer sees what they're
+    // dragging, but dim it and let it follow the cursor in fixed positioning
+    // so it ignores horizontal clamping.
+    node.style.opacity = "0.75";
+    node.style.cursor = "grabbing";
+    node.style.transition = "none";
+    node.style.transform = "translate(-50%, -50%)";
+    node.style.position = "fixed";
+    node.style.top = `${startEvent.clientY}px`;
+    node.style.left = `${startEvent.clientX}px`;
+
+    let cleaned = false;
+
+    // Mark drag as in flight so the outer popstate `checkPath` defers its
+    // `refresh()` (PRO-67 P2). The drag's own `dragSpaNav` still cancels
+    // the gesture; deferring refresh keeps the active entry attached so
+    // `cleanup()` can restore styles + reposition without operating on a
+    // detached node.
+    this.dragInFlight = true;
+
+    /** Resolve the element under the cursor with the drag chrome temporarily
+     * transparent to pointer events. Mirrors PinMode.onOverlayMouseMove.
+     * Disables the overlay, the toolbar, AND the ghost marker itself so the
+     * hit-test reaches the real host-page element underneath (PRO-67
+     * followup) — without this, a drop on a paragraph that the 26 px ghost
+     * fully covers would self-resolve to the marker. */
+    const resolveTarget = (clientX: number, clientY: number): HTMLElement | null => {
+      overlay.style.pointerEvents = "none";
+      toolbar.style.pointerEvents = "none";
+      const prevNodePE = node.style.pointerEvents;
+      node.style.pointerEvents = "none";
+      const t = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      overlay.style.pointerEvents = "auto";
+      toolbar.style.pointerEvents = "auto";
+      node.style.pointerEvents = prevNodePE;
+      return t;
+    };
+
+    const onMove = (e: MouseEvent): void => {
+      // Update the ghost position (fixed → viewport coords are fine).
+      node.style.top = `${e.clientY}px`;
+      node.style.left = `${e.clientX}px`;
+
+      const target = resolveTarget(e.clientX, e.clientY);
+      if (!target || !(target instanceof HTMLElement)) {
+        hoverOutline.clear();
+        return;
+      }
+      // Don't outline the widget host, the ghost marker itself, or the
+      // overlay/toolbar — none are meaningful drop targets.
+      if (this.shouldIgnoreElement(target) || node.contains(target) || target === node) {
+        hoverOutline.clear();
+        return;
+      }
+      if (target === document.documentElement || target === document.body) {
+        hoverOutline.clear();
+        return;
+      }
+      hoverOutline.apply(target);
+    };
+
+    const cleanup = (): void => {
+      if (cleaned) return;
+      cleaned = true;
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("contextmenu", onContextMenu, true);
+      window.removeEventListener("popstate", dragSpaNav, true);
+      hoverOutline.destroy();
+      overlay.remove();
+      toolbar.remove();
+      // Restore marker styling. `position` flips back to "absolute" because
+      // the marker container uses absolute children; reposition() below
+      // recomputes top/left so the marker snaps to its (possibly updated)
+      // anchor.
+      node.style.position = "absolute";
+      node.style.opacity = originalOpacity;
+      node.style.transform = originalTransform;
+      node.style.cursor = originalCursor;
+      node.style.transition = originalTransition;
+      this.dragInFlight = false;
+      this.dragCleanup = null;
+      // Always reposition: on cancel restores the original location, on
+      // successful relocate the record was already mutated and the new
+      // location is what reposition() reads.
+      this.reposition();
+    };
+    // Expose cleanup so `destroy()` can abort an in-flight drag (PRO-67 P1).
+    this.dragCleanup = cleanup;
+
+    // Cancel any in-flight drag when the host page navigates via the
+    // History API. Declared after cleanup so the listener can reference it.
+    const dragSpaNav = (): void => {
+      cancel();
+    };
+
+    const cancel = (): void => {
+      cleanup();
+    };
+
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancel();
+      }
+    };
+
+    const onContextMenu = (e: MouseEvent): void => {
+      e.preventDefault();
+      cancel();
+    };
+
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+    });
+
+    const onUp = (e: MouseEvent): void => {
+      if (cleaned) return;
+      // Resolve drop target with overlay click-through.
+      const target = resolveTarget(e.clientX, e.clientY);
+
+      // SPA nav between mousedown and mouseup is handled by the `dragSpaNav`
+      // popstate listener wired below — it calls `cancel()` which tears the
+      // drag down. No extra check needed here.
+
+      // Decide branch. See doc-block above.
+      const kind = entry.record.kind ?? "target";
+      const recordId = entry.record.id;
+
+      // Helper: clamp post-drop area position so the marker anchor (rendered
+      // at areaX + areaW in document space; see reposition() ~line 720) stays
+      // inside the visible viewport. Keep in sync with reposition().
+      const clampAreaAnchorX = (x: number, w: number): number => {
+        const viewLeft = window.scrollX + 8;
+        const viewRight = window.scrollX + window.innerWidth - 8;
+        const anchor = x + w;
+        if (anchor < viewLeft) return viewLeft - w;
+        if (anchor > viewRight) return viewRight - w;
+        return x;
+      };
+
+      // Build the patch.
+      let input: UpdateAnchorInput | null = null;
+
+      if (kind === "area") {
+        // Case C — translate-intact.
+        const dx = e.clientX + window.scrollX - dragStartDocX;
+        const dy = e.clientY + window.scrollY - dragStartDocY;
+        const oldX = entry.record.areaX ?? 0;
+        const oldY = entry.record.areaY ?? 0;
+        const w = entry.record.areaW ?? 0;
+        const h = entry.record.areaH ?? 0;
+        const newX = clampAreaAnchorX(oldX + dx, w);
+        const newY = oldY + dy;
+        // Carry the existing anchor / rect fields unchanged so DB schema
+        // expectations stay consistent (anchor columns are NOT NULL).
+        input = {
+          kind: "area",
+          anchor: this.entryAnchor(entry),
+          rect: { xPct: entry.record.xPct, yPct: entry.record.yPct, wPct: entry.record.wPct, hPct: entry.record.hPct },
+          pin: null,
+          area: { x: newX, y: newY, w, h },
+        };
+      } else {
+        // Decide drop branch for target / pin.
+        // Treat the ghost marker (its own fixed-position node) as ignored —
+        // the ghost follows the cursor so elementFromPoint at the drop point
+        // returns the marker itself, which would otherwise self-anchor.
+        // Mirrors the same guard in onMove (~line 582). PRO-67 followup.
+        const dropOnIgnored =
+          !target ||
+          !(target instanceof HTMLElement) ||
+          this.shouldIgnoreElement(target) ||
+          target === node ||
+          node.contains(target) ||
+          target === document.documentElement ||
+          target === document.body;
+
+        if (!dropOnIgnored && target && kind === "target" && target === entry.anchorEl) {
+          // Drop-on-same-element → no-op. Skip the write + emit so we don't
+          // burn a realtime round-trip on accidental short drags.
+          cleanup();
+          return;
+        }
+
+        if (dropOnIgnored) {
+          // Case B — coord pin.
+          input = {
+            kind: "pin",
+            anchor: this.emptyAnchor(),
+            rect: { xPct: 0, yPct: 0, wPct: 0, hPct: 0 },
+            pin: { x: e.clientX + window.scrollX, y: e.clientY + window.scrollY },
+            area: null,
+          };
+        } else if (target && target instanceof HTMLElement) {
+          // Case A — target re-anchor.
+          const rect = target.getBoundingClientRect();
+          const safeW = rect.width || 1;
+          const safeH = rect.height || 1;
+          const xPct = (e.clientX - rect.left) / safeW;
+          const yPct = (e.clientY - rect.top) / safeH;
+          input = {
+            kind: "target",
+            anchor: generateAnchor(target),
+            rect: { xPct, yPct, wPct: 0, hPct: 0 },
+            pin: null,
+            area: null,
+          };
+        }
+      }
+
+      if (input) {
+        // Optimistic local mutation so reposition() (called from cleanup)
+        // sees the new location even before the store write completes.
+        this.applyAnchorInputToRecord(entry.record, input);
+        this.store.updateAnchor?.(recordId, input);
+        this.bus.emit("feedback:updated", entry.record);
+      }
+
+      cleanup();
+    };
+
+    // Wire global listeners.
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("contextmenu", onContextMenu, true);
+    window.addEventListener("popstate", dragSpaNav, true);
+  }
+
+  /** Snapshot the entry's current anchor fields into an AnchorData. Used
+   * when an area-drag must carry forward the existing anchor unchanged. */
+  private entryAnchor(entry: MarkerEntry): AnchorData {
+    return {
+      cssSelector: entry.record.cssSelector,
+      xpath: entry.record.xpath,
+      textSnippet: entry.record.textSnippet,
+      elementTag: entry.record.elementTag,
+      elementId: entry.record.elementId,
+      textPrefix: entry.record.textPrefix,
+      textSuffix: entry.record.textSuffix,
+      fingerprint: entry.record.fingerprint,
+      neighborText: entry.record.neighborText,
+    };
+  }
+
+  /** Empty anchor for kind="pin" rows. Schema columns are NOT NULL so we
+   * fill them with empty strings rather than omitting them. */
+  private emptyAnchor(): AnchorData {
+    return {
+      cssSelector: "",
+      xpath: "",
+      textSnippet: "",
+      elementTag: "",
+      elementId: undefined,
+      textPrefix: "",
+      textSuffix: "",
+      fingerprint: "",
+      neighborText: "",
+    };
+  }
+
+  /** Apply an `UpdateAnchorInput` to a record in place so reposition() picks
+   * up the new location synchronously. Mirrors `Store.updateAnchor`. */
+  private applyAnchorInputToRecord(record: AnnotationRecord, input: UpdateAnchorInput): void {
+    record.cssSelector = input.anchor.cssSelector;
+    record.xpath = input.anchor.xpath;
+    record.textSnippet = input.anchor.textSnippet;
+    record.elementTag = input.anchor.elementTag;
+    record.elementId = input.anchor.elementId;
+    record.textPrefix = input.anchor.textPrefix;
+    record.textSuffix = input.anchor.textSuffix;
+    record.fingerprint = input.anchor.fingerprint;
+    record.neighborText = input.anchor.neighborText;
+    record.xPct = input.rect.xPct;
+    record.yPct = input.rect.yPct;
+    record.wPct = input.rect.wPct;
+    record.hPct = input.rect.hPct;
+    record.kind = input.kind;
+    if (input.pin) {
+      record.pinX = input.pin.x;
+      record.pinY = input.pin.y;
+    } else {
+      delete record.pinX;
+      delete record.pinY;
+    }
+    if (input.area) {
+      record.areaX = input.area.x;
+      record.areaY = input.area.y;
+      record.areaW = input.area.w;
+      record.areaH = input.area.h;
+    } else {
+      delete record.areaX;
+      delete record.areaY;
+      delete record.areaW;
+      delete record.areaH;
+    }
   }
 
   private renumber(): void {
@@ -330,7 +866,20 @@ export class MarkerManager {
     });
     pop.setAttribute("role", "dialog");
     pop.setAttribute("aria-label", this.t("marker.ariaLabel", { n: "" }));
+    pop.classList.add("ccm-popover");
     pop.addEventListener("click", (e) => e.stopPropagation());
+    // PRO-67: ESC closes the popover when the status dropdown menu is not
+    // open. The dropdown's own keydown listener handles the menu-open case
+    // by stopping propagation, so this handler only fires for ESCs that
+    // bubble past the dropdown (i.e. the menu was already closed). Matches
+    // pin-relocate-and-popover-tweaks.md §"ESC closes menu first; if menu
+    // already closed, ESC closes popover".
+    pop.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closePopover();
+      }
+    });
 
     const body = el("div", { style: "white-space:pre-wrap;word-break:break-word;margin-bottom:10px;" });
     setText(body, record.message);
@@ -342,17 +891,19 @@ export class MarkerManager {
     setText(meta, `${author} · ${new Date(record.createdAt).toLocaleString()}`);
 
     const status: FeedbackStatus = record.status ?? "todo";
-    const sc = STATUS_COLORS[status];
-    const statusPill = el("span", {
-      style: `
-        display:inline-block;padding:2px 10px;border-radius:9999px;
-        font-size:10px;font-weight:600;letter-spacing:0.02em;
-        background:${sc.bg};color:${sc.fg};border:1px solid ${sc.border};
-        margin-right:6px;cursor:pointer;
-      `,
+    // PRO-67: replace the cycle-on-click pill with a proper combobox
+    // dropdown. The dropdown is read-only when the store can't persist
+    // status changes (e.g. tests passing a stripped store). Caller owns
+    // store write, bus emit, optimistic mutation, and marker recolor.
+    const readOnly = typeof this.store.updateStatus !== "function";
+    const dropdown = createStatusDropdown({
+      current: status,
+      colors: this.colors,
+      t: this.t,
+      readOnly,
+      onPick: (next) => this.onStatusPicked(record, next, dropdown),
     });
-    setText(statusPill, this.t(`status.${status}`).toUpperCase());
-    statusPill.addEventListener("click", () => this.cycleStatus(record));
+    this.popoverStatusDropdown = dropdown;
 
     const kindBadge = el("span", {
       style: `
@@ -364,8 +915,8 @@ export class MarkerManager {
     });
     setText(kindBadge, record.kind ?? "target");
 
-    const tagsRow = el("div", { style: "margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;" });
-    tagsRow.appendChild(statusPill);
+    const tagsRow = el("div", { style: "margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;" });
+    tagsRow.appendChild(dropdown.root);
     tagsRow.appendChild(kindBadge);
 
     const btnRow = el("div", { style: "display:flex;justify-content:flex-end;gap:8px;" });
@@ -503,7 +1054,11 @@ export class MarkerManager {
     pop.appendChild(btnRow);
 
     // ---- Sizing: cap height + scroll inside ----
-    pop.style.maxHeight = `${POPOVER_MAX_HEIGHT_PX}px`;
+    // PRO-67: cap at min(70vh, 540 px). 540 = legacy nominal-180 * 3 — a
+    // ceiling so the popover doesn't dominate tall viewports even when
+    // 70vh would allow more height.
+    const maxHeight = Math.min(window.innerHeight * POPOVER_MAX_VH, POPOVER_MAX_HEIGHT_CEIL_PX);
+    pop.style.maxHeight = `${maxHeight}px`;
     pop.style.overflowY = "auto";
 
     // Manual `position: fixed` placement. We used to feature-detect CSS
@@ -515,46 +1070,33 @@ export class MarkerManager {
     // prevent off-viewport pins from growing host scrollWidth, the bug
     // hits every host page. Manual placement sidesteps the anchor-paint
     // bug entirely and gives us explicit control over edge-flip behavior.
+    //
+    // PRO-67: single-pass placement using off-screen pre-render. Append the
+    // popover at top: -10000 / left: -10000 first so it lays out (and the
+    // max-height clamp applies), read the real height, then position it.
+    // The legacy first-paint nominal-180 estimate + measured re-placement
+    // pass are gone — one pass with the real height gives the same UX with
+    // less code.
     const rect = marker.getBoundingClientRect();
     pop.style.position = "fixed";
-    let top = rect.bottom + 8;
-    let left = rect.left - 10;
-    // First-paint placement uses POPOVER_NOMINAL_HEIGHT as the upper-bound
-    // estimate so the popover doesn't briefly flash at top:0 before the
-    // measured pass below corrects it. PRO-64 semantics intact: this is
-    // the only placement the user ever perceives for empty-thread popovers.
-    if (top + POPOVER_NOMINAL_HEIGHT > window.innerHeight) {
-      top = rect.top - POPOVER_NOMINAL_HEIGHT - 8;
-    }
-    // Pull horizontally inside the viewport when the popover would extend
-    // past the right edge (common for markers clamped to the right edge by
-    // reposition()). POPOVER_NOMINAL_WIDTH is exact — popover width is
-    // fixed at max-width:300px;min-width:220px.
-    if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
-      left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
-    }
-    top = Math.max(8, top);
-    left = Math.max(8, left);
-    pop.style.top = `${top}px`;
-    pop.style.left = `${left}px`;
-
+    pop.style.top = "-10000px";
+    pop.style.left = "-10000px";
     document.body.appendChild(pop);
     this.popover = pop;
 
-    // ---- Measured re-placement (replies make height variable) ----
-    // Read the actual rendered height and re-run the flip+clamp. The
-    // nominal-height pass above is the first-paint estimate; this corrects
-    // it before the user perceives the gap (browsers batch layout + paint
-    // between the appendChild above and the next paint frame).
-    const actualHeight = Math.min(pop.offsetHeight, POPOVER_MAX_HEIGHT_PX);
-    let measuredTop = rect.bottom + 8;
-    if (measuredTop + actualHeight > window.innerHeight - POPOVER_VIEWPORT_MARGIN) {
-      measuredTop = rect.top - actualHeight - 8;
+    const actualHeight = Math.min(pop.offsetHeight, maxHeight);
+    let top = rect.bottom + 8;
+    let left = rect.left - 10;
+    if (top + actualHeight > window.innerHeight - POPOVER_VIEWPORT_MARGIN) {
+      top = rect.top - actualHeight - 8;
     }
-    measuredTop = Math.max(POPOVER_VIEWPORT_MARGIN, measuredTop);
-    if (measuredTop !== top) {
-      pop.style.top = `${measuredTop}px`;
+    if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
+      left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
     }
+    top = Math.max(POPOVER_VIEWPORT_MARGIN, top);
+    left = Math.max(8, left);
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
 
     // ---- Realtime: wire bus subscriptions for the open popover ----
     const offReplied = this.bus.on("feedback:replied", (reply) => {
@@ -649,19 +1191,44 @@ export class MarkerManager {
     return row;
   }
 
-  private cycleStatus(record: AnnotationRecord): void {
-    const order: FeedbackStatus[] = ["todo", "review", "done", "question"];
-    const cur = record.status ?? "todo";
-    const next = order[(order.indexOf(cur) + 1) % order.length] ?? "todo";
+  /**
+   * Status pick handler — runs the persistence + recolor side of the
+   * dropdown's onPick contract. The dropdown module owns DOM/aria/keyboard;
+   * this method owns store + bus + marker.
+   */
+  private onStatusPicked(record: AnnotationRecord, next: FeedbackStatus, handle: StatusDropdownHandle): void {
     this.store.updateStatus?.(record.id, next);
     record.status = next;
     this.bus.emit("feedback:updated", record);
-    this.closePopover();
-    this.refresh();
+    handle.setCurrent(next);
+    handle.close();
+    this.repositionAndRecolor(record.id);
+  }
+
+  /**
+   * Update one marker's color + pulse animation in place when its status
+   * changes — avoids the close-popover + refresh round-trip the legacy
+   * cycle-on-click pill used to perform (PRO-67 §3). The open popover
+   * stays mounted while the marker recolors beneath.
+   */
+  private repositionAndRecolor(id: string): void {
+    const entry = this.entries.find((e) => e.record.id === id);
+    if (!entry) return;
+    const status: FeedbackStatus = entry.record.status ?? "todo";
+    const sc = STATUS_COLORS[status];
+    entry.node.style.background = sc.border;
+    entry.node.dataset.status = status;
+    entry.node.style.animation = status === "question" ? "ccm-pulse 1.6s ease-in-out infinite" : "";
+    // The drawer + FAB count care about this status change but neither
+    // re-renders from here — `feedback:updated` (emitted by the caller)
+    // already drives the drawer.refreshIfOpen + fab.updateCount path in
+    // src/index.ts.
   }
 
   private closePopover(): void {
     if (!this.popover) return;
+    this.popoverStatusDropdown?.destroy();
+    this.popoverStatusDropdown = null;
     this.popover.remove();
     this.popover = null;
     // Tear down the open-popover bus subscriptions so the closed popover
@@ -758,6 +1325,15 @@ export class MarkerManager {
   }
 
   destroy(): void {
+    // Abort any in-flight drag-or-click watcher and drag mode BEFORE we tear
+    // down the rest (PRO-67 P1). The drag overlay/toolbar live on
+    // document.body, not inside this.container — without explicit cancel
+    // they'd survive container.remove() with five global listeners still
+    // bound. Iterate a copy of watcherCleanups because each cleanup mutates
+    // the live set.
+    this.dragCleanup?.();
+    for (const fn of [...this.watcherCleanups]) fn();
+    this.watcherCleanups.clear();
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("scroll", this.onScroll);
     window.removeEventListener("popstate", this.onPopState);

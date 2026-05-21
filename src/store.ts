@@ -38,6 +38,25 @@ export interface ReplyInput {
   userAgent: string;
 }
 
+/**
+ * Patch payload for `updateAnchor` — covers the marker-relocate write path
+ * (PRO-67). All four anchor groups (selector, rect, pin coords, area rect)
+ * are present; the caller passes the new kind plus the slots that apply,
+ * with `pin: null` / `area: null` for the slots that don't.
+ */
+export interface UpdateAnchorInput {
+  /** New annotation kind after the drop. */
+  kind: AnnotationKind;
+  /** Element-anchor fields. Empty strings when the new kind is "pin". */
+  anchor: AnchorData;
+  /** Drop fraction inside the anchor element (target) or zeros (pin/area). */
+  rect: RectData;
+  /** Document-space pin coords when kind === "pin"; null otherwise. */
+  pin: { x: number; y: number } | null;
+  /** Document-space area rect when kind === "area"; null otherwise. */
+  area: { x: number; y: number; w: number; h: number } | null;
+}
+
 /** Common store contract implemented by both `Store` (localStorage) and `CloudStore` (Supabase). */
 export interface AnnotationStore {
   list(): AnnotationRecord[];
@@ -46,6 +65,11 @@ export interface AnnotationStore {
   delete(id: string): boolean;
   clear(): void;
   updateStatus?(id: string, status: FeedbackStatus): boolean;
+  /**
+   * Overwrite an annotation's anchor + kind + pin/area slots in place
+   * (PRO-67 marker relocate). Returns false when no record matches `id`.
+   */
+  updateAnchor?(id: string, input: UpdateAnchorInput): boolean;
   /** Replies for one parent, oldest-first. */
   listReplies(parentId: string): AnnotationRecord[];
   /** Append a reply. Returns the freshly-built record. */
@@ -226,6 +250,49 @@ export class Store implements AnnotationStore {
     const item = items.find((r) => r.id === id);
     if (!item) return false;
     item.status = status;
+    persist(this.projectName, items);
+    return true;
+  }
+
+  updateAnchor(id: string, input: UpdateAnchorInput): boolean {
+    const items = load(this.projectName);
+    const item = items.find((r) => r.id === id);
+    if (!item) return false;
+    // Overwrite anchor fields verbatim. Mirror Save's input mapping so kind
+    // transitions stay symmetric with first-save semantics.
+    item.cssSelector = input.anchor.cssSelector;
+    item.xpath = input.anchor.xpath;
+    item.textSnippet = input.anchor.textSnippet;
+    item.elementTag = input.anchor.elementTag;
+    item.elementId = input.anchor.elementId;
+    item.textPrefix = input.anchor.textPrefix;
+    item.textSuffix = input.anchor.textSuffix;
+    item.fingerprint = input.anchor.fingerprint;
+    item.neighborText = input.anchor.neighborText;
+    item.xPct = input.rect.xPct;
+    item.yPct = input.rect.yPct;
+    item.wPct = input.rect.wPct;
+    item.hPct = input.rect.hPct;
+    item.kind = input.kind;
+    if (input.pin) {
+      item.pinX = input.pin.x;
+      item.pinY = input.pin.y;
+    } else {
+      // exactOptionalPropertyTypes: delete instead of assigning undefined.
+      delete item.pinX;
+      delete item.pinY;
+    }
+    if (input.area) {
+      item.areaX = input.area.x;
+      item.areaY = input.area.y;
+      item.areaW = input.area.w;
+      item.areaH = input.area.h;
+    } else {
+      delete item.areaX;
+      delete item.areaY;
+      delete item.areaW;
+      delete item.areaH;
+    }
     persist(this.projectName, items);
     return true;
   }

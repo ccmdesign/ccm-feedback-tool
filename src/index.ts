@@ -88,6 +88,10 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       // to feedback:replied via the bus and re-renders its thread in place.
       onReply: (record) => bus.emit("feedback:replied", record),
       onReplyDeleted: (id) => bus.emit("feedback:deleted", id),
+      // PRO-67: realtime UPDATEs (status flips, drag-relocate writes from
+      // other tabs) fire a feedback:updated event so host integrations see
+      // remote mutations with the same surface as local ones.
+      onUpdated: (record) => bus.emit("feedback:updated", record),
     });
     store = cloudStore;
     log("Cloud mode enabled", { url: config.supabaseUrl });
@@ -115,7 +119,8 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   document.body.appendChild(host);
 
   const popup = new Popup(colors, t);
-  const markers = new MarkerManager(colors, bus, t, store);
+  const shouldIgnore = (element: Element) => element === host || host.contains(element);
+  const markers = new MarkerManager(colors, bus, t, store, shouldIgnore);
   const fab = new Fab(shadow, bus, t, useCloud);
   const drawer = new Drawer(
     shadow,
@@ -130,8 +135,6 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   );
 
   bus.on("navigator:open", () => drawer.open());
-
-  const shouldIgnore = (element: Element) => element === host || host.contains(element);
 
   const emptyAnchor = (): AnchorData => ({
     cssSelector: "",
