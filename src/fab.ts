@@ -2,13 +2,28 @@ import { Z_INDEX_MAX } from "./constants.js";
 import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
-import { ICON_AREA, ICON_CLOSE, ICON_LINK, ICON_PIN, ICON_SITEPING, ICON_TARGET, ICON_TRASH } from "./icons.js";
+import {
+  ICON_AREA,
+  ICON_CLOSE,
+  ICON_EYE,
+  ICON_EYE_OFF,
+  ICON_LINK,
+  ICON_PIN,
+  ICON_SITEPING,
+  ICON_TARGET,
+  ICON_TRASH,
+} from "./icons.js";
 import { STATUS_COLORS } from "./popup.js";
 
 interface RadialItem {
-  id: "target" | "pin" | "area" | "export" | "copyUrl" | "clear";
+  id: "target" | "pin" | "area" | "toggle" | "export" | "copyUrl" | "clear";
   icon: string;
   label: string;
+  /** Fan direction. Capture modes (`target`/`pin`/`area`) fan upward in a
+   * vertical column; persistent actions (`toggle`/`export`/`copyUrl`/`clear`)
+   * fan leftward in a horizontal row. PRO-68 collapsed both into a single
+   * vertical fan; this restores the two-axis layout the reviewer relied on. */
+  direction: "up" | "left";
   /** When true the item renders disabled (greyed, no bus emit) with a tooltip. */
   disabled?: boolean;
   /** `title`/tooltip text shown when the item is disabled. */
@@ -21,16 +36,16 @@ const ITEM_GAP = 54;
 type CaptureMode = "target" | "pin" | "area";
 
 /**
- * FAB with a six-item radial menu in a single upward fan: target, pin, area,
- * export, copyUrl, clear. The eye visibility toggle lives on the in-mode
- * capture toolbars now, and the chat/navigator item is replaced by the
- * dblclick-opens-drawer gesture (PRO-68 §1).
+ * FAB with a two-axis radial menu:
+ *   - Vertical fan (upward): capture modes — target, pin, area.
+ *   - Horizontal fan (leftward): persistent actions — clear (trash),
+ *     copyUrl (link), export (download), toggle (eye visibility).
  *
- * Single-click toggles the radial open/closed. Double-click fires
- * `navigator:open` to open the drawer without expanding the radial. Capture
- * mode clicks (target / pin / area) leave the radial open so reviewers can
- * drop multiple comments back-to-back; one-shot actions (export, copyUrl,
- * clear) still close the radial.
+ * Single click opens BOTH fans simultaneously. Double click fires
+ * `navigator:open` to open the drawer instead. Capture-mode clicks leave the
+ * radial open so reviewers can drop multiple comments back-to-back; one-shot
+ * actions (export, copyUrl, clear) close it. The eye toggle keeps the radial
+ * open and only swaps its own icon + emits `annotations:toggle`.
  */
 type OpenMode = "closed" | "open";
 
@@ -45,7 +60,13 @@ export class Fab {
   /** Saved base aria-label so we can re-append count copy without leaking it. */
   private readonly baseAriaLabel: string;
   private mode: OpenMode = "closed";
+  /** Mirrors the markers layer visibility. Starts visible; the eye item flips
+   * this and emits `annotations:toggle` so MarkerManager hides/shows. */
+  private annotationsVisible = true;
   private readonly items: RadialItem[];
+  /** Localized eye labels — captured at construction so `handleItemClick` can
+   * swap the toggle's aria-label without re-running `t(...)` every time. */
+  private readonly toggleLabels: { on: string; off: string };
   private readonly onDocumentClick: (e: MouseEvent) => void;
   /** Active capture mode while one is in flight; null otherwise. Read by the
    * drawer-opened subscriber so the dblclick gesture cleanly cancels an
@@ -66,21 +87,26 @@ export class Fab {
     private readonly cloudMode = false,
   ) {
     this.hostEl = shadowRoot.host as HTMLElement;
+    this.toggleLabels = { on: t("toolbar.toggleOn"), off: t("toolbar.toggleOff") };
     this.items = [
-      { id: "target", icon: ICON_TARGET, label: t("fab.targetLabel") },
-      { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel") },
-      { id: "area", icon: ICON_AREA, label: t("fab.areaLabel") },
-      { id: "export", icon: EXPORT_ICON, label: t("fab.export") },
+      // Vertical fan — capture modes.
+      { id: "target", icon: ICON_TARGET, label: t("fab.targetLabel"), direction: "up" },
+      { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel"), direction: "up" },
+      { id: "area", icon: ICON_AREA, label: t("fab.areaLabel"), direction: "up" },
+      // Horizontal fan — persistent actions (closest to FAB first: trash, link, download, eye).
+      { id: "clear", icon: ICON_TRASH, label: t("fab.clear"), direction: "left" },
       {
         id: "copyUrl",
         icon: ICON_LINK,
         label: t("fab.copyUrl"),
+        direction: "left",
         // Cloud mode only — in localStorage mode there is nothing server-side
         // to serve, so the item is visibly disabled with an explanatory
         // tooltip and Export JSON stays as the always-available fallback.
         ...(this.cloudMode ? {} : { disabled: true, disabledTitle: t("fab.copyUrlLocalOnly") }),
       },
-      { id: "clear", icon: ICON_TRASH, label: t("fab.clear") },
+      { id: "export", icon: EXPORT_ICON, label: t("fab.export"), direction: "left" },
+      { id: "toggle", icon: ICON_EYE, label: this.toggleLabels.on, direction: "left" },
     ];
 
     this.fab = document.createElement("button");
@@ -111,6 +137,7 @@ export class Fab {
       btn.setAttribute("role", "menuitem");
       btn.setAttribute("aria-label", item.label);
       btn.dataset.itemId = item.id;
+      btn.dataset.direction = item.direction;
       if (item.disabled) {
         btn.setAttribute("aria-disabled", "true");
         btn.dataset.disabled = "true";
@@ -121,8 +148,13 @@ export class Fab {
 
       const label = document.createElement("span");
       label.className = "sp-radial-label";
-      // All items now fan upward — labels sit to the left.
-      label.style.cssText = "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;";
+      // Up-fan: label sits to the left of the chip. Left-fan: label sits
+      // above the chip. Mirrors the pre-PRO-68 placement so tooltips never
+      // collide with the FAB or the opposite-axis fan.
+      label.style.cssText =
+        item.direction === "up"
+          ? "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;"
+          : "position:absolute;bottom:54px;left:50%;transform:translateX(-50%);white-space:nowrap;";
       label.textContent = item.label;
       btn.appendChild(label);
 
@@ -288,9 +320,17 @@ export class Fab {
     this.setFabIcon(ICON_CLOSE);
     this.fab.setAttribute("aria-expanded", "true");
     const buttons = this.radialContainer.querySelectorAll<HTMLButtonElement>(".sp-radial-item");
-    buttons.forEach((btn, i) => {
-      const offset = 16 + ITEM_GAP * (i + 1);
-      btn.style.transform = `translate(0, ${-offset}px) scale(1)`;
+    // Per-axis slot counters so each direction packs from slot 1 outward
+    // regardless of the DOM order. Keeps the up-fan and left-fan adjacent
+    // to the FAB without leaving gaps.
+    const slot: Record<"up" | "left", number> = { up: 0, left: 0 };
+    buttons.forEach((btn) => {
+      const dir = (btn.dataset.direction as "up" | "left") ?? "up";
+      const offset = 16 + ITEM_GAP * (slot[dir] + 1);
+      slot[dir] += 1;
+      const tx = dir === "left" ? -offset : 0;
+      const ty = dir === "up" ? -offset : 0;
+      btn.style.transform = `translate(${tx}px, ${ty}px) scale(1)`;
       btn.classList.add("sp-radial-item--open");
     });
     requestAnimationFrame(() => {
@@ -332,6 +372,24 @@ export class Fab {
       case "area":
         this.bus.emit("area:start");
         break;
+      // Eye toggle — keeps the radial open so reviewers can show/hide and
+      // immediately act on the result without re-fanning. Swaps its own
+      // icon + aria-label in place.
+      case "toggle": {
+        this.annotationsVisible = !this.annotationsVisible;
+        this.bus.emit("annotations:toggle", this.annotationsVisible);
+        const btn = this.radialContainer.querySelector<HTMLButtonElement>('[data-item-id="toggle"]');
+        if (btn) {
+          const svg = btn.querySelector("svg");
+          svg?.remove();
+          btn.insertBefore(parseSvg(this.annotationsVisible ? ICON_EYE : ICON_EYE_OFF), btn.firstChild);
+          const next = this.annotationsVisible ? this.toggleLabels.on : this.toggleLabels.off;
+          btn.setAttribute("aria-label", next);
+          const label = btn.querySelector<HTMLElement>(".sp-radial-label");
+          if (label) label.textContent = next;
+        }
+        break;
+      }
       // One-shot terminal actions — close the radial.
       case "export":
         this.close();

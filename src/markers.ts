@@ -4,9 +4,11 @@ import { generateAnchor } from "./dom/anchor.js";
 import { fanOutClusters } from "./dom/cluster-fanout.js";
 import { createHoverOutline } from "./dom/hover-outline.js";
 import { resolveAnnotation } from "./dom/resolver.js";
-import { el, setText } from "./dom-utils.js";
+import { el, parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
+import { copyToClipboard } from "./export-utils.js";
 import type { TFunction } from "./i18n.js";
+import { ICON_CHECK, ICON_COPY } from "./icons.js";
 import { STATUS_COLORS } from "./popup.js";
 import { createStatusDropdown, type StatusDropdownHandle } from "./status-dropdown.js";
 import type { AnnotationStore, UpdateAnchorInput } from "./store.js";
@@ -1061,6 +1063,11 @@ export class MarkerManager {
     composer.appendChild(ta);
     composer.appendChild(sendBtn);
 
+    // Copy-UUID button — matches the drawer card affordance so reviewers can
+    // grab a comment's ID from either surface. Click swaps to a check for
+    // ~1.4s; failures log to console. PRO-90.
+    const copyBtn = this.buildPopoverCopyButton(record.id);
+    btnRow.appendChild(copyBtn);
     btnRow.appendChild(closeBtn);
     btnRow.appendChild(deleteBtn);
     pop.appendChild(tagsRow);
@@ -1157,6 +1164,54 @@ export class MarkerManager {
     });
 
     this.popoverDisposers.push(offReplied, offDeleted, offUpdated);
+  }
+
+  /**
+   * Pill-style copy-UUID button sized for the popover's btnRow (matches the
+   * height of close/delete chips). Mirrors `Drawer.buildCopyButton` behavior:
+   * stopPropagation, icon swap on success, console feedback on both paths.
+   */
+  private buildPopoverCopyButton(id: string): HTMLButtonElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.title = this.t("drawer.copyId");
+    btn.setAttribute("aria-label", this.t("drawer.copyIdAria"));
+    btn.style.cssText = `
+      display:inline-flex;align-items:center;justify-content:center;
+      height:30px;width:30px;padding:0;border-radius:9999px;
+      border:1px solid ${this.colors.border};background:${this.colors.glassBg};
+      color:${this.colors.textTertiary};font-family:inherit;cursor:pointer;
+      transition:all 0.2s ease;
+    `;
+    const setIcon = (svg: string): void => {
+      btn.replaceChildren(parseSvg(svg));
+      const node = btn.querySelector<SVGElement>("svg");
+      if (node) {
+        node.style.width = "14px";
+        node.style.height = "14px";
+      }
+    };
+    setIcon(ICON_COPY);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void copyToClipboard(id).then((ok) => {
+        if (!ok) {
+          console.warn(`[ccm-feedback] ${this.t("toast.idCopyFailed")}`);
+          return;
+        }
+        console.info(`[ccm-feedback] ${this.t("toast.idCopied")}: ${id}`);
+        btn.style.color = "#16a34a";
+        setIcon(ICON_CHECK);
+        window.setTimeout(() => {
+          btn.style.color = this.colors.textTertiary;
+          setIcon(ICON_COPY);
+        }, 1400);
+      });
+    });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+    });
+    return btn;
   }
 
   /**
