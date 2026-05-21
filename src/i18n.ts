@@ -37,6 +37,11 @@ const STRINGS: Record<string, string> = {
   "marker.popover.delete": "Delete",
   "marker.popover.close": "Close",
   "marker.popover.deleteConfirm": "Delete this comment? This cannot be undone.",
+  "marker.replies.heading": "Replies",
+  "marker.reply.delete": "Delete reply",
+  "marker.reply.placeholder": "Write a reply…",
+  "marker.reply.send": "Reply",
+  "marker.replyDeleteConfirm": "Delete this reply? This cannot be undone.",
   "toast.exported": "Exported {n} annotation(s)",
   "toast.empty": "No annotations to export",
   "toast.urlCopied": "Feedback URL copied to clipboard", // FR: "URL des retours copiée dans le presse-papiers"
