@@ -557,6 +557,42 @@ export function buildStyles(colors: ThemeColors): string {
       margin-left: auto;
     }
 
+    .sp-card-copy {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: var(--sp-radius);
+      background: transparent;
+      color: var(--sp-text-tertiary);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .sp-card-copy:hover {
+      background: var(--sp-glass-bg);
+      border-color: var(--sp-glass-border);
+      color: var(--sp-text);
+    }
+
+    .sp-card-copy:focus-visible {
+      outline: 2px solid var(--sp-accent);
+      outline-offset: 2px;
+    }
+
+    .sp-card-copy svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .sp-card-copy--ok {
+      color: var(--sp-success, #16a34a);
+    }
+
     .sp-card-message {
       font-size: 13px;
       line-height: 1.5;

@@ -1,7 +1,8 @@
 import { el, parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
+import { copyToClipboard } from "./export-utils.js";
 import type { TFunction } from "./i18n.js";
-import { ICON_CLOSE } from "./icons.js";
+import { ICON_CHECK, ICON_CLOSE, ICON_COPY } from "./icons.js";
 import { STATUS_COLORS } from "./popup.js";
 import { createStatusDropdown, type StatusDropdownHandle } from "./status-dropdown.js";
 import { type AnnotationStore, normalizePath } from "./store.js";
@@ -396,9 +397,11 @@ export class Drawer {
     dropdown.root.addEventListener("keydown", (e) => e.stopPropagation());
     const date = el("span", { class: "sp-card-date" });
     setText(date, new Date(record.createdAt).toLocaleDateString());
+    const copyBtn = this.buildCopyButton(record.id);
     headerRow.appendChild(num);
     headerRow.appendChild(dropdown.root);
     headerRow.appendChild(date);
+    headerRow.appendChild(copyBtn);
 
     const message = el("div", { class: "sp-card-message" });
     setText(message, truncated);
@@ -427,6 +430,45 @@ export class Drawer {
     card.appendChild(bar);
     card.appendChild(body);
     return card;
+  }
+
+  /**
+   * Build the per-card "copy ID" button. Clicking copies the UUID to the
+   * clipboard so the reviewer can paste it into Claude / docs / a CLI like
+   * `feedback get <uuid>`. The button briefly swaps to a check icon on
+   * success; on failure it logs and stays unchanged. `stopPropagation` is
+   * critical — the card itself is a <button> that jumps to the marker.
+   */
+  private buildCopyButton(id: string): HTMLButtonElement {
+    const btn = el("button", {
+      class: "sp-card-copy",
+      type: "button",
+      title: this.t("drawer.copyId"),
+    }) as HTMLButtonElement;
+    btn.setAttribute("aria-label", this.t("drawer.copyIdAria"));
+    btn.appendChild(parseSvg(ICON_COPY));
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void copyToClipboard(id).then((ok) => {
+        if (!ok) {
+          console.warn(`[ccm-feedback] ${this.t("toast.idCopyFailed")}`);
+          return;
+        }
+        console.info(`[ccm-feedback] ${this.t("toast.idCopied")}: ${id}`);
+        btn.classList.add("sp-card-copy--ok");
+        btn.replaceChildren(parseSvg(ICON_CHECK));
+        window.setTimeout(() => {
+          btn.classList.remove("sp-card-copy--ok");
+          btn.replaceChildren(parseSvg(ICON_COPY));
+        }, 1400);
+      });
+    });
+    // Keyboard activation on the button must not bubble into the card's
+    // jump-to-marker handler either.
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+    });
+    return btn;
   }
 
   private trapFocus(e: KeyboardEvent): void {

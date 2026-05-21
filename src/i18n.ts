@@ -57,6 +57,10 @@ const STRINGS: Record<string, string> = {
   "drawer.thisPage": "This page", // FR: "Cette page"
   "drawer.otherPages": "Other pages ({n})", // FR: "Autres pages ({n})"
   "drawer.rowAria": "Comment {n}: {message}", // FR: "Commentaire {n} : {message}"
+  "drawer.copyId": "Copy ID", // FR: "Copier l'ID"
+  "drawer.copyIdAria": "Copy comment ID", // FR: "Copier l'ID du commentaire"
+  "toast.idCopied": "Comment ID copied", // FR: "ID du commentaire copié"
+  "toast.idCopyFailed": "Could not copy ID — clipboard unavailable", // FR: "Impossible de copier l'ID"
 };
 
 export type TFunction = (key: string, vars?: Record<string, string | number>) => string;
