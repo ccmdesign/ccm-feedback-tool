@@ -15,7 +15,7 @@ Local mode is the default. You opt in to cloud mode by passing `data-supabase-ur
 
 ## Schema
 
-Cloud mode requires seven migrations applied in order: `0001_init.sql`, `0002_status_pin_area.sql`, `0003_realtime.sql`, `0004_status_review.sql`, `0005_repair_rls.sql`, `0006_replies.sql`, `0007_sequence_number.sql`. Each is idempotent. `0005` repairs the anon RLS policies from `0001` (some live projects had `anon update` missing or altered); `0006` adds the self-referential `parent_id` FK that powers comment replies; `0007` adds the persisted `sequence_number` column + BEFORE INSERT trigger that maintains the per-project `#N` identifier. See [self-hosting.md](self-hosting.md#step-2--run-the-migrations) for the full list and how to apply them.
+Cloud mode requires eight migrations applied in order: `0001_init.sql`, `0002_status_pin_area.sql`, `0003_realtime.sql`, `0004_status_review.sql`, `0005_repair_rls.sql`, `0006_replies.sql`, `0007_sequence_number.sql`, `0008_sequence_unique.sql`. Each is idempotent. `0005` repairs the anon RLS policies from `0001` (some live projects had `anon update` missing or altered); `0006` adds the self-referential `parent_id` FK that powers comment replies; `0007` adds the persisted `sequence_number` column + BEFORE INSERT trigger that maintains the per-project `#N` identifier; `0008` hardens that trigger against concurrent INSERTs (advisory transaction lock per `project_name`) and adds a unique partial index `(project_name, sequence_number) WHERE parent_id IS NULL` as a safety net. See [self-hosting.md](self-hosting.md#step-2--run-the-migrations) for the full list and how to apply them.
 
 ## How it works
 

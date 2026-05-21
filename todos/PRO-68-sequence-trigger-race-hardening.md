@@ -1,8 +1,10 @@
 # PRO-68 — Sequence-number trigger has no concurrent-insert hardening
 
+**Status:** RESOLVED — migration `0008_sequence_unique.sql` lands both defenses (advisory lock + unique partial index).
 **Severity:** P2 (per reviewer task brief) / accepted v1 limitation (per plan)
 **Owner:** downstream-resolver (follow-up migration)
-**Files:** `supabase/migrations/0007_sequence_number.sql:51-74`
+**Files:** `supabase/migrations/0007_sequence_number.sql:51-74`,
+`supabase/migrations/0008_sequence_unique.sql` (new)
 
 ## Finding
 
@@ -25,43 +27,40 @@ in the wild.
 The migration file's header comment (lines 16-23) explicitly documents
 the race window and the deferral.
 
-## Why this matters
+## Resolution
 
-Conflict between task brief and plan. The plan defers as a non-goal;
-the brief says "must." Decide which contract applies.
+**Decision: apply hardening now via migration `0008_sequence_unique.sql`,
+using both defenses (option (c) — advisory lock + unique partial index).**
 
-## Recommended next step
+The brief's P2 severity was the right call. Even with low real-world
+volumes, removing the race window is cheap (one `perform pg_advisory_xact_lock`
++ a small partial index) and the unique constraint catches any future
+code path that tries to write outside the trigger. Belt-and-suspenders
+beats post-hoc reconciliation queries the first time duplicates surface.
 
-Either:
+### What landed
 
-1. **Apply hardening now** (follow-up migration `0008_sequence_unique.sql`):
-   ```sql
-   -- Option A: serialize via advisory lock inside the trigger
-   create or replace function public.ccm_widget_assign_sequence()
-   returns trigger language plpgsql as $$
-   begin
-     if new.parent_id is not null then return new; end if;
-     perform pg_advisory_xact_lock(hashtext('ccm_widget_seq:' || new.project_name));
-     if new.sequence_number is null then
-       select coalesce(max(sequence_number), 0) + 1
-         into new.sequence_number
-         from public.ccm_widget_annotations
-         where project_name = new.project_name
-           and parent_id is null;
-     end if;
-     return new;
-   end;
-   $$;
+1. **`pg_advisory_xact_lock(hashtext('ccm_widget_seq:' || project_name))`**
+   in the trigger body. Held for the rest of the surrounding transaction
+   (auto-released on COMMIT/ROLLBACK). Serializes concurrent INSERTs for
+   the same project; unrelated projects rarely collide on the hash bucket
+   (and a collision only causes harmless serialization between two
+   different projects' inserts).
 
-   -- Option B: add the unique constraint deferrable initially deferred
-   alter table public.ccm_widget_annotations
-     add constraint ccm_widget_annotations_project_seq_uq
-     unique (project_name, sequence_number)
-     deferrable initially deferred;
-   ```
+2. **Unique partial index** on `(project_name, sequence_number) WHERE
+   parent_id IS NULL`. Partial because replies legitimately carry NULL
+   `sequence_number` and shouldn't participate in the uniqueness check.
+   Any future writer that bypasses the trigger (SQL edit, future feature)
+   gets a hard `23505 unique_violation` instead of a silent duplicate.
 
-2. **Accept the documented v1 limitation** per the plan and close this
-   todo with a PR-description note.
+3. **Migration list updated** in `scripts/apply-migrations.sh`,
+   `docs/self-hosting.md`, and `docs/cloud-mode.md` so self-hosters apply
+   `0008` after `0007`.
 
-Not auto-applied: schema change, behavior-significant, and explicitly
-deferred by the plan.
+### Behavior preserved
+
+- Migration `0007`'s trigger contract is otherwise unchanged: replies
+  (`parent_id IS NOT NULL`) are skipped; an explicitly-supplied non-null
+  `sequence_number` (used by `migrateFromLocal`) is still respected.
+- Realtime payloads, RLS policies, and the optimistic-UI client path
+  (decided in the P1 todo) are unaffected.
