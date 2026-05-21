@@ -34,7 +34,11 @@ behavior, and comment identity.
    increasing for the project's full history. `done` items count
    toward the running total — if a project has 57 done + 4 review + 9
    todo = 70 comments, the next one is #71. Deleting a comment does
-   not free its number.
+   not free its number — and crucially, **deleting the
+   highest-numbered comment does not lower the next-issued number
+   either.** The next number comes from a persisted per-project
+   high-water mark, not from `max(existing) + 1` over the current
+   row set.
 
 ## Goal
 
@@ -618,13 +622,43 @@ Add a new persisted field `sequenceNumber: number` on
 `AnnotationRecord`. Assigned exactly once at create time. Scope =
 `projectName`. Monotonic. Never reused.
 
+#### Delete-behavior contract (load-bearing)
+
+The number space is a **monotonically increasing high-water mark per
+project**, *not* a function of the current row set. Concretely:
+
+- The next-to-issue number lives in its own persisted slot,
+  separate from the annotation rows themselves.
+- Every successful save reads that slot, assigns its value to the new
+  record's `sequenceNumber`, and bumps the slot by one.
+- The slot is **never decremented**, by any code path. Delete (single
+  row), cascade delete (parent + replies), bulk clear, undo — none of
+  them touch the high-water mark.
+- "Comment #N" is therefore stable for the life of the project, even
+  if every other row in the project is deleted between assignments.
+
+Two clarifying corollaries:
+
+1. **Deleting the highest-numbered comment is the case that exposes
+   the bug.** If the high-water mark were derived from
+   `max(rows.sequenceNumber)` at insert time, deleting the current
+   max would lower the derived max and the next insert would reuse
+   the freed number. The persisted slot prevents that — `max(rows)`
+   is **never** consulted on the create path.
+2. **Clearing all rows in a project does not reset the counter.** A
+   project that has reached `#71` and then has every row deleted
+   issues `#72` next, not `#1`. The slot tracks the project's full
+   issuance history, not its current population.
+
 Counting rule (matches user's stated example: 57 done + 4 review + 9
 todo = 70 → next is #71):
 - All top-level comments (no `parentId`) count toward the sequence,
   regardless of status.
-- Replies (`parentId` set) do **not** consume sequence numbers.
-- Deleted comments still consume their number — the next insert always
-  uses `max(existing) + 1`, not the smallest unused integer.
+- Replies (`parentId` set) do **not** consume sequence numbers, and
+  saving a reply does **not** bump the high-water mark.
+- Deleted comments still consume their number — gaps are normal and
+  expected. The next insert always reads the high-water mark, not the
+  smallest unused integer and not `max(existing) + 1`.
 
 ### Data model
 
@@ -651,121 +685,231 @@ upgrade.
 
 ### Cloud migration
 
-`supabase/migrations/0006_sequence_number.sql`:
+> **Status note (post PRO-68 ship):** the original implementation
+> shipped as migrations `0007_sequence_number.sql` (column + index +
+> backfill + `max() + 1` trigger) and `0008_sequence_unique.sql`
+> (advisory lock + unique partial index). The `max() + 1` trigger
+> body matches the **defective** read-current-rows logic — deleting
+> the highest-numbered row lowers the next-issued number. The
+> follow-up ticket (see [PRO-81](https://app.plane.so/ccm-design/browse/PRO-81/) footer) replaces the
+> trigger source with a high-water-mark read+bump against a new
+> per-project meta table. The column, the partial unique index, and
+> the backfill query stay; only the trigger function changes and a
+> new table is added.
+
+#### Schema additions (follow-up migration, e.g. `0009_sequence_hwm.sql`)
 
 ```sql
-alter table public.ccm_widget_annotations
-  add column if not exists sequence_number bigint;
+-- Per-project sequence high-water mark. One row per project; the
+-- value is "the next sequence_number to issue". Created lazily on
+-- first insert for an unseen project.
+create table if not exists public.ccm_widget_project_meta (
+  project_name text primary key,
+  next_sequence_number bigint not null default 1,
+  updated_at timestamptz not null default now()
+);
 
--- Backfill: number existing rows per project by creation order. Replies
--- are excluded from the sequence — their `sequence_number` stays NULL.
-with ordered as (
-  select id,
-         row_number() over (
-           partition by project_name
-           order by created_at, id
-         ) as seq
+-- Backfill the slot from current data. For any project that already
+-- has top-level rows, seed next = max(existing.sequence_number) + 1
+-- so the cutover preserves continuity. Projects with no rows yet
+-- aren't seeded — the trigger lazily inserts on first save.
+insert into public.ccm_widget_project_meta (project_name, next_sequence_number)
+select project_name,
+       coalesce(max(sequence_number), 0) + 1
   from public.ccm_widget_annotations
-  where parent_id is null
-)
-update public.ccm_widget_annotations a
-  set sequence_number = o.seq
-  from ordered o
-  where a.id = o.id;
+ where parent_id is null
+ group by project_name
+on conflict (project_name) do update
+  set next_sequence_number = greatest(
+        public.ccm_widget_project_meta.next_sequence_number,
+        excluded.next_sequence_number
+      );
+-- `greatest(...)` makes the backfill idempotent and safe to re-run:
+-- if the slot already advanced past the table's current max (e.g.
+-- because we already deleted the prior top), keep the higher value.
 
-create index if not exists ccm_widget_annotations_project_seq_idx
-  on public.ccm_widget_annotations (project_name, sequence_number);
+-- RLS: identical posture to ccm_widget_annotations. Anon role can
+-- select / insert / update so the widget can run the trigger; service
+-- role unrestricted. The trigger runs as the inserting role.
+alter table public.ccm_widget_project_meta enable row level security;
+create policy ccm_widget_project_meta_all on public.ccm_widget_project_meta
+  for all using (true) with check (true);
 
--- BEFORE INSERT trigger: atomically assign next sequence number per
--- project. Skipped for replies (parent_id is not null). Race-safe via
--- the implicit row lock on the max() read inside the trigger body —
--- Postgres serializes concurrent inserts on the same project.
+-- Replace the trigger body. Behavior change vs 0007/0008:
+--   * No more `select max(sequence_number) ... from annotations`.
+--   * Read the meta row for this project (insert on first touch).
+--   * Take the current `next_sequence_number`, assign it, bump by 1.
+--   * Advisory lock still held — keeps two concurrent inserts from
+--     racing on the UPDATE.
 create or replace function public.ccm_widget_assign_sequence()
 returns trigger
 language plpgsql
 as $$
+declare
+  next_seq bigint;
 begin
   if new.parent_id is not null then
     return new;
   end if;
+  perform pg_advisory_xact_lock(hashtext('ccm_widget_seq:' || new.project_name));
+  -- Lazy insert of the meta row, then atomic read-and-bump. The
+  -- `returning` clause hands us the value we just consumed so we can
+  -- assign it to the new annotation row.
+  insert into public.ccm_widget_project_meta (project_name, next_sequence_number)
+    values (new.project_name, 1)
+    on conflict (project_name) do nothing;
+  update public.ccm_widget_project_meta
+     set next_sequence_number = next_sequence_number + 1,
+         updated_at = now()
+   where project_name = new.project_name
+   returning next_sequence_number - 1 into next_seq;
   if new.sequence_number is null then
-    select coalesce(max(sequence_number), 0) + 1
-      into new.sequence_number
-      from public.ccm_widget_annotations
-      where project_name = new.project_name
-        and parent_id is null;
+    new.sequence_number := next_seq;
+  end if;
+  -- When the client supplied a non-null sequence_number (migration
+  -- path), we still bumped the slot. If the supplied number is
+  -- higher than what we just issued, fast-forward the slot so a
+  -- future insert doesn't collide with the migrated number.
+  if new.sequence_number is not null and new.sequence_number >= next_seq then
+    update public.ccm_widget_project_meta
+       set next_sequence_number = new.sequence_number + 1
+     where project_name = new.project_name
+       and next_sequence_number <= new.sequence_number;
   end if;
   return new;
 end;
 $$;
-
-drop trigger if exists ccm_widget_assign_sequence_trg
-  on public.ccm_widget_annotations;
-create trigger ccm_widget_assign_sequence_trg
-  before insert on public.ccm_widget_annotations
-  for each row execute function public.ccm_widget_assign_sequence();
 ```
 
 Notes:
-- `max() + 1` under a BEFORE INSERT trigger relies on Postgres'
-  default behavior of serializing writes that conflict on the same
-  index range. For the volumes this widget targets (≤ hundreds of
-  comments per project, single-digit concurrent reviewers), the
-  trigger is sufficient without an explicit advisory lock. If we
-  ever see duplicate sequence numbers in the wild, switch to
-  `pg_advisory_xact_lock(hashtext(project_name))` inside the
-  function.
-- Existing RLS policies (`using (true)`) cover the new column with no
-  change.
-- REPLICA IDENTITY FULL (migration 0003) means the new column
-  participates in realtime UPDATE payloads automatically.
+- The unique partial index from `0008` still applies and is the
+  ultimate guard against duplicate `(project_name, sequence_number)`
+  pairs. The trigger's read-and-bump under the advisory lock makes
+  duplicates impossible during normal operation; the index is the
+  belt to the trigger's suspenders.
+- The migration path (`migrateFromLocal` supplies a `sequence_number`
+  from local data) keeps working because the trigger fast-forwards
+  the slot when the supplied value is >= the current `next`.
+- `ccm_widget_project_meta` rows live independently of annotation
+  rows. **Deleting every annotation in a project does not remove or
+  reset the meta row.** This is the schema-level expression of the
+  delete-behavior contract above.
+- Realtime publication does NOT need to include the meta table — no
+  client reads it directly.
+- Existing RLS policies on `ccm_widget_annotations` (`using (true)`)
+  cover the new column with no change. The new meta table mirrors
+  them.
 
-Self-hosters: add `0006` to `scripts/apply-migrations.sh`,
-`docs/self-hosting.md`, `docs/cloud-mode.md`. Run after 0001–0005.
+Self-hosters: append the new migration to `scripts/apply-migrations.sh`,
+`docs/self-hosting.md`, `docs/cloud-mode.md`. Run after 0001–0008.
 
 ### Store contract
 
-#### `Store` (localStorage)
+#### `Store` (localStorage) — sibling high-water mark key
 
-`buildRecord` assigns `sequenceNumber` at save time:
+The HWM lives in its own localStorage key, distinct from the
+annotation array:
+
+```
+key:    ccm-feedback:<projectName>           # array of AnnotationRecord (today)
+key:    ccm-feedback:<projectName>:seq-hwm   # JSON number, "next to issue"
+```
+
+The HWM key has a single value: the next `sequenceNumber` that
+`save()` will assign. It is **read and bumped together** in a single
+synchronous critical section inside `save()`. Pseudocode:
 
 ```ts
-export function buildRecord(input: SaveInput, existing: AnnotationRecord[]): AnnotationRecord {
-  const maxSeq = existing.reduce(
-    (m, r) => (r.parentId ? m : Math.max(m, r.sequenceNumber ?? 0)),
-    0,
-  );
-  const record: AnnotationRecord = {
-    // …existing fields…
-    sequenceNumber: maxSeq + 1,
-  };
-  // …rest unchanged…
+// Pure helpers, exported for tests.
+function loadHwm(projectName: string): number {
+  try {
+    const raw = localStorage.getItem(hwmKey(projectName));
+    if (!raw) return 1;
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "number" && parsed >= 1 ? Math.floor(parsed) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function persistHwm(projectName: string, next: number): void {
+  // Best-effort, same posture as `persist()` above.
+  try { localStorage.setItem(hwmKey(projectName), JSON.stringify(next)); } catch {}
+}
+
+// Inside Store.save():
+save(input: SaveInput): AnnotationRecord {
+  const items = load(this.projectName);
+  const assigned = loadHwm(this.projectName);
+  const record = buildRecord(input, assigned);   // <-- takes the number, not the array
+  persistHwm(this.projectName, assigned + 1);    // bump BEFORE writing the row
+  items.unshift(record);
+  persist(this.projectName, items);
+  return record;
 }
 ```
 
-`Store.save(input)` already has the loaded array in hand — pass it
-through. Same for the cloud store's `save`, which builds the record
-locally before push (the trigger will overwrite `sequence_number` on
-the server but the optimistic UI rendering uses the local guess; in
-practice both will match because the client is the only writer).
+Key points:
+- `buildRecord` no longer computes the next number from the row
+  array. It accepts a pre-assigned number from the caller. The
+  function name stays; only its signature changes.
+- The HWM key is bumped **before** the annotation array is persisted.
+  If a crash interleaves the two writes, the worst case is a
+  "consumed but never written" number — a gap, which the spec
+  already declares legal. The opposite ordering (row first, HWM
+  bumped later) would risk re-issuing a number if the crash window
+  lands between the writes, which violates the contract.
+- `nextSequenceNumber(existing)` — the helper in the shipped
+  `src/store.ts` that reads `max(existing.sequenceNumber)` — is
+  **removed**. No code path may derive the next number from the
+  current row set.
+- Backfill rule for pre-HWM localStorage (existing rows but no HWM
+  key yet): on `Store` construction, if the HWM key is absent and
+  the row array is non-empty, seed the key with
+  `max(rows.sequenceNumber) + 1`. If the row array is empty, seed
+  with `1`. The seeded value is then immutable downward — subsequent
+  loads always read the persisted slot, never re-derive from rows.
+- `backfillSequenceNumbers(items)` (which fills missing numbers in
+  pre-PRO-68 rows) runs **before** the HWM seed step, so the seed
+  observes the post-backfill max.
+- `Store.delete()`, `Store.clear()`, and the cascade-on-parent-delete
+  filter all leave the HWM key untouched. `Store.clear()` removes
+  only `ccm-feedback:<projectName>` — the HWM key persists so a
+  reviewer who clears and starts fresh still gets monotonic numbers.
+  (If we ever add an explicit "reset project numbering" command, it
+  removes the HWM key as a deliberate, separate action.)
 
 #### `CloudStore` (Supabase)
 
-Two options for the optimistic local value:
-1. Compute `max(cache) + 1` client-side (matches localStorage path,
-   may briefly mismatch the server's authoritative value if two
-   reviewers write concurrently).
-2. Insert with `sequenceNumber = null` and rely on the trigger to
-   set it; await the response and patch the cache.
+Server is authoritative. The trigger reads and bumps
+`ccm_widget_project_meta.next_sequence_number` (see "Cloud migration"
+above), so the client never needs to compute the number locally.
 
-Pick (1) for v1 — the existing `pushInsert` is fire-and-forget,
-matching the new behavior. If a concurrent insert assigned the same
-number to a different record, the realtime UPDATE / INSERT from the
-peer client carries the real values; reconcile by trusting the server
-on `id` match (already the existing pattern in `onInsert`).
+Two client-side decisions remain:
 
-Document the trade-off in `docs/architecture.md` under "sequence
-number race window".
+1. **Optimistic local value.** Two options:
+   - Insert with `sequenceNumber = null` (or `undefined`) and let
+     the trigger fill it; await the response and patch the cache
+     with the server-issued number. Costs one round-trip before the
+     marker can render its `#N`.
+   - Read a client-side "next-guess" from a cached HWM (mirroring
+     localStorage), render optimistically, reconcile on the
+     `RETURNING` response or realtime INSERT.
+
+   **Pick option 1 for v1.** Until the server has spoken, the client
+   does not know its number; render `#?` as a placeholder for the
+   ~1-RTT window. This is simpler than a client-side HWM cache that
+   would have to defend against drift across reviewers, and matches
+   the "server is authoritative" stance of the meta table.
+
+2. **`migrateFromLocal` payload.** Keep supplying the local
+   `sequenceNumber` on each migrated row — the trigger respects it
+   AND fast-forwards the meta slot if the supplied number is higher
+   than the slot's current value, so a migration that includes #70
+   leaves the slot at >= 71.
+
+Document the rendering placeholder (`#?` until INSERT resolves) in
+`docs/architecture.md` under "sequence number issuance".
 
 #### Reply records
 
@@ -775,27 +919,37 @@ skips reply rows as standalone work items — no display number needed.
 
 ### Backfill of pre-migration localStorage data
 
-When `Store` loads on init, scan the array. Any top-level record (no
-`parentId`) missing `sequenceNumber` gets one assigned in
-`createdAt` order, then the array is persisted. One-time pass; idempotent.
+Two-step sequence on `Store` construction:
 
-```ts
-function backfillSequenceNumbers(items: AnnotationRecord[]): boolean {
-  const tops = items.filter(r => !r.parentId);
-  if (tops.every(r => typeof r.sequenceNumber === "number")) return false;
-  tops
-    .slice()
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    .forEach((r, i) => {
-      if (typeof r.sequenceNumber !== "number") r.sequenceNumber = i + 1;
-    });
-  // Rewrite any numbered tops with their backfilled index too? No —
-  // only fill missing values, preserve existing numbers.
-  return true;
-}
-```
+1. **Fill missing per-row numbers.** Scan the array. Any top-level
+   record (no `parentId`) missing `sequenceNumber` gets one assigned
+   in `createdAt` order, preserving existing numbers. One-time pass;
+   idempotent.
 
-Run on `Store` construction; persist if it returned true.
+   ```ts
+   function backfillSequenceNumbers(items: AnnotationRecord[]): boolean {
+     const tops = items.filter(r => !r.parentId);
+     if (tops.every(r => typeof r.sequenceNumber === "number")) return false;
+     tops
+       .slice()
+       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+       .forEach((r, i) => {
+         if (typeof r.sequenceNumber !== "number") r.sequenceNumber = i + 1;
+       });
+     // Only fill missing values; preserve existing numbers.
+     return true;
+   }
+   ```
+
+2. **Seed the HWM key if absent.** After step 1, if the HWM
+   localStorage key is missing, write
+   `max(rows.sequenceNumber) + 1` (or `1` for an empty project).
+   After this one-time seed, the HWM is read-and-bumped on every
+   subsequent `save()` — `max(rows)` is never consulted again.
+
+Both steps run unconditionally on `Store` construction; both are
+idempotent (a second call is a no-op if the prior state is already
+consistent).
 
 ### Render
 
@@ -1011,16 +1165,24 @@ else.
 
 - Fresh project (cloud): add 3 comments → `#1, #2, #3`. Delete `#2`,
   add a new one → new comment is `#4`, not `#2`.
+- **Delete-the-highest regression case (the bug that motivated this
+  contract).** Fresh project: add 3 comments → `#1, #2, #3`. Delete
+  `#3` (the current max). Add a new comment → new comment MUST be
+  `#4`, not `#3`. Repeat for localStorage and cloud stores.
+- **Clear-then-create case.** Project at `#71`. Clear every row in
+  the project (`Store.clear()` or equivalent server-side DELETE).
+  Add one comment → it is `#72`. The HWM slot survived the wipe.
 - Project with 70 existing comments (the user's New Commons case):
   add a new comment → it renders as `#71` on both the marker AND
   the drawer card.
-- Reply on `#71` → no new number assigned. Reply does not appear in
-  any other comment's numbering.
+- Reply on `#71` → no new number assigned, **and the HWM slot does
+  not advance**. Subsequent top-level save is `#72`.
 - Two windows on same project: window A adds a comment → window B
   receives realtime INSERT with `sequence_number` set, marker
   renders identically (`#N` matches A).
 - Pre-migration localStorage: open widget once → backfill assigns
   numbers by `createdAt`; subsequent reload renders them stable.
+  The HWM key is seeded once from `max + 1` and never re-derived.
 - Filter the drawer to `done` → cards show their original numbers
   (not 1..N renumbered).
 
@@ -1195,20 +1357,40 @@ No test suite. Before merge:
       future styling.
     - `docs/architecture.md`: document cluster fan-out + its
       interaction with PRO-67 drag-relocate.
-13. **Persistent sequence numbers**:
-    - `supabase/migrations/0006_sequence_number.sql`: add column,
-      backfill via `row_number()`, create `(project_name,
-      sequence_number)` index, install BEFORE INSERT trigger.
+13. **Persistent sequence numbers** (originally implemented as PRO-68
+    §8; follow-up ticket replaces the `max(seq)+1` recipe with a
+    persisted per-project high-water mark — see [PRO-81](https://app.plane.so/ccm-design/browse/PRO-81/)
+    footer):
+    - `supabase/migrations/0007_sequence_number.sql` (shipped): add
+      column, backfill via `row_number()`, create `(project_name,
+      sequence_number)` index, install BEFORE INSERT trigger using
+      `max() + 1`.
+    - `supabase/migrations/0008_sequence_unique.sql` (shipped):
+      advisory lock + unique partial index hardening.
+    - **`supabase/migrations/0009_sequence_hwm.sql` (follow-up
+      ticket):** add `ccm_widget_project_meta` table with
+      `next_sequence_number`; backfill from current `max + 1` per
+      project; replace trigger body with read-and-bump against the
+      meta row (keeping advisory lock + supplied-value fast-forward).
     - `scripts/apply-migrations.sh`, `docs/self-hosting.md`,
-      `docs/cloud-mode.md`: add 0006 to migration list.
+      `docs/cloud-mode.md`: add new migration to list.
     - `src/types.ts`: add `sequenceNumber?: number` on
-      `AnnotationRecord`.
-    - `src/store.ts`: `buildRecord` takes the existing list, computes
-      `maxSeq + 1`. Add one-time `backfillSequenceNumbers` pass on
-      `Store` construction; persist if modified.
+      `AnnotationRecord` (shipped).
+    - `src/store.ts`:
+      - **Follow-up:** delete the `nextSequenceNumber(existing)`
+        helper. Add `hwmKey(projectName)` + `loadHwm` / `persistHwm`
+        helpers. Change `buildRecord` signature from
+        `(input, existing)` to `(input, assignedSequenceNumber)`.
+        Make `Store.save` read-and-bump the HWM key, then build the
+        row with the assigned number, then write the array.
+      - **Follow-up:** in the constructor, after
+        `backfillSequenceNumbers`, seed the HWM key when absent from
+        `max(rows.sequenceNumber) + 1` (or `1` for empty).
     - `src/cloud-store.ts`: `CloudRow.sequence_number?: number | null`;
-      `recordToRow` / `rowToRecord` mappers; `migrateFromLocal` drops
-      `sequenceNumber` from payload so the trigger reassigns.
+      `recordToRow` / `rowToRecord` mappers; `migrateFromLocal` carries
+      `sequenceNumber` (trigger fast-forwards the meta slot).
+      **Follow-up:** new local rows render `#?` until the server's
+      INSERT response arrives with the assigned number.
     - `src/markers.ts`: `buildMarker(record)` reads
       `record.sequenceNumber`. Delete `renumber()` and all callers.
       `addOne` / `refresh` drop the index argument.
