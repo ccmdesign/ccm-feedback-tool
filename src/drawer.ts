@@ -256,13 +256,12 @@ export class Drawer {
     const currentPage = sorted.filter((r) => normalizePath(r.path) === currentPath);
     const otherPages = sorted.filter((r) => normalizePath(r.path) !== currentPath);
 
-    let n = 0;
     if (currentPage.length > 0) {
       if (otherPages.length > 0) {
         this.listEl.appendChild(this.buildSectionLabel(this.t("drawer.thisPage")));
       }
       for (const record of currentPage) {
-        this.listEl.appendChild(this.buildCard(record, ++n));
+        this.listEl.appendChild(this.buildCard(record));
       }
     }
 
@@ -286,7 +285,7 @@ export class Drawer {
         setLabel();
       });
       for (const record of otherPages) {
-        sublist.appendChild(this.buildCard(record, ++n));
+        sublist.appendChild(this.buildCard(record));
       }
       this.listEl.appendChild(toggle);
       this.listEl.appendChild(sublist);
@@ -330,10 +329,20 @@ export class Drawer {
     this.render();
   }
 
-  private buildCard(record: AnnotationRecord, number: number): HTMLElement {
+  private buildCard(record: AnnotationRecord): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];
     const isCurrentPage = normalizePath(record.path) === normalizePath(window.location.pathname);
+    // PRO-68 §8 — display the canonical persisted sequence number. Replies
+    // (`parentId` set) carry no number; the drawer renders only top-level
+    // comments in v1, so we render `↳` defensively for any reply that
+    // slips through, matching the CLI's reply marker. Pre-migration rows
+    // without `sequenceNumber` show `?` until the one-time backfill runs.
+    const label = record.parentId
+      ? "↳"
+      : typeof record.sequenceNumber === "number"
+        ? String(record.sequenceNumber)
+        : "?";
 
     const card = el("button", { class: "sp-card", type: "button" }) as HTMLButtonElement;
     card.style.textAlign = "left";
@@ -351,7 +360,7 @@ export class Drawer {
     // park in the right-edge orphan lane). Cross-page rows navigate to
     // the recorded URL so the reviewer lands on the page where that
     // comment lives. The legacy "can't locate" disabled state is retired.
-    card.setAttribute("aria-label", this.t("drawer.rowAria", { n: number, message: truncated }));
+    card.setAttribute("aria-label", this.t("drawer.rowAria", { n: label, message: truncated }));
     card.addEventListener("click", () => {
       if (isCurrentPage) {
         this.jump(record.id);
@@ -365,7 +374,7 @@ export class Drawer {
 
     const headerRow = el("div", { class: "sp-card-header" });
     const num = el("span", { class: "sp-card-number" });
-    setText(num, `#${number}`);
+    setText(num, `#${label}`);
     // PRO-68 §6 — drawer cards expose the shared status dropdown so reviewers
     // can sweep statuses without leaving the drawer. Fallback to a read-only
     // pill when the store can't persist (paranoia — both shipped stores do).

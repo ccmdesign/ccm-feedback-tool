@@ -19,6 +19,7 @@
 #   supabase/migrations/0004_status_review.sql
 #   supabase/migrations/0005_repair_rls.sql
 #   supabase/migrations/0006_replies.sql
+#   supabase/migrations/0007_sequence_number.sql
 #
 # All migrations are idempotent (CREATE TABLE IF NOT EXISTS, etc.) — re-running
 # is safe. Optional hardening migrations live in supabase/migrations-optional/

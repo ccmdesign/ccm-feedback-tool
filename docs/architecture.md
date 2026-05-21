@@ -140,6 +140,26 @@ Both are **synchronous from the caller's perspective**. `CloudStore` keeps an in
 - Cloud read on init: one `GET` per page load. Realtime subscription stays open for the page lifetime.
 - LocalStorage writes block the main thread per `JSON.stringify` — fine at typical comment counts (< 1000), pathological at 10k+.
 
+## FAB and drawer interactions (PRO-68)
+
+- **Single-click on the FAB** toggles the radial open / closed.
+- **Double-click on the FAB** emits `navigator:open` to open the drawer directly. The radial does NOT expand on dblclick. Cancelling a mid-flight capture mode is intentional — opening the drawer during pin/area mode emits `${mode}:end` so the capture overlay tears down cleanly.
+- **Drawer shift.** While the drawer is open, the FAB and radial slide left by `--sp-panel-width + 24px` via the `.sp-fab--drawer-open` / `.sp-radial--drawer-open` modifiers. Below 480px the shifted FAB is hidden entirely (the panel is full-width).
+- **Marker visibility toggle (eye)** lives only on the in-mode capture toolbars (PinMode, AreaMode, CoordPinMode). Outside any capture mode there is no widget-side way to toggle visibility in v1; a keyboard shortcut is deferred to follow-up work.
+- **FAB count badges.** Two badges: yellow `todo` top-right, blue `review` top-left. `done` and `question` counts surface only in the drawer chip row.
+
+## Marker cluster fan-out (PRO-68 §7)
+
+`MarkerManager.reposition()` runs a second pass after its natural positioning loop: union-find clusters any non-orphan markers whose centers fall within `MARKER_SIZE` Chebyshev distance, then lays each cluster's members horizontally around the mean center with `MARKER_SIZE + 4px` spacing, sorted oldest-leftmost. The whole row clamps inside the viewport via the same `clampX` helper the natural pass uses.
+
+Cluster fan-out interacts with PRO-67 drag-relocate transparently: dropping a marker on an anchor that already has markers re-flows the cluster on the next `reposition()` call — no special path in the drag code.
+
+Orphan-lane targets (anchor unresolved → right-edge stack) keep their vertical layout; they're excluded via `dataset.orphan === "true"`. Right-edge orphan-lane behavior takes precedence over horizontal clustering by design.
+
+## Sequence numbers
+
+See [data-model.md § Sequence numbers](data-model.md#sequence-numbers-pro-68-8). Marker labels and drawer cards render `record.sequenceNumber` directly — there is no render-index renumbering. Replies have no number; the drawer card renders `↳`, the CLI renders the same glyph in the `#N` column.
+
 ## Versioning
 
 - Repository version comes from root `package.json` (`0.1.0-mvp` at time of writing). Tags are `vX.Y.Z`.

@@ -15,6 +15,14 @@ import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
+
+/** Render-side fallback for legacy records that pre-date the sequence-number
+ * migration. Pre-PRO-68 localStorage rows have no `sequenceNumber`; the one-
+ * time `backfillSequenceNumbers` pass fills them on next `Store` boot, but
+ * the marker/drawer still need a visible label during that brief window. */
+function formatSequenceLabel(seq: number | undefined): string {
+  return typeof seq === "number" ? String(seq) : "?";
+}
 /** PRO-68 §7 — center-to-center Chebyshev distance below this triggers a
  * cluster. Set to `MARKER_SIZE` so any pair whose circles touch or overlap
  * is grouped. */
@@ -217,21 +225,19 @@ export class MarkerManager {
     this.entries = [];
 
     const records = this.store.listForPath(window.location.pathname).filter((r) => this.shouldRender(r));
-    records.forEach((record, idx) => {
-      const node = this.buildMarker(record, idx + 1);
+    for (const record of records) {
+      const node = this.buildMarker(record);
       this.container.appendChild(node);
       this.entries.push({ record, node, anchorEl: null });
-    });
+    }
     this.reposition();
   }
 
   addOne(record: AnnotationRecord): void {
     if (!this.shouldRender(record)) return;
-    const idx = this.entries.length + 1;
-    const node = this.buildMarker(record, idx);
+    const node = this.buildMarker(record);
     this.container.appendChild(node);
     this.entries.unshift({ record, node, anchorEl: null });
-    this.renumber();
     this.reposition();
   }
 
@@ -349,12 +355,17 @@ export class MarkerManager {
     return true;
   }
 
-  private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
+  private buildMarker(record: AnnotationRecord): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];
+    // PRO-68 §8 — canonical, persisted, project-scoped identifier.
+    // Legacy localStorage rows without `sequenceNumber` get the `?` fallback
+    // until the one-time backfill (Store constructor) fills the gap; the
+    // value is stable across reloads thereafter.
+    const labelN = formatSequenceLabel(record.sequenceNumber);
     const node = el("button", {
       type: "button",
-      "aria-label": this.t("marker.ariaLabel", { n: number }),
+      "aria-label": this.t("marker.ariaLabel", { n: labelN }),
       style: `
         position:absolute;width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;
         border-radius:9999px;border:2px solid #fff;
@@ -373,7 +384,7 @@ export class MarkerManager {
     if (status === "question") {
       node.style.animation = "ccm-pulse 1.6s ease-in-out infinite";
     }
-    setText(node, String(number));
+    setText(node, labelN);
     node.addEventListener("mouseenter", () => {
       node.style.transform = "translate(-50%, -50%) scale(1.12)";
     });
@@ -855,14 +866,6 @@ export class MarkerManager {
       delete record.areaW;
       delete record.areaH;
     }
-  }
-
-  private renumber(): void {
-    this.entries.forEach((entry, i) => {
-      const n = i + 1;
-      setText(entry.node, String(n));
-      entry.node.setAttribute("aria-label", this.t("marker.ariaLabel", { n }));
-    });
   }
 
   private openPopover(record: AnnotationRecord, marker: HTMLElement): void {
