@@ -1,6 +1,7 @@
 import { ensureAuthor } from "./author.js";
 import { Z_INDEX_MAX } from "./constants.js";
 import { generateAnchor } from "./dom/anchor.js";
+import { fanOutClusters } from "./dom/cluster-fanout.js";
 import { createHoverOutline } from "./dom/hover-outline.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
@@ -14,6 +15,12 @@ import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
+/** PRO-68 §7 — center-to-center Chebyshev distance below this triggers a
+ * cluster. Set to `MARKER_SIZE` so any pair whose circles touch or overlap
+ * is grouped. */
+const COLLISION_RADIUS = MARKER_SIZE;
+/** Gap between adjacent markers inside a fanned-out cluster row. */
+const CLUSTER_GAP = 4;
 const REPOSITION_DEBOUNCE_MS = 200;
 // Drag-or-click watcher thresholds (PRO-67). A mousedown promotes to drag
 // when the cursor moves ≥ DRAG_MOVE_THRESHOLD_PX OR the press lasts longer
@@ -1297,6 +1304,7 @@ export class MarkerManager {
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.pinY}px`;
         entry.node.style.left = `${clampX(entry.record.pinX)}px`;
+        entry.node.dataset.orphan = "false";
         entry.anchorEl = null;
         continue;
       }
@@ -1310,6 +1318,7 @@ export class MarkerManager {
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.areaY}px`;
         entry.node.style.left = `${clampX(entry.record.areaX + entry.record.areaW)}px`;
+        entry.node.dataset.orphan = "false";
         entry.anchorEl = null;
         continue;
       }
@@ -1348,6 +1357,19 @@ export class MarkerManager {
       entry.node.style.top = `${top + MARKER_OFFSET}px`;
       entry.node.style.left = `${clampX(center)}px`;
     }
+
+    // PRO-68 §7 — colocated marker fan-out. Lays clusters of overlapping
+    // non-orphan markers out side-by-side around the cluster's mean center
+    // so every marker stays clickable. Orphan-lane targets keep their
+    // vertical stack (intentional, edge-parking) and are skipped inside the
+    // helper via `dataset.orphan === "true"`.
+    fanOutClusters(this.entries, {
+      markerSize: MARKER_SIZE,
+      collisionRadius: COLLISION_RADIUS,
+      clusterGap: CLUSTER_GAP,
+      minX: MARKER_OFFSET,
+      clampX,
+    });
   }
 
   destroy(): void {
