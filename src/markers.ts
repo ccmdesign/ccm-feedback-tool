@@ -12,6 +12,13 @@ import type { AnnotationRecord, FeedbackStatus } from "./types.js";
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
 const REPOSITION_DEBOUNCE_MS = 200;
+// Drag-or-click watcher thresholds (PRO-67). A mousedown promotes to drag
+// when the cursor moves ≥ DRAG_MOVE_THRESHOLD_PX OR the press lasts longer
+// than DRAG_LONGPRESS_MS. Otherwise it's treated as a click and opens the
+// popover. The watcher binds mouse events only; touch falls through to the
+// existing synthesized `click` path so tap-to-open still works on mobile.
+const DRAG_LONGPRESS_MS = 250;
+const DRAG_MOVE_THRESHOLD_PX = 6;
 // Popover dimensions used by the placement fallback to flip the popover
 // above the marker (or anchor it to the viewport edge) when the natural
 // below-right position would overflow the viewport.
@@ -282,7 +289,7 @@ export class MarkerManager {
         font-size:12px;font-weight:700;line-height:1;
         display:flex;align-items:center;justify-content:center;
         box-shadow:0 2px 8px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.18);
-        cursor:pointer;pointer-events:auto;
+        cursor:grab;pointer-events:auto;
         transform:translate(-50%, -50%);transition:transform 0.15s ease;
       `,
     }) as HTMLButtonElement;
@@ -299,11 +306,112 @@ export class MarkerManager {
     node.addEventListener("mouseleave", () => {
       node.style.transform = "translate(-50%, -50%) scale(1)";
     });
+    this.attachDragOrClickWatcher(node, record);
+    return node;
+  }
+
+  /**
+   * Drag-or-click watcher (PRO-67). Binds `mousedown` to the marker and
+   * promotes the gesture to drag if movement crosses `DRAG_MOVE_THRESHOLD_PX`
+   * OR the press lasts > `DRAG_LONGPRESS_MS`. Otherwise the synthesized
+   * `click` is treated as the canonical open-popover trigger. Mouse-only —
+   * touch synthesizes a `click` directly with no preceding `mousedown`, so
+   * the `click` fallback handler keeps tap-to-open working on touch devices.
+   *
+   * Suppression: when the watcher promotes to drag, the subsequent `click`
+   * event (synthesized by the browser on the same mouseup) is swallowed by
+   * a one-shot capture-phase listener so the popover doesn't open under the
+   * drop position.
+   */
+  private attachDragOrClickWatcher(node: HTMLElement, record: AnnotationRecord): void {
+    // Fallback path for synthesized clicks (touch + non-mouse pointer events).
+    // The watcher below promotes mouse-driven gestures via `mouseup`; this
+    // listener handles the touch case where there's no `mousedown` first.
+    // The `dragSuppressed` ref below short-circuits this for mouse drags.
+    const suppress = { value: false };
     node.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (suppress.value) {
+        suppress.value = false;
+        return;
+      }
       this.openPopover(record, node);
     });
-    return node;
+
+    node.addEventListener("mousedown", (downEvt: MouseEvent) => {
+      // Left-button only. Right-clicks and middle-clicks should not engage
+      // the drag-or-click watcher; let them bubble normally.
+      if (downEvt.button !== 0) return;
+      // Stop propagation so the document-level outside-click handler doesn't
+      // close any open popover while the gesture is still resolving.
+      downEvt.stopPropagation();
+
+      const startX = downEvt.clientX;
+      const startY = downEvt.clientY;
+      let promoted = false;
+      let longPressTimer: number | null = window.setTimeout(() => {
+        longPressTimer = null;
+        promote(downEvt);
+      }, DRAG_LONGPRESS_MS);
+
+      const onMove = (e: MouseEvent): void => {
+        if (promoted) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (dx * dx + dy * dy >= DRAG_MOVE_THRESHOLD_PX * DRAG_MOVE_THRESHOLD_PX) {
+          promote(e);
+        }
+      };
+
+      const onUp = (): void => {
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        cleanup();
+        // If we didn't promote, the synthesized `click` will reach the
+        // node's click listener above and open the popover. No-op here.
+      };
+
+      const cleanup = (): void => {
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", onUp, true);
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+
+      const promote = (currentEvt: MouseEvent): void => {
+        if (promoted) return;
+        promoted = true;
+        suppress.value = true;
+        if (longPressTimer !== null) {
+          window.clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        // Drop the move/up listeners — drag mode owns its own globals.
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", onUp, true);
+        const entry = this.entries.find((e) => e.record.id === record.id);
+        if (entry) this.enterDragMode(entry, currentEvt);
+      };
+
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", onUp, true);
+    });
+  }
+
+  /**
+   * Marker relocate via drag (PRO-67). Stubbed in U3 — full implementation
+   * lands in U4 (drag-mode overlay + drop algorithm).
+   */
+  private enterDragMode(entry: MarkerEntry, startEvent: MouseEvent): void {
+    // U4 will implement: fixed overlay, ghosted marker, hover-outline helper,
+    // drop algorithm with case A (target re-anchor), case B (coord pin), case
+    // C (area translate-intact). Avoid unused-param lint warnings until then.
+    void entry;
+    void startEvent;
   }
 
   private renumber(): void {
