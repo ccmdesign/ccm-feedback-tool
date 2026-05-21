@@ -54,8 +54,18 @@ export class MarkerManager {
     private readonly t: TFunction,
     private readonly store: AnnotationStore,
   ) {
+    // `overflow-x: clip` + `width: 100%` is a defensive guard: any pin that
+    // accidentally lands past the viewport's right edge (stale capture from
+    // a wider viewport, resolved target that extends off-screen, etc.) is
+    // visually clipped here and — crucially — does not contribute to
+    // `documentElement.scrollWidth`, which would otherwise inject a
+    // horizontal scrollbar on the host page. `overflow-y` stays `visible`
+    // so absolutely-positioned children below container origin still
+    // paint freely. (`clip` paired with `visible` is the only combination
+    // where the visible axis is preserved; `hidden` would force the other
+    // axis to `auto`.)
     this.container = el("div", {
-      style: `position:absolute;top:0;left:0;width:0;height:0;z-index:${Z_INDEX_MAX - 2};pointer-events:none;`,
+      style: `position:absolute;top:0;left:0;width:100%;height:0;overflow-x:clip;overflow-y:visible;z-index:${Z_INDEX_MAX - 2};pointer-events:none;`,
     });
     this.container.setAttribute("aria-hidden", "false");
     this.container.setAttribute("data-ccm-markers", "true");
@@ -453,12 +463,28 @@ export class MarkerManager {
   }
 
   private reposition(): void {
+    // Horizontal upper bound — any marker whose center would sit past this
+    // page-x value is hidden so it can't grow `documentElement.scrollWidth`
+    // and produce a horizontal scrollbar on the host page. Uses the
+    // viewport width (clientWidth) under the assumption that the page is
+    // laid out for the current viewport — captures taken at a wider
+    // breakpoint (recorded `pinX` / `areaX` past current viewport) get
+    // dropped rather than rendered off-canvas.
+    const viewportRight = document.documentElement.clientWidth;
+    const hideIfOffscreenX = (left: number): boolean => left - MARKER_OFFSET > viewportRight;
+
     for (const entry of this.entries) {
       const kind = entry.record.kind ?? "target";
       if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) {
+        const left = entry.record.pinX;
+        if (hideIfOffscreenX(left)) {
+          entry.node.style.display = "none";
+          entry.anchorEl = null;
+          continue;
+        }
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.pinY}px`;
-        entry.node.style.left = `${entry.record.pinX}px`;
+        entry.node.style.left = `${left}px`;
         entry.anchorEl = null;
         continue;
       }
@@ -469,9 +495,15 @@ export class MarkerManager {
         entry.record.areaW != null &&
         entry.record.areaH != null
       ) {
+        const left = entry.record.areaX + entry.record.areaW;
+        if (hideIfOffscreenX(left)) {
+          entry.node.style.display = "none";
+          entry.anchorEl = null;
+          continue;
+        }
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.areaY}px`;
-        entry.node.style.left = `${entry.record.areaX + entry.record.areaW}px`;
+        entry.node.style.left = `${left}px`;
         entry.anchorEl = null;
         continue;
       }
@@ -494,13 +526,19 @@ export class MarkerManager {
         entry.anchorEl = null;
         continue;
       }
-      entry.anchorEl = resolved.element;
       const rect = resolved.rect;
       const top = rect.top + window.scrollY - MARKER_OFFSET;
       const left = rect.right + window.scrollX - MARKER_OFFSET;
+      const center = left + MARKER_OFFSET;
+      if (hideIfOffscreenX(center)) {
+        entry.node.style.display = "none";
+        entry.anchorEl = null;
+        continue;
+      }
+      entry.anchorEl = resolved.element;
       entry.node.style.display = this.visible ? "flex" : "none";
       entry.node.style.top = `${top + MARKER_OFFSET}px`;
-      entry.node.style.left = `${left + MARKER_OFFSET}px`;
+      entry.node.style.left = `${center}px`;
     }
   }
 
