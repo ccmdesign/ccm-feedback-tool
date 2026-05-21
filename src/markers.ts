@@ -1,13 +1,15 @@
 import { ensureAuthor } from "./author.js";
 import { Z_INDEX_MAX } from "./constants.js";
+import { generateAnchor } from "./dom/anchor.js";
+import { createHoverOutline } from "./dom/hover-outline.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import { STATUS_COLORS } from "./popup.js";
-import type { AnnotationStore } from "./store.js";
+import type { AnnotationStore, UpdateAnchorInput } from "./store.js";
 import type { ThemeColors } from "./styles/theme.js";
-import type { AnnotationRecord, FeedbackStatus } from "./types.js";
+import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
@@ -68,6 +70,13 @@ export class MarkerManager {
     private readonly bus: EventBus<WidgetEvents>,
     private readonly t: TFunction,
     private readonly store: AnnotationStore,
+    /**
+     * Excludes the widget host + descendants from drag-relocate drop
+     * targeting (PRO-67). Defaults to "ignore nothing" so callers that
+     * don't construct via `index.ts` (tests, REPL) keep working. Mirrors
+     * the predicate `PinMode` already receives.
+     */
+    private readonly shouldIgnoreElement: (element: Element) => boolean = () => false,
   ) {
     // `overflow-x: clip` + `width: 100%` is a defensive guard: any pin that
     // accidentally lands past the viewport's right edge (stale capture from
@@ -403,15 +412,350 @@ export class MarkerManager {
   }
 
   /**
-   * Marker relocate via drag (PRO-67). Stubbed in U3 — full implementation
-   * lands in U4 (drag-mode overlay + drop algorithm).
+   * Marker relocate via drag (PRO-67). Mounts a fixed full-viewport overlay
+   * + instruction strip, ghosts the marker (follows the cursor), uses the
+   * shared hover-outline helper to preview the drop target, and on mouseup
+   * runs the drop algorithm:
+   *
+   *   1. Drop on same anchor element (target only) → no-op, no write.
+   *   2. Drop on widget host / body / html / ignored → case B coord pin
+   *      (unless the marker's record.kind === "area", which goes to case C).
+   *   3. Drop on real element → case A target re-anchor (unless area → C).
+   *   4. case C — area translate-intact: drag-delta in document space,
+   *      areaX/areaY shift by delta, areaW/areaH unchanged, kind stays "area".
+   *      Marker anchor (rendered at areaX + areaW) is clamped horizontally
+   *      so it stays inside [8, scrollX + innerWidth - 8].
+   *
+   * ESC / right-click / SPA nav → cancel cleanup, no store write.
    */
   private enterDragMode(entry: MarkerEntry, startEvent: MouseEvent): void {
-    // U4 will implement: fixed overlay, ghosted marker, hover-outline helper,
-    // drop algorithm with case A (target re-anchor), case B (coord pin), case
-    // C (area translate-intact). Avoid unused-param lint warnings until then.
-    void entry;
-    void startEvent;
+    // Pin everything we need for restore so listener-removal in cleanup can
+    // run without re-deriving state.
+    const node = entry.node;
+    const originalOpacity = node.style.opacity;
+    const originalTransform = node.style.transform;
+    const originalCursor = node.style.cursor;
+    const originalTransition = node.style.transition;
+    const dragStartDocX = startEvent.clientX + window.scrollX;
+    const dragStartDocY = startEvent.clientY + window.scrollY;
+
+    const hoverOutline = createHoverOutline(this.colors);
+
+    // Fixed full-viewport overlay — transparent, sits just below the toolbar
+    // so the toolbar is still interactive (cancel) but elementFromPoint can
+    // still reach the host page beneath after we toggle pointer-events.
+    const overlay = el("div", {
+      style: `
+        position:fixed;inset:0;z-index:${Z_INDEX_MAX - 1};
+        background:transparent;cursor:grabbing;
+      `,
+    });
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.setAttribute("data-ccm-drag-overlay", "true");
+
+    // Toolbar strip — same visual family as PinMode's; shorter copy because
+    // there's only one possible action ("drop") plus cancel.
+    const toolbar = el("div", {
+      style: `
+        position:fixed;top:0;left:0;right:0;z-index:${Z_INDEX_MAX};
+        height:52px;background:${this.colors.glassBg};
+        backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+        border-bottom:1px solid ${this.colors.glassBorder};
+        display:flex;align-items:center;justify-content:center;gap:16px;
+        font-family:"Inter",system-ui,-apple-system,sans-serif;
+        font-size:14px;color:${this.colors.text};
+      `,
+    });
+    const instruction = el("span", { style: "font-weight:500;letter-spacing:-0.01em;" });
+    setText(instruction, this.t("relocate.instruction"));
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.style.cssText = `
+      height:34px;padding:0 18px;border-radius:9999px;
+      border:1px solid ${this.colors.border};background:${this.colors.glassBg};
+      color:${this.colors.textTertiary};font-family:inherit;
+      font-size:13px;font-weight:500;cursor:pointer;
+    `;
+    setText(cancelBtn, this.t("relocate.cancel"));
+    toolbar.appendChild(instruction);
+    toolbar.appendChild(cancelBtn);
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(toolbar);
+
+    // Ghost the marker — keep it visible so the reviewer sees what they're
+    // dragging, but dim it and let it follow the cursor in fixed positioning
+    // so it ignores horizontal clamping.
+    node.style.opacity = "0.75";
+    node.style.cursor = "grabbing";
+    node.style.transition = "none";
+    node.style.transform = "translate(-50%, -50%)";
+    node.style.position = "fixed";
+    node.style.top = `${startEvent.clientY}px`;
+    node.style.left = `${startEvent.clientX}px`;
+
+    let cleaned = false;
+
+    /** Resolve the element under the cursor with the overlay temporarily
+     * transparent to pointer events. Mirrors PinMode.onOverlayMouseMove. */
+    const resolveTarget = (clientX: number, clientY: number): HTMLElement | null => {
+      overlay.style.pointerEvents = "none";
+      const t = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      overlay.style.pointerEvents = "auto";
+      return t;
+    };
+
+    const onMove = (e: MouseEvent): void => {
+      // Update the ghost position (fixed → viewport coords are fine).
+      node.style.top = `${e.clientY}px`;
+      node.style.left = `${e.clientX}px`;
+
+      const target = resolveTarget(e.clientX, e.clientY);
+      if (!target || !(target instanceof HTMLElement)) {
+        hoverOutline.clear();
+        return;
+      }
+      // Don't outline the widget host, the ghost marker itself, or the
+      // overlay/toolbar — none are meaningful drop targets.
+      if (this.shouldIgnoreElement(target) || node.contains(target) || target === node) {
+        hoverOutline.clear();
+        return;
+      }
+      if (target === document.documentElement || target === document.body) {
+        hoverOutline.clear();
+        return;
+      }
+      hoverOutline.apply(target);
+    };
+
+    const cleanup = (): void => {
+      if (cleaned) return;
+      cleaned = true;
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("contextmenu", onContextMenu, true);
+      window.removeEventListener("popstate", dragSpaNav, true);
+      hoverOutline.destroy();
+      overlay.remove();
+      toolbar.remove();
+      // Restore marker styling. `position` flips back to "absolute" because
+      // the marker container uses absolute children; reposition() below
+      // recomputes top/left so the marker snaps to its (possibly updated)
+      // anchor.
+      node.style.position = "absolute";
+      node.style.opacity = originalOpacity;
+      node.style.transform = originalTransform;
+      node.style.cursor = originalCursor;
+      node.style.transition = originalTransition;
+      // Always reposition: on cancel restores the original location, on
+      // successful relocate the record was already mutated and the new
+      // location is what reposition() reads.
+      this.reposition();
+    };
+
+    // Cancel any in-flight drag when the host page navigates via the
+    // History API. Declared after cleanup so the listener can reference it.
+    const dragSpaNav = (): void => {
+      cancel();
+    };
+
+    const cancel = (): void => {
+      cleanup();
+    };
+
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancel();
+      }
+    };
+
+    const onContextMenu = (e: MouseEvent): void => {
+      e.preventDefault();
+      cancel();
+    };
+
+    cancelBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+    });
+
+    const onUp = (e: MouseEvent): void => {
+      if (cleaned) return;
+      // Resolve drop target with overlay click-through.
+      const target = resolveTarget(e.clientX, e.clientY);
+
+      // SPA nav can fire between mousedown and mouseup — bail if path moved.
+      // (The outer popstate handler also calls cancel via dragCancel below.)
+
+      // Decide branch. See doc-block above.
+      const kind = entry.record.kind ?? "target";
+      const recordId = entry.record.id;
+
+      // Helper: clamp post-drop area position so the marker anchor (rendered
+      // at areaX + areaW in document space; see reposition() ~line 720) stays
+      // inside the visible viewport. Keep in sync with reposition().
+      const clampAreaAnchorX = (x: number, w: number): number => {
+        const viewLeft = window.scrollX + 8;
+        const viewRight = window.scrollX + window.innerWidth - 8;
+        const anchor = x + w;
+        if (anchor < viewLeft) return viewLeft - w;
+        if (anchor > viewRight) return viewRight - w;
+        return x;
+      };
+
+      // Build the patch.
+      let input: UpdateAnchorInput | null = null;
+
+      if (kind === "area") {
+        // Case C — translate-intact.
+        const dx = e.clientX + window.scrollX - dragStartDocX;
+        const dy = e.clientY + window.scrollY - dragStartDocY;
+        const oldX = entry.record.areaX ?? 0;
+        const oldY = entry.record.areaY ?? 0;
+        const w = entry.record.areaW ?? 0;
+        const h = entry.record.areaH ?? 0;
+        const newX = clampAreaAnchorX(oldX + dx, w);
+        const newY = oldY + dy;
+        // Carry the existing anchor / rect fields unchanged so DB schema
+        // expectations stay consistent (anchor columns are NOT NULL).
+        input = {
+          kind: "area",
+          anchor: this.entryAnchor(entry),
+          rect: { xPct: entry.record.xPct, yPct: entry.record.yPct, wPct: entry.record.wPct, hPct: entry.record.hPct },
+          pin: null,
+          area: { x: newX, y: newY, w, h },
+        };
+      } else {
+        // Decide drop branch for target / pin.
+        const dropOnIgnored =
+          !target ||
+          !(target instanceof HTMLElement) ||
+          this.shouldIgnoreElement(target) ||
+          target === document.documentElement ||
+          target === document.body;
+
+        if (!dropOnIgnored && target && kind === "target" && target === entry.anchorEl) {
+          // Drop-on-same-element → no-op. Skip the write + emit so we don't
+          // burn a realtime round-trip on accidental short drags.
+          cleanup();
+          return;
+        }
+
+        if (dropOnIgnored) {
+          // Case B — coord pin.
+          input = {
+            kind: "pin",
+            anchor: this.emptyAnchor(),
+            rect: { xPct: 0, yPct: 0, wPct: 0, hPct: 0 },
+            pin: { x: e.clientX + window.scrollX, y: e.clientY + window.scrollY },
+            area: null,
+          };
+        } else if (target && target instanceof HTMLElement) {
+          // Case A — target re-anchor.
+          const rect = target.getBoundingClientRect();
+          const safeW = rect.width || 1;
+          const safeH = rect.height || 1;
+          const xPct = (e.clientX - rect.left) / safeW;
+          const yPct = (e.clientY - rect.top) / safeH;
+          input = {
+            kind: "target",
+            anchor: generateAnchor(target),
+            rect: { xPct, yPct, wPct: 0, hPct: 0 },
+            pin: null,
+            area: null,
+          };
+        }
+      }
+
+      if (input) {
+        // Optimistic local mutation so reposition() (called from cleanup)
+        // sees the new location even before the store write completes.
+        this.applyAnchorInputToRecord(entry.record, input);
+        this.store.updateAnchor?.(recordId, input);
+        this.bus.emit("feedback:updated", entry.record);
+      }
+
+      cleanup();
+    };
+
+    // Wire global listeners.
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("contextmenu", onContextMenu, true);
+    window.addEventListener("popstate", dragSpaNav, true);
+  }
+
+  /** Snapshot the entry's current anchor fields into an AnchorData. Used
+   * when an area-drag must carry forward the existing anchor unchanged. */
+  private entryAnchor(entry: MarkerEntry): AnchorData {
+    return {
+      cssSelector: entry.record.cssSelector,
+      xpath: entry.record.xpath,
+      textSnippet: entry.record.textSnippet,
+      elementTag: entry.record.elementTag,
+      elementId: entry.record.elementId,
+      textPrefix: entry.record.textPrefix,
+      textSuffix: entry.record.textSuffix,
+      fingerprint: entry.record.fingerprint,
+      neighborText: entry.record.neighborText,
+    };
+  }
+
+  /** Empty anchor for kind="pin" rows. Schema columns are NOT NULL so we
+   * fill them with empty strings rather than omitting them. */
+  private emptyAnchor(): AnchorData {
+    return {
+      cssSelector: "",
+      xpath: "",
+      textSnippet: "",
+      elementTag: "",
+      elementId: undefined,
+      textPrefix: "",
+      textSuffix: "",
+      fingerprint: "",
+      neighborText: "",
+    };
+  }
+
+  /** Apply an `UpdateAnchorInput` to a record in place so reposition() picks
+   * up the new location synchronously. Mirrors `Store.updateAnchor`. */
+  private applyAnchorInputToRecord(record: AnnotationRecord, input: UpdateAnchorInput): void {
+    record.cssSelector = input.anchor.cssSelector;
+    record.xpath = input.anchor.xpath;
+    record.textSnippet = input.anchor.textSnippet;
+    record.elementTag = input.anchor.elementTag;
+    record.elementId = input.anchor.elementId;
+    record.textPrefix = input.anchor.textPrefix;
+    record.textSuffix = input.anchor.textSuffix;
+    record.fingerprint = input.anchor.fingerprint;
+    record.neighborText = input.anchor.neighborText;
+    record.xPct = input.rect.xPct;
+    record.yPct = input.rect.yPct;
+    record.wPct = input.rect.wPct;
+    record.hPct = input.rect.hPct;
+    record.kind = input.kind;
+    if (input.pin) {
+      record.pinX = input.pin.x;
+      record.pinY = input.pin.y;
+    } else {
+      delete record.pinX;
+      delete record.pinY;
+    }
+    if (input.area) {
+      record.areaX = input.area.x;
+      record.areaY = input.area.y;
+      record.areaW = input.area.w;
+      record.areaH = input.area.h;
+    } else {
+      delete record.areaX;
+      delete record.areaY;
+      delete record.areaW;
+      delete record.areaH;
+    }
   }
 
   private renumber(): void {

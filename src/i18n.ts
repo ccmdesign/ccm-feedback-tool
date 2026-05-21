@@ -19,6 +19,8 @@ const STRINGS: Record<string, string> = {
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",
+  "relocate.instruction": "Drop on a new target. ESC to cancel.",
+  "relocate.cancel": "Cancel relocate",
   "coordPin.instruction": "Click anywhere to drop a pin",
   "area.instruction": "Drag to capture an area",
   "status.todo": "Todo",
