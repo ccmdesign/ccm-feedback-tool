@@ -2,7 +2,7 @@
 
 **Severity:** P1
 **File:** `supabase/migrations/0006_replies.sql:25-27`
-**Status:** open
+**Status:** resolved — adopted Option B (defensive DO block). Migration now inspects `information_schema.columns` at apply time and adds `parent_id` as `uuid` on clean installs and `text` on the maintainer's drifted demo; raises explicit exception for any other type. Idempotent (`add column if not exists`); on prod the column already exists as `text` so the matching branch no-ops.
 
 ## Problem
 
