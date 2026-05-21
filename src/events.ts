@@ -45,6 +45,12 @@ export interface WidgetEvents {
   "feedback:saved": [AnnotationRecord];
   "feedback:updated": [AnnotationRecord];
   "feedback:deleted": [string];
+  /**
+   * A reply was added to a comment. Carries the full record so subscribers
+   * (specifically the open popover) can render the reply in place without
+   * a second listReplies() lookup. Mirrors `feedback:saved`.
+   */
+  "feedback:replied": [AnnotationRecord];
   "annotations:toggle": [boolean];
   "export:click": [];
   "copyUrl:click": [];

@@ -13,6 +13,11 @@
  * Runtime: Bun (`bun run scripts/feedback.ts` / `bun run feedback`). Uses
  * top-level await and process.env directly — no build step.
  *
+ * Replies (`parent_id`): rows with `parent_id` set are replies, never
+ * standalone work items. The `list` command groups them under their parent
+ * (folded as conversation context). Never source-map or set-status a reply
+ * row directly. See docs/data-model.md § Replies.
+ *
  * Config resolution (both URL and key required):
  *   - SUPABASE_URL / SUPABASE_ANON_KEY from the environment, OR
  *   - --url / --key flags (override env).
@@ -142,6 +147,9 @@ interface AnnotationRow {
   status?: string | null;
   path?: string | null;
   message?: string | null;
+  parent_id?: string | null;
+  author_name?: string | null;
+  created_at?: string | null;
 }
 
 async function cmdList(
@@ -159,12 +167,40 @@ async function cmdList(
     console.log("(no annotations)");
     return;
   }
+  // Partition by parent_id: rows with parent_id set are replies, folded
+  // under their parent. Never standalone work items — see header doc block
+  // and docs/data-model.md § Replies. The replies map sorts ascending by
+  // created_at (oldest → newest) to match conversation order.
+  const replies = new Map<string, AnnotationRow[]>();
+  const topLevel: AnnotationRow[] = [];
   for (const r of rows) {
+    if (r.parent_id) {
+      const arr = replies.get(r.parent_id) ?? [];
+      arr.push(r);
+      replies.set(r.parent_id, arr);
+    } else {
+      topLevel.push(r);
+    }
+  }
+  for (const arr of replies.values()) {
+    arr.sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+  }
+  for (const r of topLevel) {
     const status = (r.status ?? "todo").padEnd(8);
     const path = (r.path ?? "").padEnd(20);
     console.log(`${r.id}  ${status}  ${path}  ${truncate(r.message ?? "", 60)}`);
+    const children = replies.get(r.id);
+    if (children) {
+      for (const c of children) {
+        const author = (c.author_name ?? "Anonymous").trim() || "Anonymous";
+        console.log(`  ↳ ${author}: ${truncate(c.message ?? "", 70)}`);
+      }
+    }
   }
-  console.log(`\n${rows.length} annotation(s)`);
+  const replyCount = rows.length - topLevel.length;
+  console.log(
+    `\n${topLevel.length} comment(s)${replyCount > 0 ? `, ${replyCount} repl${replyCount === 1 ? "y" : "ies"}` : ""}`,
+  );
 }
 
 async function cmdGet(endpoint: string, headers: Record<string, string>, id: string): Promise<void> {

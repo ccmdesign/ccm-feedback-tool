@@ -4,6 +4,12 @@ Status: proposed · Scope: v1 (flat thread, no edit) · Owner: TBD ·
 Baseline: branch `dev` after PRO-57 (status enum `todo|review|done|question`,
 migrations through `0004_status_review.sql`)
 
+> **Historical context (PRO-66):** This spec was drafted before PRO-65
+> introduced `0005_repair_rls.sql`. The replies migration is therefore
+> numbered **`0006_replies.sql`** in implementation. The body text below
+> has been corrected; older references in git history may still say
+> `0005`.
+
 ## Goal
 
 Let a reviewer respond to an existing comment without dropping a new marker.
@@ -117,11 +123,11 @@ Replies render **oldest-first** within a thread.
 - `rowToRecord`: `if (row.parent_id) record.parentId = row.parent_id;`
 - `recordToRow`: `if (r.parentId) row.parent_id = r.parentId;`
 
-## Migration: `supabase/migrations/0005_replies.sql`
+## Migration: `supabase/migrations/0006_replies.sql`
 
-Numbered **0005** — `0004_status_review.sql` already exists on `dev` (PRO-57,
-widens the `status` CHECK to add `review`). This migration runs strictly
-after it.
+Numbered **0006** — `0004_status_review.sql` and `0005_repair_rls.sql`
+already exist on `dev` (PRO-57 + PRO-65). This migration runs strictly
+after them.
 
 ```sql
 alter table public.ccm_widget_annotations
@@ -145,7 +151,7 @@ Notes:
   `todo|review|done|question` (0004); `'todo'` still satisfies it. No
   constraint change needed.
 
-Self-hosters run `0005` after `0001`–`0004`. Add it to
+Self-hosters run `0006` after `0001`–`0005`. Add it to
 `scripts/apply-migrations.sh`, `docs/self-hosting.md`, and
 `docs/cloud-mode.md` migration lists.
 
@@ -306,7 +312,7 @@ No test suite. Before merge:
 
 ## Implementation checklist
 
-1. `0005_replies.sql` + register in `scripts/apply-migrations.sh`, add to
+1. `0006_replies.sql` + register in `scripts/apply-migrations.sh`, add to
    self-hosting / cloud-mode docs.
 2. `types.ts`: `parentId?: string`.
 3. `store.ts`: `ReplyInput`, `buildReplyRecord`, `listReplies`, `addReply`;

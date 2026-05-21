@@ -64,9 +64,11 @@ supabase/migrations/0001_init.sql           -- creates ccm_widget_annotations + 
 supabase/migrations/0002_status_pin_area.sql -- adds status, kind, pin/area, captured_elements
 supabase/migrations/0003_realtime.sql       -- enables realtime publication
 supabase/migrations/0004_status_review.sql  -- adds the "review" status (agent loop)
+supabase/migrations/0005_repair_rls.sql     -- repairs anon RLS (drop+recreate, idempotent)
+supabase/migrations/0006_replies.sql        -- adds parent_id self-FK for reply rows
 ```
 
-After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled. `0004` is required for the apply-feedback loop (an agent setting handled comments to `review`).
+After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled. `0004` is required for the apply-feedback loop (an agent setting handled comments to `review`). `0006` enables the comment-replies feature; reply rows carry `parent_id` and are cascade-deleted with their parent.
 
 ### Step 3 — wire it into the script tag
 

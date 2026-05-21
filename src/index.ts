@@ -83,6 +83,11 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
         fab.updateCount(countActive(store.list()));
         drawer.refreshIfOpen();
       },
+      // Reply rows arrive via these callbacks instead of onChange so the
+      // marker layer / drawer don't churn — the open popover subscribes
+      // to feedback:replied via the bus and re-renders its thread in place.
+      onReply: (record) => bus.emit("feedback:replied", record),
+      onReplyDeleted: (id) => bus.emit("feedback:deleted", id),
     });
     store = cloudStore;
     log("Cloud mode enabled", { url: config.supabaseUrl });
@@ -268,6 +273,12 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   bus.on("feedback:saved", syncUi);
   bus.on("feedback:updated", syncUi);
   bus.on("feedback:deleted", syncUi);
+  // Replies don't affect markers (no marker) or the FAB count (countActive
+  // operates on store.list() which already filters parentId-bearing rows).
+  // drawer.refreshIfOpen() is a no-op today — the drawer only surfaces
+  // top-level comments in v1 — but it's the right hook for any future
+  // "reply count badge" UI. Cost is one call on a closed drawer.
+  bus.on("feedback:replied", () => drawer.refreshIfOpen());
 
   // `findAnchorElement` is re-exported so consumers that want to
   // programmatically add an annotation have access to the anchor logic.
