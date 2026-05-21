@@ -82,6 +82,10 @@ interface CloudRow {
   area_h?: number | null;
   captured_elements?: CapturedElement[] | null;
   parent_id?: string | null;
+  /** PRO-68 §8 — project-scoped monotonic identifier. Server-assigned by the
+   * `ccm_widget_assign_sequence` BEFORE INSERT trigger; the client may
+   * supply a value for optimistic UI but the server is authoritative. */
+  sequence_number?: number | null;
 }
 
 const TABLE = "ccm_widget_annotations";
@@ -148,6 +152,7 @@ function rowToRecord(row: CloudRow): AnnotationRecord {
   // Conditional set: exactOptionalPropertyTypes forbids assigning `undefined`
   // to an optional field. Match the elementId / pin / area pattern above.
   if (row.parent_id) record.parentId = row.parent_id;
+  if (typeof row.sequence_number === "number") record.sequenceNumber = row.sequence_number;
   return record;
 }
 
@@ -189,6 +194,15 @@ function recordToRow(r: AnnotationRecord): CloudRow {
   // applies — emitting `parent_id: null` would work but adds insert-payload
   // noise for the common case.
   if (r.parentId) row.parent_id = r.parentId;
+  // sequence_number: send the optimistic local guess so realtime echoes
+  // carry the same number the local cache rendered with. The server trigger
+  // ignores any supplied value when the column is null OR — more usefully —
+  // accepts the supplied value when one is present (see migration 0007).
+  // For the optimistic insert path the local guess and the trigger result
+  // will usually match because the client is the only writer for the typical
+  // single-reviewer session; in races the realtime UPDATE/INSERT carries the
+  // authoritative number.
+  if (typeof r.sequenceNumber === "number") row.sequence_number = r.sequenceNumber;
   return row;
 }
 
@@ -326,7 +340,11 @@ export class CloudStore implements AnnotationStore {
   }
 
   save(input: SaveInput): AnnotationRecord {
-    const record = buildRecord(input);
+    // Pass the in-memory cache so `buildRecord` can compute an optimistic
+    // `sequenceNumber = max(cache) + 1`. The server trigger reconfirms /
+    // overwrites authoritatively on INSERT; realtime echo carries the
+    // canonical value. PRO-68 §8.
+    const record = buildRecord(input, this.cache);
     this.cache.unshift(record);
     void this.pushInsert(record);
     return record;
@@ -458,13 +476,23 @@ export class CloudStore implements AnnotationStore {
     const fresh = records.filter((r) => !known.has(r.id));
     if (fresh.length === 0) return 0;
     try {
+      // PRO-68 §8 — drop client-side `sequence_number` from migration
+      // payloads. Pre-migration local numbers were render-indices, not
+      // canonical identifiers; the server trigger assigns fresh authoritative
+      // values that interleave correctly with any existing cloud rows for the
+      // same project.
+      const payload = fresh.map((r) => {
+        const row = recordToRow(r);
+        delete row.sequence_number;
+        return row;
+      });
       const res = await fetch(this.endpoint, {
         method: "POST",
         headers: {
           ...this.headers,
           Prefer: "return=representation,resolution=ignore-duplicates",
         },
-        body: JSON.stringify(fresh.map(recordToRow)),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const body = await res.text();

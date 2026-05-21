@@ -1,4 +1,5 @@
 import { Z_INDEX_MAX } from "./constants.js";
+import { buildToolbarEye, type MarkerVisibilityRead, type ToolbarEyeHandle } from "./dom/toolbar-eye.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
@@ -43,6 +44,7 @@ export interface AreaCapture {
 export class CoordPinMode {
   private overlay: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
+  private eyeHandle: ToolbarEyeHandle | null = null;
   private isActive = false;
   private savedOverflow = "";
   private readonly unsubStart: () => void;
@@ -53,6 +55,8 @@ export class CoordPinMode {
     private readonly t: TFunction,
     private readonly onCapture: (capture: PinCapture) => Promise<void>,
     private readonly shouldIgnoreElement: (element: Element) => boolean,
+    /** Read-only handle on marker visibility for the in-toolbar eye (PRO-68 §3). */
+    private readonly markers: MarkerVisibilityRead,
   ) {
     this.unsubStart = this.bus.on("pin:start", () => this.activate());
   }
@@ -90,7 +94,14 @@ export class CoordPinMode {
     `;
     setText(cancel, this.t("pin.cancel"));
     cancel.addEventListener("click", () => this.deactivate());
+    this.eyeHandle = buildToolbarEye({
+      bus: this.bus,
+      t: this.t,
+      colors: this.colors,
+      markers: this.markers,
+    });
     this.toolbar.appendChild(instr);
+    this.toolbar.appendChild(this.eyeHandle.button);
     this.toolbar.appendChild(cancel);
 
     this.overlay.addEventListener("click", this.onClick, true);
@@ -106,6 +117,8 @@ export class CoordPinMode {
     this.overlay?.removeEventListener("click", this.onClick, true);
     document.removeEventListener("keydown", this.onKey);
     document.body.style.overflow = this.savedOverflow;
+    this.eyeHandle?.destroy();
+    this.eyeHandle = null;
     this.overlay?.remove();
     this.toolbar?.remove();
     this.overlay = null;
@@ -153,6 +166,7 @@ export class CoordPinMode {
 export class AreaMode {
   private overlay: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
+  private eyeHandle: ToolbarEyeHandle | null = null;
   private rectEl: HTMLElement | null = null;
   private isActive = false;
   private savedOverflow = "";
@@ -165,6 +179,8 @@ export class AreaMode {
     private readonly t: TFunction,
     private readonly onCapture: (capture: AreaCapture) => Promise<void>,
     private readonly shouldIgnoreElement: (element: Element) => boolean,
+    /** Read-only handle on marker visibility for the in-toolbar eye (PRO-68 §3). */
+    private readonly markers: MarkerVisibilityRead,
   ) {
     this.unsubStart = this.bus.on("area:start", () => this.activate());
   }
@@ -200,7 +216,14 @@ export class AreaMode {
     `;
     setText(cancel, this.t("pin.cancel"));
     cancel.addEventListener("click", () => this.deactivate());
+    this.eyeHandle = buildToolbarEye({
+      bus: this.bus,
+      t: this.t,
+      colors: this.colors,
+      markers: this.markers,
+    });
     this.toolbar.appendChild(instr);
+    this.toolbar.appendChild(this.eyeHandle.button);
     this.toolbar.appendChild(cancel);
 
     this.overlay.addEventListener("mousedown", this.onMouseDown, true);
@@ -220,6 +243,8 @@ export class AreaMode {
     this.overlay?.removeEventListener("mouseup", this.onMouseUp, true);
     document.removeEventListener("keydown", this.onKey);
     document.body.style.overflow = this.savedOverflow;
+    this.eyeHandle?.destroy();
+    this.eyeHandle = null;
     this.overlay?.remove();
     this.toolbar?.remove();
     this.rectEl?.remove();

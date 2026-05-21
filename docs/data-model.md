@@ -184,3 +184,18 @@ GET /feedback?project=<name>
 It queries Supabase server-side with the **anon key only** (from `SUPABASE_URL` / `SUPABASE_ANON_KEY` env vars — never shipped to any client asset, never the service-role key) and returns **byte-for-byte the `exportAsJson()` shape above** (`projectName`, `exportedAt`, `count`, `annotations`, rows mapped snake_case → camelCase via the same field mapping as `rowToRecord()`). It is read-only (GET + OPTIONS), CORS-open for GET, and returns generic errors that never echo the key.
 
 Because the URL response and the downloaded file are the same shape, the `apply-ccm-feedback` skill treats "fetch this URL" and "read this attached JSON" identically. The widget's FAB exposes a **"Copy feedback URL"** action in cloud mode (disabled with a tooltip in localStorage mode, where Export JSON is the fallback). The copied URL uses the reviewed site's own origin, so that site must deploy the function.
+
+## Sequence numbers (PRO-68 §8)
+
+Every top-level comment carries a persisted `sequenceNumber: number` (cloud column `sequence_number`). The number is:
+
+- **Project-scoped.** Uniqueness is per `projectName` — comment `#71` in project A is a different row from `#71` in project B.
+- **Monotonic.** New top-level inserts get `max(existing.sequenceNumber) + 1`. Deleted comments still consume their number; gaps are normal (deleting `#67` does not free it).
+- **Assigned at create time.** Never reused, never recomputed. Once assigned, the value is immutable.
+- **Replies excluded.** Records with `parentId` set carry no `sequenceNumber`. The CLI / drawer render `↳` in the `#N` slot for replies.
+
+Uniqueness of the `(project_name, sequence_number)` pair is enforced **by convention** in v1 — the migration ships an index on the pair but no `UNIQUE` constraint. The trigger reads `max() + 1` per project, which serializes correctly under normal Postgres write conflict resolution; the documented race window for two concurrent inserts is listed under [cloud-mode.md Known limitations](cloud-mode.md#known-limitations).
+
+LocalStorage rows from before PRO-68 land without `sequenceNumber`. The `Store` constructor runs a one-time `backfillSequenceNumbers` pass that assigns numbers in `createdAt` order and persists the result; missing fields fall back to `?` in the marker and drawer until that pass completes.
+
+The CLI (`bun run feedback`) accepts `#N`, bare `N`, or UUID anywhere a comment id is expected (see `scripts/feedback.ts`); `--project` is required for any non-UUID token.

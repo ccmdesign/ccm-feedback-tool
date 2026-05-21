@@ -66,9 +66,11 @@ supabase/migrations/0003_realtime.sql       -- enables realtime publication
 supabase/migrations/0004_status_review.sql  -- adds the "review" status (agent loop)
 supabase/migrations/0005_repair_rls.sql     -- repairs anon RLS (drop+recreate, idempotent)
 supabase/migrations/0006_replies.sql        -- adds parent_id self-FK for reply rows
+supabase/migrations/0007_sequence_number.sql -- adds sequence_number + BEFORE INSERT trigger (PRO-68)
+supabase/migrations/0008_sequence_unique.sql -- advisory lock + unique partial index on (project_name, sequence_number) (PRO-68)
 ```
 
-After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled. `0004` is required for the apply-feedback loop (an agent setting handled comments to `review`). `0006` enables the comment-replies feature; reply rows carry `parent_id` and are cascade-deleted with their parent.
+After these run you should see a single table `public.ccm_widget_annotations` with permissive anon RLS policies and realtime enabled. `0004` is required for the apply-feedback loop (an agent setting handled comments to `review`). `0006` enables the comment-replies feature; reply rows carry `parent_id` and are cascade-deleted with their parent. `0007` adds the persistent `#N` identifier per project — the trigger assigns `max(sequence_number) + 1` partitioned by `project_name`, skipping replies; the migration backfills existing rows in `created_at` order. `0008` hardens that trigger against concurrent INSERTs by serializing per-project assignments via `pg_advisory_xact_lock` and adds a unique partial index on `(project_name, sequence_number) WHERE parent_id IS NULL` as a defense-in-depth safety net.
 
 ### Step 3 — wire it into the script tag
 

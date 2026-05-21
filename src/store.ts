@@ -120,7 +120,51 @@ function persist(projectName: string, items: AnnotationRecord[]): void {
   }
 }
 
-export function buildRecord(input: SaveInput): AnnotationRecord {
+/**
+ * Compute the next project-scoped sequence number from a list of existing
+ * records. Replies (`parentId` set) are ignored. Pre-migration rows without
+ * a number are treated as zero — they get filled by `backfillSequenceNumbers`
+ * before this is called from the regular create path.
+ */
+function nextSequenceNumber(existing: readonly AnnotationRecord[]): number {
+  let max = 0;
+  for (const r of existing) {
+    if (r.parentId) continue;
+    if (typeof r.sequenceNumber === "number" && r.sequenceNumber > max) max = r.sequenceNumber;
+  }
+  return max + 1;
+}
+
+/**
+ * Fill `sequenceNumber` for any top-level record missing one, in `createdAt`
+ * order starting at 1. Existing numbers are preserved — the pass only fills
+ * gaps. Returns true when at least one record was modified so the caller
+ * knows to persist.
+ */
+export function backfillSequenceNumbers(items: AnnotationRecord[]): boolean {
+  const tops = items.filter((r) => !r.parentId);
+  if (tops.every((r) => typeof r.sequenceNumber === "number")) return false;
+  // Sort ascending by createdAt (then id for stable tiebreaker) — the
+  // assignment order matters because the resulting numbers are persisted.
+  const ordered = [...tops].sort((a, b) => {
+    const da = new Date(a.createdAt).getTime();
+    const db = new Date(b.createdAt).getTime();
+    if (da !== db) return da - db;
+    return a.id.localeCompare(b.id);
+  });
+  // Start from the max of already-numbered tops so we never reuse a number.
+  let cursor = ordered.reduce((m, r) => (typeof r.sequenceNumber === "number" ? Math.max(m, r.sequenceNumber) : m), 0);
+  let changed = false;
+  for (const r of ordered) {
+    if (typeof r.sequenceNumber === "number") continue;
+    cursor += 1;
+    r.sequenceNumber = cursor;
+    changed = true;
+  }
+  return changed;
+}
+
+export function buildRecord(input: SaveInput, existing: readonly AnnotationRecord[] = []): AnnotationRecord {
   const record: AnnotationRecord = {
     id: generateId(),
     projectName: input.projectName,
@@ -146,6 +190,7 @@ export function buildRecord(input: SaveInput): AnnotationRecord {
     hPct: input.rect.hPct,
     status: input.status ?? "todo",
     kind: input.kind ?? "target",
+    sequenceNumber: nextSequenceNumber(existing),
   };
   if (input.pin) {
     record.pinX = input.pin.x;
@@ -202,7 +247,16 @@ export function buildReplyRecord(input: ReplyInput): AnnotationRecord {
 
 /** Client-side store backed by `localStorage`. Scoped by `projectName`. */
 export class Store implements AnnotationStore {
-  constructor(private readonly projectName: string) {}
+  constructor(private readonly projectName: string) {
+    // One-time pass over pre-migration localStorage data: fill any missing
+    // `sequenceNumber` for top-level records by `createdAt` order. Idempotent
+    // — `backfillSequenceNumbers` returns false on a second call so the
+    // localStorage write is skipped. PRO-68 §8.
+    const items = load(this.projectName);
+    if (backfillSequenceNumbers(items)) {
+      persist(this.projectName, items);
+    }
+  }
 
   list(): AnnotationRecord[] {
     // Replies (parentId set) never surface as top-level — they live only
@@ -220,7 +274,7 @@ export class Store implements AnnotationStore {
 
   save(input: SaveInput): AnnotationRecord {
     const items = load(this.projectName);
-    const record = buildRecord(input);
+    const record = buildRecord(input, items);
     items.unshift(record);
     persist(this.projectName, items);
     return record;

@@ -1,6 +1,7 @@
 import { ensureAuthor } from "./author.js";
 import { Z_INDEX_MAX } from "./constants.js";
 import { generateAnchor } from "./dom/anchor.js";
+import { fanOutClusters } from "./dom/cluster-fanout.js";
 import { createHoverOutline } from "./dom/hover-outline.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
@@ -14,6 +15,20 @@ import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
 
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
+
+/** Render-side fallback for legacy records that pre-date the sequence-number
+ * migration. Pre-PRO-68 localStorage rows have no `sequenceNumber`; the one-
+ * time `backfillSequenceNumbers` pass fills them on next `Store` boot, but
+ * the marker/drawer still need a visible label during that brief window. */
+function formatSequenceLabel(seq: number | undefined): string {
+  return typeof seq === "number" ? String(seq) : "?";
+}
+/** PRO-68 §7 — center-to-center Chebyshev distance below this triggers a
+ * cluster. Set to `MARKER_SIZE` so any pair whose circles touch or overlap
+ * is grouped. */
+const COLLISION_RADIUS = MARKER_SIZE;
+/** Gap between adjacent markers inside a fanned-out cluster row. */
+const CLUSTER_GAP = 4;
 const REPOSITION_DEBOUNCE_MS = 200;
 // Drag-or-click watcher thresholds (PRO-67). A mousedown promotes to drag
 // when the cursor moves ≥ DRAG_MOVE_THRESHOLD_PX OR the press lasts longer
@@ -210,21 +225,19 @@ export class MarkerManager {
     this.entries = [];
 
     const records = this.store.listForPath(window.location.pathname).filter((r) => this.shouldRender(r));
-    records.forEach((record, idx) => {
-      const node = this.buildMarker(record, idx + 1);
+    for (const record of records) {
+      const node = this.buildMarker(record);
       this.container.appendChild(node);
       this.entries.push({ record, node, anchorEl: null });
-    });
+    }
     this.reposition();
   }
 
   addOne(record: AnnotationRecord): void {
     if (!this.shouldRender(record)) return;
-    const idx = this.entries.length + 1;
-    const node = this.buildMarker(record, idx);
+    const node = this.buildMarker(record);
     this.container.appendChild(node);
     this.entries.unshift({ record, node, anchorEl: null });
-    this.renumber();
     this.reposition();
   }
 
@@ -251,6 +264,14 @@ export class MarkerManager {
     this.visible = visible;
     this.container.style.display = visible ? "block" : "none";
     if (!visible) this.closePopover();
+  }
+
+  /** Read-only accessor — the capture-mode toolbars need the current
+   * visibility state so the eye button can reflect (and invert) it.
+   * PRO-68 §3 — visibility is owned by the marker layer; toolbars are
+   * pure consumers. */
+  get isVisible(): boolean {
+    return this.visible;
   }
 
   /**
@@ -334,12 +355,17 @@ export class MarkerManager {
     return true;
   }
 
-  private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
+  private buildMarker(record: AnnotationRecord): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];
+    // PRO-68 §8 — canonical, persisted, project-scoped identifier.
+    // Legacy localStorage rows without `sequenceNumber` get the `?` fallback
+    // until the one-time backfill (Store constructor) fills the gap; the
+    // value is stable across reloads thereafter.
+    const labelN = formatSequenceLabel(record.sequenceNumber);
     const node = el("button", {
       type: "button",
-      "aria-label": this.t("marker.ariaLabel", { n: number }),
+      "aria-label": this.t("marker.ariaLabel", { n: labelN }),
       style: `
         position:absolute;width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;
         border-radius:9999px;border:2px solid #fff;
@@ -358,7 +384,7 @@ export class MarkerManager {
     if (status === "question") {
       node.style.animation = "ccm-pulse 1.6s ease-in-out infinite";
     }
-    setText(node, String(number));
+    setText(node, labelN);
     node.addEventListener("mouseenter", () => {
       node.style.transform = "translate(-50%, -50%) scale(1.12)";
     });
@@ -842,14 +868,6 @@ export class MarkerManager {
     }
   }
 
-  private renumber(): void {
-    this.entries.forEach((entry, i) => {
-      const n = i + 1;
-      setText(entry.node, String(n));
-      entry.node.setAttribute("aria-label", this.t("marker.ariaLabel", { n }));
-    });
-  }
-
   private openPopover(record: AnnotationRecord, marker: HTMLElement): void {
     this.closePopover();
     const pop = el("div", {
@@ -1122,7 +1140,23 @@ export class MarkerManager {
       }
     });
 
-    this.popoverDisposers.push(offReplied, offDeleted);
+    // PRO-68 §6 — drawer-driven status changes for the same record must
+    // refresh the open popover's pill. The dropdown survives outside-tab
+    // updates the same way, so this subscriber is the single source of
+    // truth for "an update for THIS record arrived".
+    const offUpdated = this.bus.on("feedback:updated", (updated) => {
+      if (updated.id !== record.id) return;
+      const next: FeedbackStatus = updated.status ?? "todo";
+      // Defensive — popoverStatusDropdown may already be torn down if the
+      // popover is mid-close.
+      this.popoverStatusDropdown?.setCurrent(next);
+      // Keep the in-flight record reference and the marker visual aligned
+      // with the new status so closing + reopening renders identical state.
+      record.status = next;
+      this.repositionAndRecolor(record.id);
+    });
+
+    this.popoverDisposers.push(offReplied, offDeleted, offUpdated);
   }
 
   /**
@@ -1273,6 +1307,7 @@ export class MarkerManager {
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.pinY}px`;
         entry.node.style.left = `${clampX(entry.record.pinX)}px`;
+        entry.node.dataset.orphan = "false";
         entry.anchorEl = null;
         continue;
       }
@@ -1286,6 +1321,7 @@ export class MarkerManager {
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.areaY}px`;
         entry.node.style.left = `${clampX(entry.record.areaX + entry.record.areaW)}px`;
+        entry.node.dataset.orphan = "false";
         entry.anchorEl = null;
         continue;
       }
@@ -1324,6 +1360,19 @@ export class MarkerManager {
       entry.node.style.top = `${top + MARKER_OFFSET}px`;
       entry.node.style.left = `${clampX(center)}px`;
     }
+
+    // PRO-68 §7 — colocated marker fan-out. Lays clusters of overlapping
+    // non-orphan markers out side-by-side around the cluster's mean center
+    // so every marker stays clickable. Orphan-lane targets keep their
+    // vertical stack (intentional, edge-parking) and are skipped inside the
+    // helper via `dataset.orphan === "true"`.
+    fanOutClusters(this.entries, {
+      markerSize: MARKER_SIZE,
+      collisionRadius: COLLISION_RADIUS,
+      clusterGap: CLUSTER_GAP,
+      minX: MARKER_OFFSET,
+      clampX,
+    });
   }
 
   destroy(): void {

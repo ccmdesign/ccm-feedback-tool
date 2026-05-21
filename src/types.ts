@@ -71,6 +71,17 @@ export interface AnnotationRecord extends AnchorData, RectData {
   capturedElements?: CapturedElement[];
   /** Set on reply records — points at the parent comment's id. Undefined for top-level comments. */
   parentId?: string;
+  /**
+   * PRO-68 §8 — project-scoped monotonic identifier. Assigned at create time,
+   * never reused. Counts toward the project's sequence iff `parentId` is not
+   * set (replies don't get a number). Optional on the type so reads tolerate
+   * pre-migration localStorage rows; the one-time `backfillSequenceNumbers`
+   * pass in `Store` fills missing values, and the Supabase BEFORE INSERT
+   * trigger assigns authoritative values for cloud writes. Undefined is the
+   * legacy-row signal — the marker / drawer render path falls back to "?"
+   * until backfill catches up.
+   */
+  sequenceNumber?: number;
 }
 
 /** Public widget config — MVP surface area is deliberately small. */
