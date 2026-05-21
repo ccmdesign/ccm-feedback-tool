@@ -69,6 +69,8 @@ export interface AnnotationRecord extends AnchorData, RectData {
   areaH?: number;
   /** Captured DOM elements at point/inside area for agent context. */
   capturedElements?: CapturedElement[];
+  /** Set on reply records — points at the parent comment's id. Undefined for top-level comments. */
+  parentId?: string;
 }
 
 /** Public widget config — MVP surface area is deliberately small. */
