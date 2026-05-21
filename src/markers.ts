@@ -1218,6 +1218,7 @@ export class MarkerManager {
     const sc = STATUS_COLORS[status];
     entry.node.style.background = sc.border;
     entry.node.dataset.status = status;
+    entry.node.dataset.kind = entry.record.kind ?? "target";
     entry.node.style.animation = status === "question" ? "ccm-pulse 1.6s ease-in-out infinite" : "";
     // The drawer + FAB count care about this status change but neither
     // re-renders from here — `feedback:updated` (emitted by the caller)
@@ -1267,6 +1268,7 @@ export class MarkerManager {
 
     for (const entry of this.entries) {
       const kind = entry.record.kind ?? "target";
+      entry.node.dataset.kind = kind;
       if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) {
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.pinY}px`;
