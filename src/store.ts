@@ -81,6 +81,47 @@ function storageKey(projectName: string): string {
 }
 
 /**
+ * Sibling-key namespace for the per-project sequence-number high-water mark
+ * (PRO-81). Distinct from `storageKey` so `Store.clear()` (which removes only
+ * the annotation array) leaves the HWM intact — clearing a project's
+ * comments must not recycle previously-issued numbers. See
+ * docs/fab-toolbar-tweaks.md §8 "Store contract".
+ */
+function hwmKey(projectName: string): string {
+  return `ccm-feedback:${projectName}:seq-hwm`;
+}
+
+/**
+ * Read the persisted next-to-issue sequence number for a project. Returns
+ * `1` when the key is absent, unparseable, not a number, or below `1`. The
+ * try/catch posture mirrors `load` — storage failures are silent and
+ * non-fatal (consistent with the rest of this module's best-effort I/O).
+ */
+function loadHwm(projectName: string): number {
+  try {
+    const raw = localStorage.getItem(hwmKey(projectName));
+    if (!raw) return 1;
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === "number" && parsed >= 1 ? Math.floor(parsed) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * Best-effort write of the next-to-issue sequence number for a project.
+ * Same posture as `persist` — quota errors and similar are dropped
+ * silently so the calling save path doesn't fail visibly.
+ */
+function persistHwm(projectName: string, next: number): void {
+  try {
+    localStorage.setItem(hwmKey(projectName), JSON.stringify(next));
+  } catch {
+    // Quota exceeded — best-effort, drop silently.
+  }
+}
+
+/**
  * Normalize a pathname for page scoping.
  * - Strips trailing slash except root
  * - Leaves case as-is (routes can be case-sensitive)
@@ -121,21 +162,6 @@ function persist(projectName: string, items: AnnotationRecord[]): void {
 }
 
 /**
- * Compute the next project-scoped sequence number from a list of existing
- * records. Replies (`parentId` set) are ignored. Pre-migration rows without
- * a number are treated as zero — they get filled by `backfillSequenceNumbers`
- * before this is called from the regular create path.
- */
-function nextSequenceNumber(existing: readonly AnnotationRecord[]): number {
-  let max = 0;
-  for (const r of existing) {
-    if (r.parentId) continue;
-    if (typeof r.sequenceNumber === "number" && r.sequenceNumber > max) max = r.sequenceNumber;
-  }
-  return max + 1;
-}
-
-/**
  * Fill `sequenceNumber` for any top-level record missing one, in `createdAt`
  * order starting at 1. Existing numbers are preserved — the pass only fills
  * gaps. Returns true when at least one record was modified so the caller
@@ -164,7 +190,18 @@ export function backfillSequenceNumbers(items: AnnotationRecord[]): boolean {
   return changed;
 }
 
-export function buildRecord(input: SaveInput, existing: readonly AnnotationRecord[] = []): AnnotationRecord {
+/**
+ * Build a top-level annotation record from a `SaveInput`. The
+ * `assignedSequenceNumber` argument carries the pre-issued `#N` from the
+ * caller (PRO-81 HWM mechanism — `Store.save` reads and bumps the HWM,
+ * then passes the assigned number here). Pass `undefined` to omit the
+ * `sequenceNumber` field entirely — used by `CloudStore.save` so the
+ * optimistic local row renders `#?` until the server trigger's assigned
+ * number arrives via the realtime echo. The field is set only when the
+ * argument is a number (exactOptionalPropertyTypes forbids assigning
+ * `undefined` to an optional property).
+ */
+export function buildRecord(input: SaveInput, assignedSequenceNumber: number | undefined): AnnotationRecord {
   const record: AnnotationRecord = {
     id: generateId(),
     projectName: input.projectName,
@@ -190,8 +227,10 @@ export function buildRecord(input: SaveInput, existing: readonly AnnotationRecor
     hPct: input.rect.hPct,
     status: input.status ?? "todo",
     kind: input.kind ?? "target",
-    sequenceNumber: nextSequenceNumber(existing),
   };
+  if (typeof assignedSequenceNumber === "number") {
+    record.sequenceNumber = assignedSequenceNumber;
+  }
   if (input.pin) {
     record.pinX = input.pin.x;
     record.pinY = input.pin.y;
@@ -256,6 +295,41 @@ export class Store implements AnnotationStore {
     if (backfillSequenceNumbers(items)) {
       persist(this.projectName, items);
     }
+    // PRO-81 — seed the per-project HWM slot. The slot lives in its own
+    // localStorage key (see `hwmKey`) so it survives `Store.clear()` and
+    // is never decremented by delete paths. Order matters: this runs
+    // AFTER `backfillSequenceNumbers` so the seed observes the
+    // post-backfill max. The seed only runs when the key is absent
+    // (first construction for this project) — subsequent constructions
+    // read the persisted slot and never re-derive from rows.
+    const rawHwm = (() => {
+      try {
+        return localStorage.getItem(hwmKey(this.projectName));
+      } catch {
+        return null;
+      }
+    })();
+    const maxTopSeq = items.reduce(
+      (m, r) => (!r.parentId && typeof r.sequenceNumber === "number" && r.sequenceNumber > m ? r.sequenceNumber : m),
+      0,
+    );
+    if (rawHwm === null) {
+      // First-ever construction for this project (or pre-PRO-81 storage
+      // with no HWM key yet). Seed from max(rows.sequenceNumber) + 1, or
+      // 1 for an empty project.
+      persistHwm(this.projectName, maxTopSeq + 1);
+    } else {
+      // Defensive self-heal: if the persisted slot is somehow below
+      // max(rows) + 1 (e.g. a reviewer manually edited localStorage, or a
+      // legacy bug shipped a number above the slot), bump the slot to
+      // restore the monotonic invariant. The slot only moves UP — never
+      // down — to preserve PRO-81's "never decrement" contract.
+      const current = loadHwm(this.projectName);
+      const needed = maxTopSeq + 1;
+      if (current < needed) {
+        persistHwm(this.projectName, needed);
+      }
+    }
   }
 
   list(): AnnotationRecord[] {
@@ -273,8 +347,16 @@ export class Store implements AnnotationStore {
   }
 
   save(input: SaveInput): AnnotationRecord {
+    // PRO-81 HWM contract: read the slot, build with the assigned number,
+    // bump the slot BEFORE persisting the row array. Bump-before-write is
+    // the load-bearing crash-safety choice — if the process dies between
+    // the two writes the worst case is a gap (slot consumed, row never
+    // saved), which the spec declares legal. The opposite ordering would
+    // risk re-issuing the same number on the next save, violating R1.
     const items = load(this.projectName);
-    const record = buildRecord(input, items);
+    const assigned = loadHwm(this.projectName);
+    const record = buildRecord(input, assigned);
+    persistHwm(this.projectName, assigned + 1);
     items.unshift(record);
     persist(this.projectName, items);
     return record;
@@ -292,10 +374,15 @@ export class Store implements AnnotationStore {
     // against a reply id is a harmless no-op (no children).
     const next = items.filter((r) => r.id !== id && r.parentId !== id);
     persist(this.projectName, next);
+    // PRO-81: delete MUST NOT touch the HWM slot. Deleting #N (even the
+    // current-highest) leaves the slot at N+1 so the next save issues N+1.
     return true;
   }
 
   clear(): void {
+    // PRO-81: clear MUST NOT touch the HWM slot. A reviewer who clears
+    // and starts fresh still gets monotonic numbers — slot at #71 before
+    // clear, next save after clear issues #72, not #1.
     localStorage.removeItem(storageKey(this.projectName));
   }
 

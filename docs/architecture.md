@@ -160,6 +160,8 @@ Orphan-lane targets (anchor unresolved → right-edge stack) keep their vertical
 
 See [data-model.md § Sequence numbers](data-model.md#sequence-numbers-pro-68-8). Marker labels and drawer cards render `record.sequenceNumber` directly — there is no render-index renumbering. Replies have no number; the drawer card renders `↳`, the CLI renders the same glyph in the `#N` column.
 
+Per-project issuance is a monotonic high-water mark (PRO-81). Local-mode `Store` keeps the HWM in a sibling localStorage key (`ccm-feedback:<project>:seq-hwm`) that survives deletes and `clear()` — the slot is never decremented, so deleting the highest-numbered comment leaves the next insert one above its predecessor, not at the freed slot. Cloud-mode `CloudStore` defers to the server: migration `0009` adds a `ccm_widget_project_meta` row per project and the BEFORE INSERT trigger read-and-bumps that slot under the advisory lock from `0008`. Cloud rows briefly render `#?` between the local optimistic insert and the realtime echo carrying the trigger-assigned number; the marker label and drawer card both use the same `?` fallback that covers pre-PRO-68 legacy rows, so the placeholder window has no dedicated render path.
+
 ## Versioning
 
 - Repository version comes from root `package.json` (`0.1.0-mvp` at time of writing). Tags are `vX.Y.Z`.
