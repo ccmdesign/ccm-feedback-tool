@@ -1,3 +1,4 @@
+import { ensureAuthor } from "./author.js";
 import { Z_INDEX_MAX } from "./constants.js";
 import { resolveAnnotation } from "./dom/resolver.js";
 import { el, setText } from "./dom-utils.js";
@@ -16,6 +17,12 @@ const REPOSITION_DEBOUNCE_MS = 200;
 // below-right position would overflow the viewport.
 const POPOVER_NOMINAL_HEIGHT = 180;
 const POPOVER_NOMINAL_WIDTH = 300;
+// Cap on rendered popover height — long reply threads scroll inside the
+// popover rather than off-screen. Pairs with `overflow-y: auto`.
+const POPOVER_MAX_HEIGHT_PX = 480;
+// Safety inset against viewport edges during the measured re-placement
+// pass; matches the 8px gap used elsewhere on the marker side.
+const POPOVER_VIEWPORT_MARGIN = 16;
 
 interface MarkerEntry {
   record: AnnotationRecord;
@@ -38,6 +45,8 @@ export class MarkerManager {
    * page. */
   private includeDone = false;
   private popover: HTMLElement | null = null;
+  /** Off-handlers for bus subscriptions opened during openPopover. */
+  private popoverDisposers: Array<() => void> = [];
   private repositionTimer: number | null = null;
   private readonly onResize: () => void;
   private readonly onScroll: () => void;
@@ -389,12 +398,113 @@ export class MarkerManager {
       this.refresh();
     });
 
+    // ---- Reply thread section ----
+    // Order: tags → body → meta → divider → repliesList → composer → btnRow.
+    // Empty thread renders nothing (no "no replies" placeholder) — keeps the
+    // popover compact for the common case.
+    const divider = el("div", {
+      style: `height:1px;background:${this.colors.border};margin:10px -4px 10px;`,
+    });
+
+    const thread = el("div", {
+      style: "display:flex;flex-direction:column;gap:8px;margin-bottom:10px;",
+    });
+
+    const renderThread = (): void => {
+      thread.replaceChildren();
+      const replies = this.store.listReplies(record.id);
+      if (replies.length > 0) {
+        const heading = el("div", {
+          style: `font-size:11px;font-weight:600;color:${this.colors.textTertiary};margin-bottom:2px;letter-spacing:0.02em;text-transform:uppercase;`,
+        });
+        setText(heading, this.t("marker.replies.heading"));
+        thread.appendChild(heading);
+      }
+      for (const reply of replies) {
+        thread.appendChild(this.buildReplyRow(reply));
+      }
+    };
+    renderThread();
+
+    // ---- Composer ----
+    const composer = el("div", {
+      style: "display:flex;flex-direction:column;gap:6px;margin-bottom:10px;",
+    });
+
+    const ta = el("textarea", {
+      rows: "2",
+      placeholder: this.t("marker.reply.placeholder"),
+      "aria-label": this.t("marker.reply.placeholder"),
+      style: `
+        width:100%;box-sizing:border-box;resize:vertical;min-height:48px;max-height:160px;
+        border-radius:8px;border:1px solid ${this.colors.border};
+        background:${this.colors.glassBg};color:${this.colors.text};
+        font-family:inherit;font-size:13px;line-height:1.4;padding:8px 10px;
+      `,
+    }) as HTMLTextAreaElement;
+
+    const sendBtn = document.createElement("button");
+    sendBtn.type = "button";
+    sendBtn.style.cssText = `
+      align-self:flex-end;height:28px;padding:0 14px;border-radius:9999px;
+      border:1px solid ${this.colors.accent};background:${this.colors.accent};
+      color:#fff;font-family:inherit;font-size:12px;font-weight:600;
+      cursor:pointer;transition:all 0.2s ease;
+    `;
+    setText(sendBtn, this.t("marker.reply.send"));
+
+    const send = (): void => {
+      const message = ta.value.trim();
+      if (!message) return; // silent no-op for blank / whitespace-only
+      const reply = this.store.addReply({
+        projectName: record.projectName,
+        parentId: record.id,
+        message,
+        authorName: ensureAuthor(),
+        url: record.url,
+        path: record.path,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        userAgent: navigator.userAgent,
+      });
+      this.bus.emit("feedback:replied", reply);
+      ta.value = "";
+      renderThread();
+      // Pin the scroll to the newest reply so reviewer sees their post.
+      pop.scrollTop = pop.scrollHeight;
+    };
+    sendBtn.addEventListener("click", send);
+
+    ta.addEventListener("keydown", (e) => {
+      // Enter submits; Shift+Enter inserts a newline. ⌘/Ctrl+Enter also
+      // submits (matches the popup.ts hint convention so muscle memory
+      // carries across).
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+        return;
+      }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    composer.appendChild(ta);
+    composer.appendChild(sendBtn);
+
     btnRow.appendChild(closeBtn);
     btnRow.appendChild(deleteBtn);
     pop.appendChild(tagsRow);
     pop.appendChild(body);
     pop.appendChild(meta);
+    pop.appendChild(divider);
+    pop.appendChild(thread);
+    pop.appendChild(composer);
     pop.appendChild(btnRow);
+
+    // ---- Sizing: cap height + scroll inside ----
+    pop.style.maxHeight = `${POPOVER_MAX_HEIGHT_PX}px`;
+    pop.style.overflowY = "auto";
 
     // Manual `position: fixed` placement. We used to feature-detect CSS
     // Anchor Positioning (`anchor-name` + `position-area`) and use it when
@@ -409,14 +519,17 @@ export class MarkerManager {
     pop.style.position = "fixed";
     let top = rect.bottom + 8;
     let left = rect.left - 10;
-    // Flip above the marker if the natural below-position would overflow
-    // the viewport's bottom edge.
+    // First-paint placement uses POPOVER_NOMINAL_HEIGHT as the upper-bound
+    // estimate so the popover doesn't briefly flash at top:0 before the
+    // measured pass below corrects it. PRO-64 semantics intact: this is
+    // the only placement the user ever perceives for empty-thread popovers.
     if (top + POPOVER_NOMINAL_HEIGHT > window.innerHeight) {
       top = rect.top - POPOVER_NOMINAL_HEIGHT - 8;
     }
     // Pull horizontally inside the viewport when the popover would extend
     // past the right edge (common for markers clamped to the right edge by
-    // reposition()).
+    // reposition()). POPOVER_NOMINAL_WIDTH is exact — popover width is
+    // fixed at max-width:300px;min-width:220px.
     if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
       left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
     }
@@ -427,6 +540,113 @@ export class MarkerManager {
 
     document.body.appendChild(pop);
     this.popover = pop;
+
+    // ---- Measured re-placement (replies make height variable) ----
+    // Read the actual rendered height and re-run the flip+clamp. The
+    // nominal-height pass above is the first-paint estimate; this corrects
+    // it before the user perceives the gap (browsers batch layout + paint
+    // between the appendChild above and the next paint frame).
+    const actualHeight = Math.min(pop.offsetHeight, POPOVER_MAX_HEIGHT_PX);
+    let measuredTop = rect.bottom + 8;
+    if (measuredTop + actualHeight > window.innerHeight - POPOVER_VIEWPORT_MARGIN) {
+      measuredTop = rect.top - actualHeight - 8;
+    }
+    measuredTop = Math.max(POPOVER_VIEWPORT_MARGIN, measuredTop);
+    if (measuredTop !== top) {
+      pop.style.top = `${measuredTop}px`;
+    }
+
+    // ---- Realtime: wire bus subscriptions for the open popover ----
+    const offReplied = this.bus.on("feedback:replied", (reply) => {
+      if (reply.parentId !== record.id) return;
+      // Skip re-render if the row is already in the DOM (echo suppression
+      // for our own just-sent reply: addReply already updated the cache and
+      // the send-handler called renderThread above, so this incoming event
+      // is just our own echo via realtime).
+      if (thread.querySelector(`[data-reply-id="${reply.id}"]`)) return;
+      renderThread();
+      pop.scrollTop = pop.scrollHeight;
+    });
+
+    const offDeleted = this.bus.on("feedback:deleted", (id) => {
+      // Parent delete arriving from another window → close this popover.
+      if (id === record.id) {
+        this.closePopover();
+        return;
+      }
+      // Reply delete (local or remote) that belongs to this thread → re-render.
+      if (thread.querySelector(`[data-reply-id="${id}"]`)) {
+        renderThread();
+      }
+    });
+
+    this.popoverDisposers.push(offReplied, offDeleted);
+  }
+
+  /**
+   * Render one reply row: meta line (author · time), body, hover-revealed
+   * delete affordance. Marked with `data-reply-id` so the realtime handlers
+   * can cheaply test whether a deleted/inserted id belongs to this thread.
+   */
+  private buildReplyRow(reply: AnnotationRecord): HTMLElement {
+    const row = el("div", {
+      style: `
+        position:relative;padding:8px 10px 8px 10px;border-radius:8px;
+        background:${this.colors.glassBgHeavy};
+        border:1px solid ${this.colors.border};
+      `,
+    });
+    row.dataset.replyId = reply.id;
+
+    const metaLine = el("div", {
+      style: `font-size:11px;color:${this.colors.textTertiary};margin-bottom:4px;padding-right:18px;`,
+    });
+    const author = reply.authorName?.trim() || "Anonymous";
+    setText(metaLine, `${author} · ${new Date(reply.createdAt).toLocaleString()}`);
+
+    const bodyLine = el("div", {
+      style: "white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.45;",
+    });
+    setText(bodyLine, reply.message);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.setAttribute("aria-label", this.t("marker.reply.delete"));
+    delBtn.style.cssText = `
+      position:absolute;top:4px;right:4px;width:18px;height:18px;
+      border-radius:9999px;border:none;background:transparent;
+      color:${this.colors.textTertiary};
+      font-family:inherit;font-size:14px;line-height:1;cursor:pointer;
+      opacity:0;transition:opacity 0.15s ease,color 0.15s ease;
+      padding:0;
+    `;
+    setText(delBtn, "×");
+    row.addEventListener("mouseenter", () => {
+      delBtn.style.opacity = "1";
+    });
+    row.addEventListener("mouseleave", () => {
+      delBtn.style.opacity = "0";
+    });
+    delBtn.addEventListener("focus", () => {
+      delBtn.style.opacity = "1";
+    });
+    delBtn.addEventListener("blur", () => {
+      delBtn.style.opacity = "0";
+    });
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!window.confirm(this.t("marker.replyDeleteConfirm"))) return;
+      this.store.delete(reply.id);
+      // Emit feedback:deleted so the open-popover subscription drops the
+      // row in place. Do NOT call refresh() — replies have no markers, so
+      // a full marker re-render would be pure cost.
+      this.bus.emit("feedback:deleted", reply.id);
+    });
+
+    row.appendChild(metaLine);
+    row.appendChild(bodyLine);
+    row.appendChild(delBtn);
+    return row;
   }
 
   private cycleStatus(record: AnnotationRecord): void {
@@ -444,6 +664,10 @@ export class MarkerManager {
     if (!this.popover) return;
     this.popover.remove();
     this.popover = null;
+    // Tear down the open-popover bus subscriptions so the closed popover
+    // doesn't keep re-rendering when realtime delivers events after close.
+    for (const off of this.popoverDisposers) off();
+    this.popoverDisposers = [];
   }
 
   private scheduleReposition(): void {

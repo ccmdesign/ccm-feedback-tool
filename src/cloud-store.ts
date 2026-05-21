@@ -343,9 +343,7 @@ export class CloudStore implements AnnotationStore {
   }
 
   listReplies(parentId: string): AnnotationRecord[] {
-    return this.cache
-      .filter((r) => r.parentId === parentId)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return this.cache.filter((r) => r.parentId === parentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   addReply(input: ReplyInput): AnnotationRecord {
