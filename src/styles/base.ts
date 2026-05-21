@@ -33,6 +33,10 @@ export function buildStyles(colors: ThemeColors): string {
       /* Identity modal — theme-aware backdrop + panel */
       --sp-identity-bg: ${colors.glassBgHeavy};
       --sp-identity-overlay: ${colors.bg === "#ffffff" ? "rgba(15, 23, 42, 0.2)" : "rgba(0, 0, 0, 0.4)"};
+
+      /* Drawer panel width — referenced by .sp-panel and by the FAB shift
+         modifier so a future host override can be a single token change. */
+      --sp-panel-width: 400px;
     }
 
     *, *::before, *::after {
@@ -106,11 +110,34 @@ export function buildStyles(colors: ThemeColors): string {
     .sp-fab--bottom-right {
       bottom: 24px;
       right: 24px;
+      transition: right 0.25s ease;
     }
 
     .sp-fab--bottom-left {
       bottom: 24px;
       left: 24px;
+    }
+
+    /* PRO-68 §2 — FAB and radial slide left while the drawer is open so the
+       open panel doesn't sit on top of them. The CSS custom property lets a
+       future host theme override the panel width in one place. */
+    .sp-fab--drawer-open {
+      right: calc(var(--sp-panel-width, 400px) + 24px);
+    }
+
+    .sp-radial--drawer-open {
+      right: calc(var(--sp-panel-width, 400px) + 24px);
+      transition: right 0.25s ease;
+    }
+
+    @media (max-width: 480px) {
+      /* Below 480px the drawer panel is full-width — hide the FAB entirely
+         so the shifted modifier doesn't push it off-screen. Reviewer uses
+         the drawer's own close button to dismiss. */
+      .sp-fab--drawer-open,
+      .sp-radial--drawer-open {
+        display: none;
+      }
     }
 
     .sp-fab svg {
@@ -236,7 +263,7 @@ export function buildStyles(colors: ThemeColors): string {
       position: fixed;
       top: 0;
       right: 0;
-      width: 400px;
+      width: var(--sp-panel-width, 400px);
       max-width: 100vw;
       height: 100vh;
       height: 100dvh;

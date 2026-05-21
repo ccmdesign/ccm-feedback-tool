@@ -15,7 +15,6 @@ const STRINGS: Record<string, string> = {
   "fab.copyUrlLocalOnly": "Cloud mode only — use Export JSON", // FR: "Mode cloud uniquement — utilisez Export JSON"
   "fab.clear": "Clear all",
   "fab.clearConfirm": "Delete all annotations for this project? This cannot be undone.",
-  "fab.navigatorLabel": "Comments", // FR: "Commentaires"
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",

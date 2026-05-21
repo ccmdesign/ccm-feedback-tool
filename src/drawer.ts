@@ -142,6 +142,7 @@ export class Drawer {
     this.root.inert = false;
     document.addEventListener("click", this.onDocumentClick);
     document.addEventListener("keydown", this.onKeydown, true);
+    this.bus.emit("drawer:opened");
     requestAnimationFrame(() => {
       const first = this.root.querySelector<HTMLElement>(
         'button:not([disabled]):not([aria-disabled="true"]), [tabindex]:not([tabindex="-1"])',
@@ -159,6 +160,7 @@ export class Drawer {
     document.removeEventListener("click", this.onDocumentClick);
     document.removeEventListener("keydown", this.onKeydown, true);
     this.bus.emit("navigator:close");
+    this.bus.emit("drawer:closed");
     const target = this.previouslyFocused;
     this.previouslyFocused = null;
     if (target && typeof target.focus === "function") target.focus();
