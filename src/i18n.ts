@@ -8,8 +8,8 @@ const STRINGS: Record<string, string> = {
   "fab.targetLabel": "Target element",
   "fab.pinLabel": "Drop pin",
   "fab.areaLabel": "Capture area",
-  "fab.toggleOn": "Hide comments",
-  "fab.toggleOff": "Show comments",
+  "toolbar.toggleOn": "Hide comments",
+  "toolbar.toggleOff": "Show comments",
   "fab.export": "Export JSON",
   "fab.copyUrl": "Copy feedback URL", // FR: "Copier l'URL des retours"
   "fab.copyUrlLocalOnly": "Cloud mode only — use Export JSON", // FR: "Mode cloud uniquement — utilisez Export JSON"

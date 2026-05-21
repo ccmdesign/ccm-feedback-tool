@@ -253,6 +253,14 @@ export class MarkerManager {
     if (!visible) this.closePopover();
   }
 
+  /** Read-only accessor — the capture-mode toolbars need the current
+   * visibility state so the eye button can reflect (and invert) it.
+   * PRO-68 §3 — visibility is owned by the marker layer; toolbars are
+   * pure consumers. */
+  get isVisible(): boolean {
+    return this.visible;
+  }
+
   /**
    * Read-only locatability probe used by the comment navigator drawer.
    * True when an entry exists for `id` and its marker resolved on the

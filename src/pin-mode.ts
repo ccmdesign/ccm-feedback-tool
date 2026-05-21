@@ -1,5 +1,6 @@
 import { Z_INDEX_MAX } from "./constants.js";
 import { createHoverOutline, type HoverOutlineHandle } from "./dom/hover-outline.js";
+import { buildToolbarEye, type MarkerVisibilityRead, type ToolbarEyeHandle } from "./dom/toolbar-eye.js";
 import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
@@ -34,6 +35,8 @@ import type { ThemeColors } from "./styles/theme.js";
 export class PinMode {
   private overlay: HTMLElement | null = null;
   private toolbar: HTMLElement | null = null;
+  /** Active eye-button handle while the toolbar is rendered; destroyed in `deactivate()`. */
+  private eyeHandle: ToolbarEyeHandle | null = null;
   private isActive = false;
   private savedOverflow = "";
   private previouslyFocused: HTMLElement | null = null;
@@ -65,6 +68,8 @@ export class PinMode {
     private readonly openPopupForElement: (element: HTMLElement) => Promise<void>,
     /** Excludes the widget host + descendants so pin doesn't outline itself. */
     private readonly shouldIgnoreElement: (element: Element) => boolean,
+    /** Read-only handle on marker visibility — drives the in-toolbar eye button (PRO-68 §3). */
+    private readonly markers: MarkerVisibilityRead,
   ) {
     this.hoverOutline = createHoverOutline(this.colors);
     this.unsubPinStart = this.bus.on("target:start", () => this.activate());
@@ -113,7 +118,15 @@ export class PinMode {
     setText(cancelBtn, this.t("pin.cancel"));
     cancelBtn.addEventListener("click", () => this.deactivate());
 
+    this.eyeHandle = buildToolbarEye({
+      bus: this.bus,
+      t: this.t,
+      colors: this.colors,
+      markers: this.markers,
+    });
+
     this.toolbar.appendChild(instruction);
+    this.toolbar.appendChild(this.eyeHandle.button);
     this.toolbar.appendChild(cancelBtn);
 
     this.overlay.addEventListener("mousemove", this.onOverlayMouseMove, true);
@@ -138,6 +151,8 @@ export class PinMode {
     // Always restore body overflow — even if downstream listeners throw.
     document.body.style.overflow = this.savedOverflow;
 
+    this.eyeHandle?.destroy();
+    this.eyeHandle = null;
     this.overlay?.remove();
     this.toolbar?.remove();
     this.overlay = null;

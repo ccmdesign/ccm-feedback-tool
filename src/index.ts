@@ -225,9 +225,9 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     log("Saved area", record.id);
   };
 
-  const pinMode = new PinMode(colors, bus, t, openPopupForElement, shouldIgnore);
-  const coordPinMode = new CoordPinMode(colors, bus, t, onPinCapture, shouldIgnore);
-  const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore);
+  const pinMode = new PinMode(colors, bus, t, openPopupForElement, shouldIgnore, markers);
+  const coordPinMode = new CoordPinMode(colors, bus, t, onPinCapture, shouldIgnore, markers);
+  const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore, markers);
 
   bus.on("export:click", () => {
     const records = store.list();
