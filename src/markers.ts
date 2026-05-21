@@ -249,25 +249,15 @@ export class MarkerManager {
   }
 
   private isEntryLocatable(entry: MarkerEntry): boolean {
-    const kind = entry.record.kind ?? "target";
-    if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) return true;
-    if (
-      kind === "area" &&
-      entry.record.areaX != null &&
-      entry.record.areaY != null &&
-      entry.record.areaW != null &&
-      entry.record.areaH != null
-    ) {
-      return true;
-    }
-    // target: `reposition()` sets `anchorEl` to the resolved element (or null
-    // when the four-strategy resolver fails) independent of `this.visible`.
-    // Locatability tracks anchor *resolution* only — NOT the global
-    // markers-visible toggle. Gating on `display !== "none"` here would make
-    // every resolvable target read as unlocatable while comments are hidden
-    // via the FAB eye, breaking the drawer's hide-then-jump flow.
-    // `scrollToAndFlash` still scrolls (and just skips the flash) when hidden.
-    return entry.anchorEl != null;
+    // Every rendered entry has a position assigned in reposition() — coord
+    // kinds carry their own coords, resolved targets use their anchor's
+    // rect, and unresolved targets park along the right-edge orphan lane.
+    // None of those paths produce a "no position" outcome, so every entry
+    // is locatable from the drawer's perspective. The "can't locate"
+    // badge is intentionally retired: reviewers must always be able to
+    // jump to and click any comment.
+    void entry;
+    return true;
   }
 
   private buildMarker(record: AnnotationRecord, number: number): HTMLElement {
@@ -463,28 +453,31 @@ export class MarkerManager {
   }
 
   private reposition(): void {
-    // Horizontal upper bound — any marker whose center would sit past this
-    // page-x value is hidden so it can't grow `documentElement.scrollWidth`
-    // and produce a horizontal scrollbar on the host page. Uses the
-    // viewport width (clientWidth) under the assumption that the page is
-    // laid out for the current viewport — captures taken at a wider
-    // breakpoint (recorded `pinX` / `areaX` past current viewport) get
-    // dropped rather than rendered off-canvas.
-    const viewportRight = document.documentElement.clientWidth;
-    const hideIfOffscreenX = (left: number): boolean => left - MARKER_OFFSET > viewportRight;
+    // Horizontal clamp window — any marker whose center would land outside
+    // [minX, maxX] gets pinned to the nearest edge so it stays visible AND
+    // doesn't extend `documentElement.scrollWidth`. Combined with the
+    // container's `overflow-x: clip`, this guarantees no horizontal
+    // scrollbar regression on the host page. Markers are never hidden for
+    // being off-viewport — reviewers must always be able to see/click
+    // every comment.
+    const viewportWidth = document.documentElement.clientWidth;
+    const minX = MARKER_OFFSET;
+    const maxX = Math.max(MARKER_OFFSET, viewportWidth - MARKER_OFFSET);
+    const clampX = (x: number) => Math.max(minX, Math.min(maxX, x));
+
+    // Parking lane for target-kind markers whose anchor element couldn't be
+    // resolved on the current page. Stacked vertically along the right edge
+    // of the current viewport (recomputed on scroll via scheduleReposition)
+    // so they're always reachable.
+    let orphanIndex = 0;
+    const orphanTop = (i: number) => window.scrollY + 80 + i * (MARKER_SIZE + 8);
 
     for (const entry of this.entries) {
       const kind = entry.record.kind ?? "target";
       if (kind === "pin" && entry.record.pinX != null && entry.record.pinY != null) {
-        const left = entry.record.pinX;
-        if (hideIfOffscreenX(left)) {
-          entry.node.style.display = "none";
-          entry.anchorEl = null;
-          continue;
-        }
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.pinY}px`;
-        entry.node.style.left = `${left}px`;
+        entry.node.style.left = `${clampX(entry.record.pinX)}px`;
         entry.anchorEl = null;
         continue;
       }
@@ -495,15 +488,9 @@ export class MarkerManager {
         entry.record.areaW != null &&
         entry.record.areaH != null
       ) {
-        const left = entry.record.areaX + entry.record.areaW;
-        if (hideIfOffscreenX(left)) {
-          entry.node.style.display = "none";
-          entry.anchorEl = null;
-          continue;
-        }
         entry.node.style.display = this.visible ? "flex" : "none";
         entry.node.style.top = `${entry.record.areaY}px`;
-        entry.node.style.left = `${left}px`;
+        entry.node.style.left = `${clampX(entry.record.areaX + entry.record.areaW)}px`;
         entry.anchorEl = null;
         continue;
       }
@@ -522,23 +509,25 @@ export class MarkerManager {
         { xPct: entry.record.xPct, yPct: entry.record.yPct, wPct: entry.record.wPct, hPct: entry.record.hPct },
       );
       if (!resolved) {
-        entry.node.style.display = "none";
+        // Orphan: park at right edge of viewport, stacked. Reviewer can
+        // still click to read the comment body; the popover will note the
+        // anchor is unresolved.
+        entry.node.style.display = this.visible ? "flex" : "none";
+        entry.node.style.top = `${orphanTop(orphanIndex)}px`;
+        entry.node.style.left = `${maxX}px`;
+        entry.node.dataset.orphan = "true";
         entry.anchorEl = null;
+        orphanIndex++;
         continue;
       }
+      entry.node.dataset.orphan = "false";
+      entry.anchorEl = resolved.element;
       const rect = resolved.rect;
       const top = rect.top + window.scrollY - MARKER_OFFSET;
-      const left = rect.right + window.scrollX - MARKER_OFFSET;
-      const center = left + MARKER_OFFSET;
-      if (hideIfOffscreenX(center)) {
-        entry.node.style.display = "none";
-        entry.anchorEl = null;
-        continue;
-      }
-      entry.anchorEl = resolved.element;
+      const center = rect.right + window.scrollX;
       entry.node.style.display = this.visible ? "flex" : "none";
       entry.node.style.top = `${top + MARKER_OFFSET}px`;
-      entry.node.style.left = `${center}px`;
+      entry.node.style.left = `${clampX(center)}px`;
     }
   }
 

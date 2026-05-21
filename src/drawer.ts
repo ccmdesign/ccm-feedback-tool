@@ -47,8 +47,6 @@ export class Drawer {
     private readonly colors: ThemeColors,
     /** Scroll to + flash a marker. Returns false when the anchor can't be located. */
     private readonly jump: (id: string) => boolean,
-    /** Whether an annotation's marker can be located on the current page. */
-    private readonly canLocate: (id: string) => boolean,
     /** Notify the marker layer that the drawer's status filter changed. The
      * marker layer uses this to gate `done`-marker visibility: done markers
      * stay hidden unless the drawer's current filter is `done`. */
@@ -182,8 +180,7 @@ export class Drawer {
     this.filter = filter;
     this.applyChipStyles();
     // Notify before render so the marker layer can refresh its visible set
-    // first — render() calls canLocate() per row, which depends on which
-    // markers are currently rendered.
+    // first — switching to/from Done changes which markers are rendered.
     this.onFilterChange(filter);
     this.render();
   }
@@ -301,7 +298,7 @@ export class Drawer {
   private buildCard(record: AnnotationRecord, number: number): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];
-    const locatable = this.canLocate(record.id);
+    const isCurrentPage = normalizePath(record.path) === normalizePath(window.location.pathname);
 
     const card = el("button", { class: "sp-card", type: "button" }) as HTMLButtonElement;
     card.style.textAlign = "left";
@@ -313,15 +310,20 @@ export class Drawer {
         ? `${record.message.slice(0, MESSAGE_TRUNCATE).trimEnd()}…`
         : record.message;
 
-    if (locatable) {
-      card.setAttribute("aria-label", this.t("drawer.rowAria", { n: number, message: truncated }));
-      card.addEventListener("click", () => {
-        const ok = this.jump(record.id);
-        if (!ok) this.markUnlocatable(card, number, truncated);
-      });
-    } else {
-      this.markUnlocatable(card, number, truncated);
-    }
+    // Every row is actionable. Same-page rows jump to the marker (which is
+    // guaranteed to be positioned somewhere — current page markers are
+    // never hidden, off-viewport ones are clamped, unresolved targets
+    // park in the right-edge orphan lane). Cross-page rows navigate to
+    // the recorded URL so the reviewer lands on the page where that
+    // comment lives. The legacy "can't locate" disabled state is retired.
+    card.setAttribute("aria-label", this.t("drawer.rowAria", { n: number, message: truncated }));
+    card.addEventListener("click", () => {
+      if (isCurrentPage) {
+        this.jump(record.id);
+      } else if (record.url) {
+        window.location.href = record.url;
+      }
+    });
 
     const bar = el("div", { class: "sp-card-bar", style: `background:${sc.border};` });
     const body = el("div", { class: "sp-card-body" });
@@ -364,26 +366,9 @@ export class Drawer {
     body.appendChild(message);
     body.appendChild(meta);
 
-    if (!locatable) {
-      const note = el("div", {
-        style: `font-size:11px;font-style:italic;color:${this.colors.textTertiary};margin-top:8px;`,
-      });
-      setText(note, this.t("drawer.cantLocate"));
-      body.appendChild(note);
-    }
-
     card.appendChild(bar);
     card.appendChild(body);
     return card;
-  }
-
-  /** Flip a card into the passive, non-actionable "can't locate" state. */
-  private markUnlocatable(card: HTMLButtonElement, number: number, message: string): void {
-    card.classList.add("sp-card--resolved");
-    card.disabled = true;
-    card.setAttribute("aria-disabled", "true");
-    card.style.cursor = "default";
-    card.setAttribute("aria-label", this.t("drawer.rowAriaDisabled", { n: number, message }));
   }
 
   private trapFocus(e: KeyboardEvent): void {

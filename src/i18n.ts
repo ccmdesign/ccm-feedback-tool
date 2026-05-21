@@ -48,9 +48,7 @@ const STRINGS: Record<string, string> = {
   "drawer.emptyFiltered": "No comments match this filter", // FR: "Aucun commentaire ne correspond à ce filtre"
   "drawer.thisPage": "This page", // FR: "Cette page"
   "drawer.otherPages": "Other pages ({n})", // FR: "Autres pages ({n})"
-  "drawer.cantLocate": "Can't locate on this page", // FR: "Introuvable sur cette page"
   "drawer.rowAria": "Comment {n}: {message}", // FR: "Commentaire {n} : {message}"
-  "drawer.rowAriaDisabled": "Comment {n} ({message}) — can't locate on this page", // FR: "Commentaire {n} ({message}) — introuvable sur cette page"
 };
 
 export type TFunction = (key: string, vars?: Record<string, string | number>) => string;
