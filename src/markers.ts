@@ -70,6 +70,21 @@ export class MarkerManager {
   private readonly origPushState: typeof history.pushState;
   private readonly origReplaceState: typeof history.replaceState;
   private lastPath = window.location.pathname;
+  /** Cleanup fn for the active drag mode (PRO-67 P1). Set by `enterDragMode`,
+   * nulled inside its `cleanup()`. Invoked by `destroy()` to tear down an
+   * in-flight drag before disposing the manager so the overlay/toolbar DOM
+   * and the five global capture-phase listeners don't leak. */
+  private dragCleanup: (() => void) | null = null;
+  /** Cleanup fns for active drag-or-click watchers (PRO-67 P1). One entry
+   * per in-flight `mousedown` gesture that hasn't yet resolved to click or
+   * drag. Watchers self-remove via the existing `cleanup()` closure, but
+   * `destroy()` also drains the set so the window-level mousemove/mouseup
+   * capture listeners + the longpress timer can't outlive the manager. */
+  private watcherCleanups: Set<() => void> = new Set();
+  /** True while `enterDragMode` is active. The outer popstate handler
+   * (`checkPath`) reads this and skips `refresh()` so the entry being
+   * dragged isn't detached out from under the drag closure (PRO-67 P2). */
+  private dragInFlight = false;
 
   constructor(
     private readonly colors: ThemeColors,
@@ -158,8 +173,17 @@ export class MarkerManager {
 
     // SPA navigation: re-filter markers when pathname changes via the
     // History API. Covers Nuxt, React Router, Vue Router, Next.js.
+    //
+    // If a drag is in flight, defer the refresh — the drag's own
+    // `dragSpaNav` (capture-phase) handler cancels the gesture, and we
+    // don't want to tear down the active entry's DOM out from under the
+    // drag's `cleanup()` closure (PRO-67 P2). `lastPath` is left untouched
+    // so the next mutation re-evaluates against the original baseline; the
+    // resize/scroll listeners keep the rendered set in sync once the drag
+    // resolves.
     const checkPath = () => {
       if (window.location.pathname === this.lastPath) return;
+      if (this.dragInFlight) return;
       this.lastPath = window.location.pathname;
       this.refresh();
     };
@@ -415,6 +439,7 @@ export class MarkerManager {
           window.clearTimeout(longPressTimer);
           longPressTimer = null;
         }
+        this.watcherCleanups.delete(cleanup);
       };
 
       const promote = (currentEvt: MouseEvent): void => {
@@ -426,14 +451,18 @@ export class MarkerManager {
           longPressTimer = null;
         }
         // Drop the move/up listeners — drag mode owns its own globals.
-        window.removeEventListener("mousemove", onMove, true);
-        window.removeEventListener("mouseup", onUp, true);
+        // Use the shared `cleanup` so the watcherCleanups bookkeeping stays
+        // in sync (PRO-67 P1) — promotion is a handoff, not a leak.
+        cleanup();
         const entry = this.entries.find((e) => e.record.id === record.id);
         if (entry) this.enterDragMode(entry, currentEvt);
       };
 
       window.addEventListener("mousemove", onMove, true);
       window.addEventListener("mouseup", onUp, true);
+      // Track this watcher so `destroy()` can abort it if the host
+      // re-initializes the widget mid-gesture (PRO-67 P1).
+      this.watcherCleanups.add(cleanup);
     });
   }
 
@@ -522,6 +551,13 @@ export class MarkerManager {
 
     let cleaned = false;
 
+    // Mark drag as in flight so the outer popstate `checkPath` defers its
+    // `refresh()` (PRO-67 P2). The drag's own `dragSpaNav` still cancels
+    // the gesture; deferring refresh keeps the active entry attached so
+    // `cleanup()` can restore styles + reposition without operating on a
+    // detached node.
+    this.dragInFlight = true;
+
     /** Resolve the element under the cursor with the overlay temporarily
      * transparent to pointer events. Mirrors PinMode.onOverlayMouseMove. */
     const resolveTarget = (clientX: number, clientY: number): HTMLElement | null => {
@@ -574,11 +610,15 @@ export class MarkerManager {
       node.style.transform = originalTransform;
       node.style.cursor = originalCursor;
       node.style.transition = originalTransition;
+      this.dragInFlight = false;
+      this.dragCleanup = null;
       // Always reposition: on cancel restores the original location, on
       // successful relocate the record was already mutated and the new
       // location is what reposition() reads.
       this.reposition();
     };
+    // Expose cleanup so `destroy()` can abort an in-flight drag (PRO-67 P1).
+    this.dragCleanup = cleanup;
 
     // Cancel any in-flight drag when the host page navigates via the
     // History API. Declared after cleanup so the listener can reference it.
@@ -1256,6 +1296,15 @@ export class MarkerManager {
   }
 
   destroy(): void {
+    // Abort any in-flight drag-or-click watcher and drag mode BEFORE we tear
+    // down the rest (PRO-67 P1). The drag overlay/toolbar live on
+    // document.body, not inside this.container — without explicit cancel
+    // they'd survive container.remove() with five global listeners still
+    // bound. Iterate a copy of watcherCleanups because each cleanup mutates
+    // the live set.
+    this.dragCleanup?.();
+    for (const fn of [...this.watcherCleanups]) fn();
+    this.watcherCleanups.clear();
     window.removeEventListener("resize", this.onResize);
     window.removeEventListener("scroll", this.onScroll);
     window.removeEventListener("popstate", this.onPopState);

@@ -4,6 +4,7 @@
 **File:** `src/markers.ts`
 **Lines:** 161–177 (outer `onPopState`), 585–587 + 715 (`dragSpaNav`)
 **Discovered by:** ce-code-review autofix (PRO-67, PR #32)
+**Status:** resolved (Option 2) — `MarkerManager.dragInFlight` flag is set in `enterDragMode`, cleared in its `cleanup()`. The outer `checkPath` early-returns when `dragInFlight`, so SPA nav mid-drag no longer rebuilds the entries array out from under the drag closure. The drag's own capture-phase `dragSpaNav` still cancels the gesture. `bun run check` + `bun run lint` clean.
 
 ## Problem
 

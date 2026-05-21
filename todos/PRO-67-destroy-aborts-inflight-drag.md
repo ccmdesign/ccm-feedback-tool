@@ -4,6 +4,7 @@
 **File:** `src/markers.ts`
 **Lines:** 1257–1267 (`destroy`), 376–437 (`attachDragOrClickWatcher`), 457–716 (`enterDragMode`)
 **Discovered by:** ce-code-review autofix (PRO-67, PR #32)
+**Status:** resolved — `MarkerManager` now tracks `dragCleanup` + `watcherCleanups` and `destroy()` invokes them before tearing down the container. `attachDragOrClickWatcher` registers/unregisters via the shared `cleanup` closure (so promotion-handoff to drag doesn't double-clean). `enterDragMode`'s `cleanup()` nulls `dragCleanup` on exit. `bun run check` + `bun run lint` clean.
 
 ## Problem
 
