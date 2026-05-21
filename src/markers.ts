@@ -517,10 +517,12 @@ export class MarkerManager {
         backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
         border-bottom:1px solid ${this.colors.glassBorder};
         display:flex;align-items:center;justify-content:center;gap:16px;
+        pointer-events:auto;
         font-family:"Inter",system-ui,-apple-system,sans-serif;
         font-size:14px;color:${this.colors.text};
       `,
     });
+    toolbar.setAttribute("data-ccm-drag-toolbar", "true");
     const instruction = el("span", { style: "font-weight:500;letter-spacing:-0.01em;" });
     setText(instruction, this.t("relocate.instruction"));
     const cancelBtn = document.createElement("button");
@@ -558,12 +560,21 @@ export class MarkerManager {
     // detached node.
     this.dragInFlight = true;
 
-    /** Resolve the element under the cursor with the overlay temporarily
-     * transparent to pointer events. Mirrors PinMode.onOverlayMouseMove. */
+    /** Resolve the element under the cursor with the drag chrome temporarily
+     * transparent to pointer events. Mirrors PinMode.onOverlayMouseMove.
+     * Disables the overlay, the toolbar, AND the ghost marker itself so the
+     * hit-test reaches the real host-page element underneath (PRO-67
+     * followup) — without this, a drop on a paragraph that the 26 px ghost
+     * fully covers would self-resolve to the marker. */
     const resolveTarget = (clientX: number, clientY: number): HTMLElement | null => {
       overlay.style.pointerEvents = "none";
+      toolbar.style.pointerEvents = "none";
+      const prevNodePE = node.style.pointerEvents;
+      node.style.pointerEvents = "none";
       const t = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
       overlay.style.pointerEvents = "auto";
+      toolbar.style.pointerEvents = "auto";
+      node.style.pointerEvents = prevNodePE;
       return t;
     };
 
@@ -697,10 +708,16 @@ export class MarkerManager {
         };
       } else {
         // Decide drop branch for target / pin.
+        // Treat the ghost marker (its own fixed-position node) as ignored —
+        // the ghost follows the cursor so elementFromPoint at the drop point
+        // returns the marker itself, which would otherwise self-anchor.
+        // Mirrors the same guard in onMove (~line 582). PRO-67 followup.
         const dropOnIgnored =
           !target ||
           !(target instanceof HTMLElement) ||
           this.shouldIgnoreElement(target) ||
+          target === node ||
+          node.contains(target) ||
           target === document.documentElement ||
           target === document.body;
 
@@ -851,6 +868,18 @@ export class MarkerManager {
     pop.setAttribute("aria-label", this.t("marker.ariaLabel", { n: "" }));
     pop.classList.add("ccm-popover");
     pop.addEventListener("click", (e) => e.stopPropagation());
+    // PRO-67: ESC closes the popover when the status dropdown menu is not
+    // open. The dropdown's own keydown listener handles the menu-open case
+    // by stopping propagation, so this handler only fires for ESCs that
+    // bubble past the dropdown (i.e. the menu was already closed). Matches
+    // pin-relocate-and-popover-tweaks.md §"ESC closes menu first; if menu
+    // already closed, ESC closes popover".
+    pop.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closePopover();
+      }
+    });
 
     const body = el("div", { style: "white-space:pre-wrap;word-break:break-word;margin-bottom:10px;" });
     setText(body, record.message);
