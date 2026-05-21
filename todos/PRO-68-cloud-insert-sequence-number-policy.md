@@ -1,5 +1,6 @@
 # PRO-68 — Cloud INSERT sends client-computed `sequence_number`
 
+**Status:** RESOLVED — keep spec contract (option 2, "spec wins")
 **Severity:** P1 (per reviewer task brief) / P3 (per spec + plan)
 **Owner:** downstream-resolver (policy decision)
 **Files:** `src/cloud-store.ts:198-206`, `src/cloud-store.ts:342-351`
@@ -40,21 +41,22 @@ Two possible interpretations:
    resolved by realtime UPDATE reconciliation. The trigger respects
    client values to preserve optimistic UI consistency.
 
-## Recommended next step
+## Resolution
 
-Decide which contract is authoritative before changing the code. If
-brief wins: strip `sequence_number` from `recordToRow()`'s INSERT path
-(keep it for migration which already strips); if spec wins: close this
-todo with a one-line note in the PR description acknowledging the
-brief/spec disagreement.
+**Decision: keep the spec contract (option 2). No code change.**
 
-## Suggested fix (if brief wins)
+Re-read of `docs/fab-toolbar-tweaks.md` §8 confirms the canonical
+choice — the "Store contract → CloudStore" section explicitly picks
+option (1) (compute `max(cache) + 1` client-side, send it, accept the
+documented race window) over option (2) (insert with `null` and patch
+on echo). The trigger respects non-null values precisely to preserve
+optimistic-UI parity between the local render and the realtime echo.
 
-```ts
-// In recordToRow, drop:
-if (typeof r.sequenceNumber === "number") row.sequence_number = r.sequenceNumber;
-// Or fork into recordToInsertRow / recordToUpdateRow so PATCH paths can
-// still carry the value (they don't today; defensive only).
-```
+The P1/P3 severity disagreement is a brief-vs-spec drift. The spec is
+the source of truth and was published first; the reviewer brief did
+not call out the spec contradiction. The P2 hardening (advisory lock +
+unique index in migration `0008_sequence_unique.sql`) is the right
+place to tighten the race — not at the optimistic-client layer.
 
-Not auto-applied: changes behavior the spec explicitly chose.
+Code at `src/cloud-store.ts:197-206` already documents the choice
+inline. No diff needed beyond this resolution note.
