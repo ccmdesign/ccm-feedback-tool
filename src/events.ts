@@ -57,4 +57,9 @@ export interface WidgetEvents {
   "clear:click": [];
   "navigator:open": [];
   "navigator:close": [];
+  /** Drawer slid open. Fired by `Drawer.open()` after the open transition begins. */
+  "drawer:opened": [];
+  /** Drawer slid closed. Fired by `Drawer.close()`. Distinct from `navigator:close`,
+   * which is the legacy event still emitted by `close()` for FAB-internal use. */
+  "drawer:closed": [];
 }

@@ -8,14 +8,13 @@ const STRINGS: Record<string, string> = {
   "fab.targetLabel": "Target element",
   "fab.pinLabel": "Drop pin",
   "fab.areaLabel": "Capture area",
-  "fab.toggleOn": "Hide comments",
-  "fab.toggleOff": "Show comments",
+  "toolbar.toggleOn": "Hide comments",
+  "toolbar.toggleOff": "Show comments",
   "fab.export": "Export JSON",
   "fab.copyUrl": "Copy feedback URL", // FR: "Copier l'URL des retours"
   "fab.copyUrlLocalOnly": "Cloud mode only — use Export JSON", // FR: "Mode cloud uniquement — utilisez Export JSON"
   "fab.clear": "Clear all",
   "fab.clearConfirm": "Delete all annotations for this project? This cannot be undone.",
-  "fab.navigatorLabel": "Comments", // FR: "Commentaires"
   "pin.ariaLabel": "Pin mode toolbar",
   "pin.instruction": "Click any element to comment on it",
   "pin.cancel": "Cancel",

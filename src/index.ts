@@ -17,13 +17,22 @@ import { buildThemeColors } from "./styles/theme.js";
 import type { AnchorData, AnnotationRecord, CcmFeedbackConfig, CcmFeedbackInstance } from "./types.js";
 
 /**
- * Count "active" annotations — everything except `done`. Used for the FAB
- * badge so the visible counter reflects work still pending review/action,
- * not historical resolved items. `done` records remain visible in the
- * drawer (and as markers) but stop inflating the headline count.
+ * Compute `{ todo, review }` counts for the current page. PRO-68 §5 — the FAB
+ * now renders two badges (yellow todo top-right, blue review top-left); `done`
+ * and `question` are not surfaced on the FAB and stay drawer-only. Replies
+ * (`parentId` set) are excluded — `listForPath` already filters them, but the
+ * filter here makes the contract explicit in case future shapes change.
  */
-function countActive(records: readonly AnnotationRecord[]): number {
-  return records.reduce((n, r) => n + ((r.status ?? "todo") !== "done" ? 1 : 0), 0);
+function computeCounts(store: AnnotationStore): { todo: number; review: number } {
+  const records = store.listForPath(window.location.pathname).filter((r) => !r.parentId);
+  let todo = 0;
+  let review = 0;
+  for (const r of records) {
+    const s = r.status ?? "todo";
+    if (s === "todo") todo++;
+    else if (s === "review") review++;
+  }
+  return { todo, review };
 }
 
 let instance: CcmFeedbackInstance | null = null;
@@ -80,7 +89,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       log,
       onChange: () => {
         markers.refresh();
-        fab.updateCount(countActive(store.list()));
+        fab.updateCounts(computeCounts(store));
         drawer.refreshIfOpen();
       },
       // Reply rows arrive via these callbacks instead of onChange so the
@@ -171,7 +180,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(countActive(store.list()));
+    fab.updateCounts(computeCounts(store));
     log("Saved", record.id);
   };
 
@@ -196,7 +205,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(countActive(store.list()));
+    fab.updateCounts(computeCounts(store));
     log("Saved pin", record.id);
   };
 
@@ -221,13 +230,13 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     });
     bus.emit("feedback:saved", record);
     markers.addOne(record);
-    fab.updateCount(countActive(store.list()));
+    fab.updateCounts(computeCounts(store));
     log("Saved area", record.id);
   };
 
-  const pinMode = new PinMode(colors, bus, t, openPopupForElement, shouldIgnore);
-  const coordPinMode = new CoordPinMode(colors, bus, t, onPinCapture, shouldIgnore);
-  const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore);
+  const pinMode = new PinMode(colors, bus, t, openPopupForElement, shouldIgnore, markers);
+  const coordPinMode = new CoordPinMode(colors, bus, t, onPinCapture, shouldIgnore, markers);
+  const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore, markers);
 
   bus.on("export:click", () => {
     const records = store.list();
@@ -259,7 +268,7 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     if (!window.confirm(t("fab.clearConfirm"))) return;
     store.clear();
     markers.refresh();
-    fab.updateCount(0);
+    fab.updateCounts({ todo: 0, review: 0 });
     drawer.refreshIfOpen();
     log("Cleared all annotations");
   });
@@ -270,14 +279,14 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   // count and a delete shrinks the total, neither of which the per-save
   // call sites cover.
   const syncUi = () => {
-    fab.updateCount(countActive(store.list()));
+    fab.updateCounts(computeCounts(store));
     drawer.refreshIfOpen();
   };
   bus.on("feedback:saved", syncUi);
   bus.on("feedback:updated", syncUi);
   bus.on("feedback:deleted", syncUi);
-  // Replies don't affect markers (no marker) or the FAB count (countActive
-  // operates on store.list() which already filters parentId-bearing rows).
+  // Replies don't affect markers (no marker) or the FAB count (computeCounts
+  // operates on listForPath which already filters parentId-bearing rows).
   // drawer.refreshIfOpen() is a no-op today — the drawer only surfaces
   // top-level comments in v1 — but it's the right hook for any future
   // "reply count badge" UI. Cost is one call on a closed drawer.
@@ -291,16 +300,16 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   // refresh once the network fetch completes so other reviewers' comments
   // appear without requiring a page reload.
   markers.refresh();
-  fab.updateCount(countActive(store.list()));
+  fab.updateCounts(computeCounts(store));
   if (cloudStore) {
     const cs = cloudStore;
     void cs.init().then(async () => {
       markers.refresh();
-      fab.updateCount(countActive(store.list()));
+      fab.updateCounts(computeCounts(store));
       const migrated = await migrateLocalToCloud(cs, config.projectName, log);
       if (migrated > 0) {
         markers.refresh();
-        fab.updateCount(countActive(store.list()));
+        fab.updateCounts(computeCounts(store));
       }
     });
   }

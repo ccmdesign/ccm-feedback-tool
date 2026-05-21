@@ -22,6 +22,53 @@ record each handled comment as `review` so a human can verify it.
 Run this end-to-end. Don't ask the user to confirm individual edits unless
 something is genuinely ambiguous. Batch the work and report at the end.
 
+## Comment reference resolution
+
+When the human refers to a comment by number ("comment 67", "#67", "issue 71"),
+resolve it to the row whose `sequence_number = N` AND `project_name = <current
+project>` AND `parent_id IS NULL`. There is exactly one such row; if the
+lookup returns zero or more than one, **halt and ask the human to clarify** —
+do not silently pick one.
+
+Always confirm before acting. Echo the comment body back so the human can
+catch a wrong number before edits land:
+
+> Found #67 — "Header copy should say 'Welcome back' instead of 'Hello'" on
+> /home. Working on it.
+
+Numbers are stable. A previously-deleted #67 stays deleted; the next new
+comment becomes `#N` where `N = max(seq) + 1`, not #67. "Comment #67" always
+refers to the same row for the project's lifetime.
+
+Prefer `record.sequenceNumber` (camelCase from JSON / share URL;
+`sequence_number` from raw PostgREST) over array index for any human-facing
+reference. Replies carry no `sequenceNumber`; never refer to a reply by `#N`.
+
+### Example session
+
+> User: *let's work on comment 67*
+>
+> Skill (internally): `bun run feedback get #67 --project mysite` →
+> resolves UUID, fetches row.
+>
+> Claude: *Found #67 on /pricing — "Make the CTA blue instead of green".
+> Editing the component now.*
+
+### CLI invocations
+
+`bun run feedback` accepts `#N`, bare `N`, or UUID anywhere a comment id is
+taken; `--project` is required for any non-UUID token:
+
+```bash
+bun run feedback get #67 --project mysite
+bun run feedback set-status 67 review --project mysite
+bun run feedback delete #4 --project mysite
+```
+
+`list` output leads with the `#N` column; UUID is the trailing column (still
+present so scripts that parse columns continue to work). Replies render `↳`
+in the `#N` slot.
+
 ## The loop you are closing — read this first
 
 `status` has four values: `todo`, `review`, `done`, `question`.

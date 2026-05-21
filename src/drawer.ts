@@ -3,6 +3,7 @@ import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import { ICON_CLOSE } from "./icons.js";
 import { STATUS_COLORS } from "./popup.js";
+import { createStatusDropdown, type StatusDropdownHandle } from "./status-dropdown.js";
 import { type AnnotationStore, normalizePath } from "./store.js";
 import type { ThemeColors } from "./styles/theme.js";
 import { type AnnotationRecord, FEEDBACK_STATUSES, type FeedbackStatus } from "./types.js";
@@ -36,6 +37,10 @@ export class Drawer {
   private readonly chipButtons = new Map<StatusFilter, HTMLButtonElement>();
   private readonly chipCounts = new Map<StatusFilter, HTMLElement>();
   private readonly chipLabels = new Map<StatusFilter, string>();
+  /** Active per-card status dropdown handles. Re-render destroys all, then
+   * rebuilds — keeps the bus + outside-click listeners from leaking when
+   * cards are torn down. */
+  private readonly cardDropdowns = new Set<StatusDropdownHandle>();
   private readonly onDocumentClick: (e: MouseEvent) => void;
   private readonly onKeydown: (e: KeyboardEvent) => void;
 
@@ -142,6 +147,7 @@ export class Drawer {
     this.root.inert = false;
     document.addEventListener("click", this.onDocumentClick);
     document.addEventListener("keydown", this.onKeydown, true);
+    this.bus.emit("drawer:opened");
     requestAnimationFrame(() => {
       const first = this.root.querySelector<HTMLElement>(
         'button:not([disabled]):not([aria-disabled="true"]), [tabindex]:not([tabindex="-1"])',
@@ -159,6 +165,7 @@ export class Drawer {
     document.removeEventListener("click", this.onDocumentClick);
     document.removeEventListener("keydown", this.onKeydown, true);
     this.bus.emit("navigator:close");
+    this.bus.emit("drawer:closed");
     const target = this.previouslyFocused;
     this.previouslyFocused = null;
     if (target && typeof target.focus === "function") target.focus();
@@ -170,6 +177,8 @@ export class Drawer {
   }
 
   destroy(): void {
+    for (const handle of this.cardDropdowns) handle.destroy();
+    this.cardDropdowns.clear();
     document.removeEventListener("click", this.onDocumentClick);
     document.removeEventListener("keydown", this.onKeydown, true);
     this.root.remove();
@@ -222,6 +231,11 @@ export class Drawer {
   }
 
   private render(): void {
+    // Destroy any per-card dropdowns from the previous render so their bus
+    // listeners + outside-click handlers don't leak when the card DOM is
+    // detached.
+    for (const handle of this.cardDropdowns) handle.destroy();
+    this.cardDropdowns.clear();
     this.listEl.replaceChildren();
 
     const all = this.store.list();
@@ -242,13 +256,12 @@ export class Drawer {
     const currentPage = sorted.filter((r) => normalizePath(r.path) === currentPath);
     const otherPages = sorted.filter((r) => normalizePath(r.path) !== currentPath);
 
-    let n = 0;
     if (currentPage.length > 0) {
       if (otherPages.length > 0) {
         this.listEl.appendChild(this.buildSectionLabel(this.t("drawer.thisPage")));
       }
       for (const record of currentPage) {
-        this.listEl.appendChild(this.buildCard(record, ++n));
+        this.listEl.appendChild(this.buildCard(record));
       }
     }
 
@@ -272,7 +285,7 @@ export class Drawer {
         setLabel();
       });
       for (const record of otherPages) {
-        sublist.appendChild(this.buildCard(record, ++n));
+        sublist.appendChild(this.buildCard(record));
       }
       this.listEl.appendChild(toggle);
       this.listEl.appendChild(sublist);
@@ -295,10 +308,41 @@ export class Drawer {
     return empty;
   }
 
-  private buildCard(record: AnnotationRecord, number: number): HTMLElement {
+  /**
+   * onPick handler for the per-card status dropdown (PRO-68 §6).
+   * - Persists via store.updateStatus (no-op when the store doesn't expose it).
+   * - Mutates record.status in place so subsequent renders see the new value.
+   * - Emits `feedback:updated` so the marker layer, FAB counts, and any other
+   *   subscribers update without us reaching across modules.
+   * - Re-renders the drawer list so the card refreshes color + filter
+   *   membership in place (cards that no longer match the active chip
+   *   disappear; accepted snap behavior).
+   */
+  private handleStatusPick(record: AnnotationRecord, next: FeedbackStatus, dropdown: StatusDropdownHandle): void {
+    if (next === record.status) return;
+    this.store.updateStatus?.(record.id, next);
+    record.status = next;
+    // Update the dropdown's pill color immediately so the visual matches
+    // even when the next render is suppressed (filter no-op, no-op store).
+    dropdown.setCurrent(next);
+    this.bus.emit("feedback:updated", record);
+    this.render();
+  }
+
+  private buildCard(record: AnnotationRecord): HTMLElement {
     const status: FeedbackStatus = record.status ?? "todo";
     const sc = STATUS_COLORS[status];
     const isCurrentPage = normalizePath(record.path) === normalizePath(window.location.pathname);
+    // PRO-68 §8 — display the canonical persisted sequence number. Replies
+    // (`parentId` set) carry no number; the drawer renders only top-level
+    // comments in v1, so we render `↳` defensively for any reply that
+    // slips through, matching the CLI's reply marker. Pre-migration rows
+    // without `sequenceNumber` show `?` until the one-time backfill runs.
+    const label = record.parentId
+      ? "↳"
+      : typeof record.sequenceNumber === "number"
+        ? String(record.sequenceNumber)
+        : "?";
 
     const card = el("button", { class: "sp-card", type: "button" }) as HTMLButtonElement;
     card.style.textAlign = "left";
@@ -316,7 +360,7 @@ export class Drawer {
     // park in the right-edge orphan lane). Cross-page rows navigate to
     // the recorded URL so the reviewer lands on the page where that
     // comment lives. The legacy "can't locate" disabled state is retired.
-    card.setAttribute("aria-label", this.t("drawer.rowAria", { n: number, message: truncated }));
+    card.setAttribute("aria-label", this.t("drawer.rowAria", { n: label, message: truncated }));
     card.addEventListener("click", () => {
       if (isCurrentPage) {
         this.jump(record.id);
@@ -330,16 +374,30 @@ export class Drawer {
 
     const headerRow = el("div", { class: "sp-card-header" });
     const num = el("span", { class: "sp-card-number" });
-    setText(num, `#${number}`);
-    const badge = el("span", {
-      class: "sp-badge",
-      style: `background:${sc.bg};color:${sc.fg};border:1px solid ${sc.border};`,
+    setText(num, `#${label}`);
+    // PRO-68 §6 — drawer cards expose the shared status dropdown so reviewers
+    // can sweep statuses without leaving the drawer. Fallback to a read-only
+    // pill when the store can't persist (paranoia — both shipped stores do).
+    const canUpdate = typeof this.store.updateStatus === "function";
+    const dropdown = createStatusDropdown({
+      current: status,
+      colors: this.colors,
+      t: this.t,
+      readOnly: !canUpdate,
+      onPick: (next) => this.handleStatusPick(record, next, dropdown),
     });
-    setText(badge, this.t(`status.${status}`).toUpperCase());
+    this.cardDropdowns.add(dropdown);
+    // The card itself is a <button> that jumps to the marker — every click
+    // inside the dropdown must stopPropagation so the card-jump doesn't
+    // fire when the reviewer is just changing status. Belt-and-braces:
+    // the trigger/options already stopPropagation internally, but guard at
+    // the dropdown root for any future menu chrome we might add.
+    dropdown.root.addEventListener("click", (e) => e.stopPropagation());
+    dropdown.root.addEventListener("keydown", (e) => e.stopPropagation());
     const date = el("span", { class: "sp-card-date" });
     setText(date, new Date(record.createdAt).toLocaleDateString());
     headerRow.appendChild(num);
-    headerRow.appendChild(badge);
+    headerRow.appendChild(dropdown.root);
     headerRow.appendChild(date);
 
     const message = el("div", { class: "sp-card-message" });

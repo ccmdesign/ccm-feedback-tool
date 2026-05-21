@@ -15,7 +15,7 @@ Local mode is the default. You opt in to cloud mode by passing `data-supabase-ur
 
 ## Schema
 
-Cloud mode requires six migrations applied in order: `0001_init.sql`, `0002_status_pin_area.sql`, `0003_realtime.sql`, `0004_status_review.sql`, `0005_repair_rls.sql`, `0006_replies.sql`. Each is idempotent. `0005` repairs the anon RLS policies from `0001` (some live projects had `anon update` missing or altered); `0006` adds the self-referential `parent_id` FK that powers comment replies. See [self-hosting.md](self-hosting.md#step-2--run-the-migrations) for the full list and how to apply them.
+Cloud mode requires eight migrations applied in order: `0001_init.sql`, `0002_status_pin_area.sql`, `0003_realtime.sql`, `0004_status_review.sql`, `0005_repair_rls.sql`, `0006_replies.sql`, `0007_sequence_number.sql`, `0008_sequence_unique.sql`. Each is idempotent. `0005` repairs the anon RLS policies from `0001` (some live projects had `anon update` missing or altered); `0006` adds the self-referential `parent_id` FK that powers comment replies; `0007` adds the persisted `sequence_number` column + BEFORE INSERT trigger that maintains the per-project `#N` identifier; `0008` hardens that trigger against concurrent INSERTs (advisory transaction lock per `project_name`) and adds a unique partial index `(project_name, sequence_number) WHERE parent_id IS NULL` as a safety net. See [self-hosting.md](self-hosting.md#step-2--run-the-migrations) for the full list and how to apply them.
 
 ## How it works
 
@@ -126,3 +126,8 @@ const local = isLocalHost(window.location.hostname);
 | Network panel: requests to `qnkvkumtssihbjmocbtv.supabase.co` | That's the maintainer's demo project. You're using the public CDN build with `data-supabase-*` unset — local mode is on, the URL probably comes from another widget. |
 
 Enable `data-debug="true"` on the script tag to log every cloud op to the console.
+
+## Known limitations
+
+- **Sequence-number race window** (PRO-68 §8). The `#N` identifier on every top-level comment is maintained by a BEFORE INSERT trigger that reads `max(sequence_number) + 1` partitioned by `project_name`. Two concurrent INSERTs for the same project may briefly read the same `max()` and assign the same `#N`. v1 accepts this — no `unique (project_name, sequence_number)` constraint is in place. Under widget-scale traffic (single-digit concurrent reviewers, hundreds of comments per project) the collision hasn't been observed. If duplicates appear in production, add the unique constraint deferrable initially deferred in a follow-up migration.
+- **`migrateFromLocal` drops client sequence numbers.** Pre-PRO-68 localStorage rows were render-indexed; the migration POST strips `sequence_number` so the server trigger assigns fresh values that interleave correctly with any existing cloud rows.

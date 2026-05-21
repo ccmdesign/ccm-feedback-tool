@@ -1,25 +1,14 @@
+import { Z_INDEX_MAX } from "./constants.js";
 import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
-import {
-  ICON_AREA,
-  ICON_CHAT,
-  ICON_CLOSE,
-  ICON_EYE,
-  ICON_EYE_OFF,
-  ICON_LINK,
-  ICON_PIN,
-  ICON_SITEPING,
-  ICON_TARGET,
-  ICON_TRASH,
-} from "./icons.js";
+import { ICON_AREA, ICON_CLOSE, ICON_LINK, ICON_PIN, ICON_SITEPING, ICON_TARGET, ICON_TRASH } from "./icons.js";
+import { STATUS_COLORS } from "./popup.js";
 
 interface RadialItem {
-  id: "target" | "pin" | "area" | "toggle" | "navigator" | "export" | "copyUrl" | "clear";
+  id: "target" | "pin" | "area" | "export" | "copyUrl" | "clear";
   icon: string;
-  iconAlt?: string;
   label: string;
-  direction: "up" | "left";
   /** When true the item renders disabled (greyed, no bus emit) with a tooltip. */
   disabled?: boolean;
   /** `title`/tooltip text shown when the item is disabled. */
@@ -28,55 +17,78 @@ interface RadialItem {
 
 const ITEM_GAP = 54;
 
+/** Capture modes whose `*:start` / `*:end` events drive `setModeActive`. */
+type CaptureMode = "target" | "pin" | "area";
+
 /**
- * FAB with 3-item radial menu: pin (start pin mode), toggle (show/hide
- * pins), export (download JSON). Click outside to dismiss.
+ * FAB with a six-item radial menu in a single upward fan: target, pin, area,
+ * export, copyUrl, clear. The eye visibility toggle lives on the in-mode
+ * capture toolbars now, and the chat/navigator item is replaced by the
+ * dblclick-opens-drawer gesture (PRO-68 §1).
+ *
+ * Single-click toggles the radial open/closed. Double-click fires
+ * `navigator:open` to open the drawer without expanding the radial. Capture
+ * mode clicks (target / pin / area) leave the radial open so reviewers can
+ * drop multiple comments back-to-back; one-shot actions (export, copyUrl,
+ * clear) still close the radial.
  */
-type OpenMode = "closed" | "up" | "all";
+type OpenMode = "closed" | "open";
 
 export class Fab {
   private root: HTMLElement;
   private fab: HTMLButtonElement;
   private radialContainer: HTMLElement;
-  private countBadge: HTMLElement | null = null;
+  /** Yellow todo badge — top-right. */
+  private todoBadge: HTMLElement | null = null;
+  /** Blue review badge — top-left. */
+  private reviewBadge: HTMLElement | null = null;
+  /** Saved base aria-label so we can re-append count copy without leaking it. */
+  private readonly baseAriaLabel: string;
   private mode: OpenMode = "closed";
-  private annotationsVisible = true;
   private readonly items: RadialItem[];
   private readonly onDocumentClick: (e: MouseEvent) => void;
+  /** Active capture mode while one is in flight; null otherwise. Read by the
+   * drawer-opened subscriber so the dblclick gesture cleanly cancels an
+   * in-flight capture per spec §4 edge case. */
+  private activeMode: CaptureMode | null = null;
+  /** Saved z-index for the widget host so `setModeActive(false)` restores it. */
+  private savedHostZIndex = "";
+  private readonly hostEl: HTMLElement;
+  /** Bus unsubscribe handles — drained in `destroy()`. */
+  private readonly unsubs: Array<() => void> = [];
 
   constructor(
     shadowRoot: ShadowRoot,
     private readonly bus: EventBus<WidgetEvents>,
-    private readonly t: TFunction,
+    t: TFunction,
     /** True when the widget persists to Supabase. The Copy-URL item is only
      * functional in cloud mode (the share endpoint serves cloud rows). */
     private readonly cloudMode = false,
   ) {
+    this.hostEl = shadowRoot.host as HTMLElement;
     this.items = [
-      { id: "target", icon: ICON_TARGET, label: t("fab.targetLabel"), direction: "up" },
-      { id: "toggle", icon: ICON_EYE, iconAlt: ICON_EYE_OFF, label: t("fab.toggleOn"), direction: "up" },
-      { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel"), direction: "up" },
-      { id: "area", icon: ICON_AREA, label: t("fab.areaLabel"), direction: "up" },
-      { id: "navigator", icon: ICON_CHAT, label: t("fab.navigatorLabel"), direction: "up" },
-      { id: "export", icon: EXPORT_ICON, label: t("fab.export"), direction: "left" },
+      { id: "target", icon: ICON_TARGET, label: t("fab.targetLabel") },
+      { id: "pin", icon: ICON_PIN, label: t("fab.pinLabel") },
+      { id: "area", icon: ICON_AREA, label: t("fab.areaLabel") },
+      { id: "export", icon: EXPORT_ICON, label: t("fab.export") },
       {
         id: "copyUrl",
         icon: ICON_LINK,
         label: t("fab.copyUrl"),
-        direction: "left",
         // Cloud mode only — in localStorage mode there is nothing server-side
         // to serve, so the item is visibly disabled with an explanatory
         // tooltip and Export JSON stays as the always-available fallback.
         ...(this.cloudMode ? {} : { disabled: true, disabledTitle: t("fab.copyUrlLocalOnly") }),
       },
-      { id: "clear", icon: ICON_TRASH, label: t("fab.clear"), direction: "left" },
+      { id: "clear", icon: ICON_TRASH, label: t("fab.clear") },
     ];
 
     this.fab = document.createElement("button");
     this.fab.className = "sp-fab sp-fab--bottom-right sp-anim-fab-in";
     this.fab.style.position = "fixed";
     this.fab.appendChild(parseSvg(ICON_SITEPING));
-    this.fab.setAttribute("aria-label", t("fab.aria"));
+    this.baseAriaLabel = t("fab.aria");
+    this.fab.setAttribute("aria-label", this.baseAriaLabel);
     this.fab.setAttribute("aria-expanded", "false");
     this.fab.addEventListener("click", (e) => {
       if (e.detail >= 2) return;
@@ -84,7 +96,7 @@ export class Fab {
     });
     this.fab.addEventListener("dblclick", (e) => {
       e.preventDefault();
-      this.openAll();
+      this.bus.emit("navigator:open");
     });
 
     this.radialContainer = document.createElement("div");
@@ -99,7 +111,6 @@ export class Fab {
       btn.setAttribute("role", "menuitem");
       btn.setAttribute("aria-label", item.label);
       btn.dataset.itemId = item.id;
-      btn.dataset.direction = item.direction;
       if (item.disabled) {
         btn.setAttribute("aria-disabled", "true");
         btn.dataset.disabled = "true";
@@ -110,10 +121,8 @@ export class Fab {
 
       const label = document.createElement("span");
       label.className = "sp-radial-label";
-      label.style.cssText =
-        item.direction === "up"
-          ? "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;"
-          : "position:absolute;bottom:54px;left:50%;transform:translateX(-50%);white-space:nowrap;";
+      // All items now fan upward — labels sit to the left.
+      label.style.cssText = "position:absolute;right:54px;top:50%;transform:translateY(-50%);white-space:nowrap;";
       label.textContent = item.label;
       btn.appendChild(label);
 
@@ -130,9 +139,8 @@ export class Fab {
     this.root.appendChild(this.fab);
     shadowRoot.appendChild(this.root);
 
-    const host = shadowRoot.host;
     this.onDocumentClick = (e) => {
-      if (this.mode !== "closed" && !e.composedPath().includes(host)) this.close();
+      if (this.mode !== "closed" && !e.composedPath().includes(this.hostEl)) this.close();
     };
     document.addEventListener("click", this.onDocumentClick);
 
@@ -144,52 +152,145 @@ export class Fab {
     };
     this.fab.addEventListener("keydown", handleEscape);
     this.radialContainer.addEventListener("keydown", handleEscape);
+
+    // Bus subscriptions: drawer-shift, capture-mode z-index lift.
+    this.unsubs.push(
+      this.bus.on("drawer:opened", () => {
+        this.setDrawerOpen(true);
+        // Spec §4 edge case: cancel any in-flight capture mode when the drawer
+        // opens via dblclick. Without this the capture overlay/toolbar sits on
+        // top of the drawer and visually clobbers it.
+        if (this.activeMode) {
+          this.bus.emit(`${this.activeMode}:end`);
+        }
+      }),
+      this.bus.on("drawer:closed", () => this.setDrawerOpen(false)),
+      this.bus.on("target:start", () => this.onModeStart("target")),
+      this.bus.on("pin:start", () => this.onModeStart("pin")),
+      this.bus.on("area:start", () => this.onModeStart("area")),
+      this.bus.on("target:end", () => this.onModeEnd("target")),
+      this.bus.on("pin:end", () => this.onModeEnd("pin")),
+      this.bus.on("area:end", () => this.onModeEnd("area")),
+    );
   }
 
-  updateCount(count: number): void {
-    if (count <= 0) {
-      this.countBadge?.remove();
-      this.countBadge = null;
+  /**
+   * Render up to two badges on the FAB: yellow `todo` top-right + blue
+   * `review` top-left (PRO-68 §5). Each badge hides when its count is zero.
+   * Both share a single `aria-label` on the FAB host so screen readers
+   * announce both numbers without competing live regions.
+   */
+  updateCounts(counts: { todo: number; review: number }): void {
+    this.todoBadge = this.renderBadge(this.todoBadge, counts.todo, "todo");
+    this.reviewBadge = this.renderBadge(this.reviewBadge, counts.review, "review");
+
+    if (counts.todo <= 0 && counts.review <= 0) {
+      this.fab.setAttribute("aria-label", this.baseAriaLabel);
       return;
     }
-    if (!this.countBadge) {
-      this.countBadge = document.createElement("span");
-      this.countBadge.className = "sp-fab-badge";
-      this.countBadge.setAttribute("role", "status");
-      this.countBadge.setAttribute("aria-live", "polite");
-      this.fab.appendChild(this.countBadge);
+    const parts: string[] = [];
+    if (counts.todo > 0) parts.push(`${counts.todo} todo`);
+    if (counts.review > 0) parts.push(`${counts.review} review`);
+    this.fab.setAttribute("aria-label", `${this.baseAriaLabel}, ${parts.join(", ")}`);
+  }
+
+  /** Lazily create / remove a status badge node. */
+  private renderBadge(current: HTMLElement | null, count: number, kind: "todo" | "review"): HTMLElement | null {
+    if (count <= 0) {
+      current?.remove();
+      return null;
     }
-    setText(this.countBadge, count > 99 ? "99+" : String(count));
+    let node = current;
+    if (!node) {
+      node = document.createElement("span");
+      // Both badges share the existing `.sp-fab-badge` chrome; the `--left`
+      // modifier flips its positioning for the review (blue) badge.
+      node.className = kind === "todo" ? "sp-fab-badge" : "sp-fab-badge sp-fab-badge--left";
+      // aria-hidden on the badge itself — the combined string lives on the
+      // FAB button's aria-label so SR users hear "Feedback, N todo, M review"
+      // as one announcement.
+      node.setAttribute("aria-hidden", "true");
+      const sc = STATUS_COLORS[kind];
+      node.style.background = sc.border;
+      node.style.color = "#fff";
+      this.fab.appendChild(node);
+    }
+    setText(node, count > 99 ? "99+" : String(count));
+    return node;
+  }
+
+  /** Toggle the `.sp-fab--drawer-open` modifier on the FAB + radial container
+   * so they shift left while the drawer is open. The actual `right` offset is
+   * driven by CSS — see `src/styles/base.ts`. */
+  setDrawerOpen(open: boolean): void {
+    this.fab.classList.toggle("sp-fab--drawer-open", open);
+    this.radialContainer.classList.toggle("sp-radial--drawer-open", open);
+  }
+
+  /** Raise the widget shadow host above the capture overlay (`Z_INDEX_MAX - 1`)
+   * so the radial stays clickable during an active mode. Restored on exit.
+   *
+   * Re-entrance safe: if `setModeActive(true)` fires while the host is already
+   * lifted (e.g. a second `*:start` event arrives without a matching `*:end`,
+   * or a future bus path that emits overlapping starts), the saved z-index is
+   * preserved — we only snapshot `savedHostZIndex` on the first true-call.
+   * Symmetrically, a redundant `setModeActive(false)` while no mode is active
+   * is a no-op rather than re-applying `savedHostZIndex` over a fresh value
+   * the host may have set in the meantime. This keeps z-index restoration
+   * load-bearing even if start/end pairing drifts.
+   */
+  setModeActive(active: boolean): void {
+    if (active) {
+      // Snapshot ONLY on the transition from no-mode → mode. Without this
+      // guard, a second `*:start` (re-entry) would read the already-lifted
+      // `Z_INDEX_MAX` value back into `savedHostZIndex`, and the next end
+      // would "restore" the host to Z_INDEX_MAX forever.
+      if (this.activeMode === null) {
+        this.savedHostZIndex = this.hostEl.style.zIndex;
+      }
+      this.hostEl.style.zIndex = String(Z_INDEX_MAX);
+    } else {
+      // Only restore when there's something to restore. A spurious end with
+      // no active mode would otherwise stomp the host's current z-index
+      // with whatever happened to be in `savedHostZIndex` (possibly an
+      // empty string from construction time).
+      if (this.activeMode === null) return;
+      this.hostEl.style.zIndex = this.savedHostZIndex;
+    }
+  }
+
+  private onModeStart(mode: CaptureMode): void {
+    // Re-entrance: if a mode is already active, ignore the second start. The
+    // existing mode's lift is in place; clobbering `activeMode` here would
+    // make the eventual `*:end` for the original mode no-op (because the
+    // guard in `onModeEnd` checks `activeMode === mode`), leaving the host
+    // lifted permanently. Capture modes are mutually exclusive by design;
+    // the second start is a stray event, not a mode switch.
+    if (this.activeMode !== null) return;
+    this.setModeActive(true);
+    this.activeMode = mode;
+  }
+
+  private onModeEnd(mode: CaptureMode): void {
+    if (this.activeMode === mode) {
+      this.setModeActive(false);
+      this.activeMode = null;
+    }
   }
 
   private toggle(): void {
-    if (this.mode === "closed") this.openMode("up");
+    if (this.mode === "closed") this.openRadial();
     else this.close();
   }
 
-  private openAll(): void {
-    this.openMode("all");
-  }
-
-  private openMode(target: "up" | "all"): void {
-    this.mode = target;
+  private openRadial(): void {
+    this.mode = "open";
     this.setFabIcon(ICON_CLOSE);
     this.fab.setAttribute("aria-expanded", "true");
     const buttons = this.radialContainer.querySelectorAll<HTMLButtonElement>(".sp-radial-item");
-    const slot: Record<"up" | "left", number> = { up: 0, left: 0 };
-    buttons.forEach((btn) => {
-      const dir = (btn.dataset.direction as "up" | "left") ?? "up";
-      const visible = target === "all" || dir === "up";
-      if (!visible) {
-        btn.style.transform = "translate(0, 0) scale(0.8)";
-        btn.classList.remove("sp-radial-item--open");
-        return;
-      }
-      const offset = 16 + ITEM_GAP * (slot[dir] + 1);
-      slot[dir] += 1;
-      const tx = dir === "left" ? -offset : 0;
-      const ty = dir === "up" ? -offset : 0;
-      btn.style.transform = `translate(${tx}px, ${ty}px) scale(1)`;
+    buttons.forEach((btn, i) => {
+      const offset = 16 + ITEM_GAP * (i + 1);
+      btn.style.transform = `translate(0, ${-offset}px) scale(1)`;
       btn.classList.add("sp-radial-item--open");
     });
     requestAnimationFrame(() => {
@@ -210,14 +311,18 @@ export class Fab {
   }
 
   private setFabIcon(svgStr: string): void {
-    const badge = this.countBadge;
+    const todo = this.todoBadge;
+    const review = this.reviewBadge;
     this.fab.replaceChildren(parseSvg(svgStr));
-    if (badge) this.fab.appendChild(badge);
+    if (todo) this.fab.appendChild(todo);
+    if (review) this.fab.appendChild(review);
   }
 
   private handleItemClick(id: RadialItem["id"]): void {
-    this.close();
     switch (id) {
+      // Capture-mode entries — leave the radial open so the reviewer can drop
+      // multiple comments back-to-back. The radial sits *above* the mode
+      // overlay because `setModeActive(true)` lifts the host z-index.
       case "target":
         this.bus.emit("target:start");
         break;
@@ -227,28 +332,17 @@ export class Fab {
       case "area":
         this.bus.emit("area:start");
         break;
-      case "toggle": {
-        this.annotationsVisible = !this.annotationsVisible;
-        this.bus.emit("annotations:toggle", this.annotationsVisible);
-        const btn = this.radialContainer.querySelector<HTMLButtonElement>('[data-item-id="toggle"]');
-        if (btn) {
-          const svg = btn.querySelector("svg");
-          svg?.remove();
-          btn.insertBefore(parseSvg(this.annotationsVisible ? ICON_EYE : ICON_EYE_OFF), btn.firstChild);
-          btn.setAttribute("aria-label", this.t(this.annotationsVisible ? "fab.toggleOn" : "fab.toggleOff"));
-        }
-        break;
-      }
-      case "navigator":
-        this.bus.emit("navigator:open");
-        break;
+      // One-shot terminal actions — close the radial.
       case "export":
+        this.close();
         this.bus.emit("export:click");
         break;
       case "copyUrl":
+        this.close();
         this.bus.emit("copyUrl:click");
         break;
       case "clear":
+        this.close();
         this.bus.emit("clear:click");
         break;
     }
@@ -256,6 +350,10 @@ export class Fab {
 
   destroy(): void {
     document.removeEventListener("click", this.onDocumentClick);
+    for (const off of this.unsubs) off();
+    this.unsubs.length = 0;
+    // Restore host z-index if we lifted it.
+    if (this.activeMode) this.setModeActive(false);
     this.root.remove();
   }
 }

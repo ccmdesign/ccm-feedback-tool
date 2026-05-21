@@ -75,18 +75,23 @@ Usage:
 
 Commands:
   list [--project P] [--status S] [--path PATH]
-        List annotations (newest first). Optional filters.
-  get <id>
-        Print one annotation as pretty JSON.
+        List annotations (newest first). Output format:
+          #N      STATUS    PATH                  MESSAGE…  UUID
+          ↳       (empty)   (empty)               AUTHOR: REPLY…  UUID
+        Replies render with ↳ in the #N column.
+  get <id> [--project P]
+        Print one annotation as pretty JSON. <id> accepts UUID, "#N", or
+        bare integer; --project is required for non-UUID tokens.
   create --project P --message M --page-url U [--path PATH] [--status S] [--author A]
         Insert a minimal annotation. status defaults to "todo".
         --page-url is the annotated page's URL (distinct from the Supabase
         --url config flag, which always points at the Supabase project).
-  set-status <id> <todo|review|done|question>
+  set-status <id> <todo|review|done|question> [--project P]
         Update an annotation's status. PRIMARY command for the agent loop.
         Agents pass "review" only — never "done" (human-only transition).
-  delete <id>
-        Delete an annotation.
+        <id> accepts UUID, "#N", or bare integer (see get for the rule).
+  delete <id> [--project P]
+        Delete an annotation. <id> accepts UUID, "#N", or bare integer.
 
 Config (both required, same for every command):
   SUPABASE_URL / SUPABASE_ANON_KEY env vars, or --url / --key flags.
@@ -150,6 +155,40 @@ interface AnnotationRow {
   parent_id?: string | null;
   author_name?: string | null;
   created_at?: string | null;
+  sequence_number?: number | null;
+}
+
+/** PRO-68 §8 — accept UUID, `#N`, or bare `N` anywhere a comment id is taken.
+ * UUIDs pass through unchanged. Integer tokens look up the row whose
+ * `(project_name, sequence_number, parent_id IS NULL)` matches. Errors clearly
+ * on ambiguous / missing matches and when `--project` is absent for a
+ * non-UUID token. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveAnnotationId(
+  endpoint: string,
+  headers: Record<string, string>,
+  token: string,
+  project: string | undefined,
+): Promise<string> {
+  const trimmed = token.startsWith("#") ? token.slice(1) : token;
+  if (UUID_RE.test(trimmed)) return trimmed;
+  if (!/^\d+$/.test(trimmed)) {
+    fail(`unrecognized id "${token}" — expected UUID, #N, or bare integer.`);
+  }
+  if (!project) {
+    fail(`--project is required when resolving by sequence number (got "${token}").`);
+  }
+  const seq = Number.parseInt(trimmed, 10);
+  const url = `${endpoint}?project_name=eq.${encodeURIComponent(project)}&sequence_number=eq.${seq}&parent_id=is.null&select=id`;
+  const rows = (await request(url, { headers })) as Array<{ id: string }>;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    fail(`no comment #${seq} in project ${project}`);
+  }
+  if (rows.length > 1) {
+    fail(`ambiguous: ${rows.length} rows match #${seq} in project ${project} — schema invariant violated`);
+  }
+  return (rows[0] as { id: string }).id;
 }
 
 async function cmdList(
@@ -185,15 +224,22 @@ async function cmdList(
   for (const arr of replies.values()) {
     arr.sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
   }
+  // PRO-68 §8 — lead with `#N` so the human-grokkable identifier is the
+  // primary column. UUID is demoted to the trailing slot (still present so
+  // scripts that parse the columns keep working). Replies render `↳` in
+  // place of `#N` to mirror the drawer card affordance.
   for (const r of topLevel) {
+    const seq = typeof r.sequence_number === "number" ? `#${r.sequence_number}` : "#?";
     const status = (r.status ?? "todo").padEnd(8);
     const path = (r.path ?? "").padEnd(20);
-    console.log(`${r.id}  ${status}  ${path}  ${truncate(r.message ?? "", 60)}`);
+    console.log(`${seq.padEnd(6)}  ${status}  ${path}  ${truncate(r.message ?? "", 60)}  ${r.id}`);
     const children = replies.get(r.id);
     if (children) {
       for (const c of children) {
         const author = (c.author_name ?? "Anonymous").trim() || "Anonymous";
-        console.log(`  ↳ ${author}: ${truncate(c.message ?? "", 70)}`);
+        console.log(
+          `${"↳".padEnd(6)}  ${"".padEnd(8)}  ${"".padEnd(20)}  ${author}: ${truncate(c.message ?? "", 60)}  ${c.id}`,
+        );
       }
     }
   }
@@ -309,20 +355,26 @@ async function main(): Promise<void> {
       await cmdList(endpoint, headers, flags);
       break;
     case "get": {
-      const id = positionals[0];
-      if (!id) fail("get requires <id>");
+      const token = positionals[0];
+      if (!token) fail("get requires <id> (UUID, #N, or bare integer)");
+      const id = await resolveAnnotationId(endpoint, headers, token, flags.project);
       await cmdGet(endpoint, headers, id);
       break;
     }
     case "create":
       await cmdCreate(endpoint, headers, flags);
       break;
-    case "set-status":
-      await cmdSetStatus(endpoint, headers, positionals);
+    case "set-status": {
+      const [token, status] = positionals;
+      if (!token || !status) fail("set-status requires <id> <todo|review|done|question>");
+      const id = await resolveAnnotationId(endpoint, headers, token, flags.project);
+      await cmdSetStatus(endpoint, headers, [id, status]);
       break;
+    }
     case "delete": {
-      const id = positionals[0];
-      if (!id) fail("delete requires <id>");
+      const token = positionals[0];
+      if (!token) fail("delete requires <id> (UUID, #N, or bare integer)");
+      const id = await resolveAnnotationId(endpoint, headers, token, flags.project);
       await cmdDelete(endpoint, headers, id);
       break;
     }
