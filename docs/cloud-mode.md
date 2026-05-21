@@ -13,6 +13,10 @@ Cloud mode persists annotations to a Supabase Postgres table and streams cross-b
 
 Local mode is the default. You opt in to cloud mode by passing `data-supabase-url` + `data-supabase-key`.
 
+## Schema
+
+Cloud mode requires six migrations applied in order: `0001_init.sql`, `0002_status_pin_area.sql`, `0003_realtime.sql`, `0004_status_review.sql`, `0005_repair_rls.sql`, `0006_replies.sql`. Each is idempotent. `0005` repairs the anon RLS policies from `0001` (some live projects had `anon update` missing or altered); `0006` adds the self-referential `parent_id` FK that powers comment replies. See [self-hosting.md](self-hosting.md#step-2--run-the-migrations) for the full list and how to apply them.
+
 ## How it works
 
 The widget speaks **raw PostgREST + Realtime** — no `@supabase/supabase-js` SDK. This keeps the bundle small (~30 KB minified) and avoids version drift.

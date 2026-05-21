@@ -17,6 +17,8 @@
 #   supabase/migrations/0002_status_pin_area.sql
 #   supabase/migrations/0003_realtime.sql
 #   supabase/migrations/0004_status_review.sql
+#   supabase/migrations/0005_repair_rls.sql
+#   supabase/migrations/0006_replies.sql
 #
 # All migrations are idempotent (CREATE TABLE IF NOT EXISTS, etc.) — re-running
 # is safe. Optional hardening migrations live in supabase/migrations-optional/

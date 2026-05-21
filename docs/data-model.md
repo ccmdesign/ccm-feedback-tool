@@ -52,6 +52,10 @@ interface AnnotationRecord {
 
   // Captured DOM context (pin / area kinds — for handoff to AI agents or devs)
   capturedElements?: CapturedElement[];
+
+  // Reply pointer (see "Replies" section below) — set means this record is a
+  // reply to the parent comment; undefined means top-level work item.
+  parentId?: string;
 }
 
 interface CapturedElement {
@@ -81,6 +85,29 @@ The `review` status closes the agent loop without letting the agent complete its
 | `area`   | Viewport rectangle      | `areaX/areaY/areaW/areaH`                  | "This whole hero section needs to breathe more."          |
 
 `pin` and `area` kinds populate `capturedElements` with snapshots of whatever DOM was under/inside the marker at capture time, so a developer (or an AI agent) reading the export still has DOM context even though the pin isn't anchored to a specific element.
+
+## Replies (`parentId`)
+
+A **reply** is an `AnnotationRecord` where `parentId` is set — pointing at the parent comment's `id`. Replies are degenerate rows: identity + body fields populated, every spatial / lifecycle field at its zero-value default. Specifically:
+
+- `url` and `path` mirror the parent's values verbatim (the DB column is `NOT NULL`, and reply rows are never path-filtered for rendering).
+- Anchor fields (`cssSelector`, `xpath`, `textSnippet`, `elementTag`, `elementId`, `textPrefix`, `textSuffix`, `fingerprint`, `neighborText`) are empty strings.
+- Rect fields (`xPct`, `yPct`, `wPct`, `hPct`) are `0`.
+- `status` and `kind` are unset — they are **meaningless for replies** and consumers must not read them from a reply row.
+- `pinX/pinY`, `areaX/areaY/areaW/areaH`, `capturedElements` are unset.
+
+Replies live in the same `ccm-feedback:<projectName>` localStorage array and the same `ccm_widget_annotations` Postgres table as comments. The DB enforces the parent pointer via a self-referential FK with `on delete cascade` (`supabase/migrations/0006_replies.sql`); deleting a parent removes every reply server-side and emits one realtime `DELETE` event per cascaded row.
+
+### Grouping rule for any consumer
+
+> **Reply rows are never standalone work items.** Every export consumer (the `apply-ccm-feedback` skill, `scripts/feedback.ts`, the Netlify `/feedback` endpoint, third-party tooling) MUST group rows by `parentId`:
+>
+> - `parentId` undefined / null → top-level comment, a work item to source-map and act on.
+> - `parentId` set → a reply, folded into its parent's thread as conversation context.
+
+The widget itself enforces this in `Store.list()` / `Store.listForPath()` and `CloudStore.list()` / `CloudStore.listForPath()` — both apply a `!r.parentId` filter so replies never reach the marker layer or the drawer. `listReplies(parentId)` is the dedicated read path for thread rendering.
+
+See [`docs/replies.md`](replies.md) for the full design rationale and the agent re-engagement loop.
 
 ## URL sanitization
 
