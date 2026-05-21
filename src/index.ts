@@ -88,6 +88,10 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
       // to feedback:replied via the bus and re-renders its thread in place.
       onReply: (record) => bus.emit("feedback:replied", record),
       onReplyDeleted: (id) => bus.emit("feedback:deleted", id),
+      // PRO-67: realtime UPDATEs (status flips, drag-relocate writes from
+      // other tabs) fire a feedback:updated event so host integrations see
+      // remote mutations with the same surface as local ones.
+      onUpdated: (record) => bus.emit("feedback:updated", record),
     });
     store = cloudStore;
     log("Cloud mode enabled", { url: config.supabaseUrl });
