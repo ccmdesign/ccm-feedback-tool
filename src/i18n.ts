@@ -39,6 +39,8 @@ const STRINGS: Record<string, string> = {
   "marker.popover.delete": "Delete",
   "marker.popover.close": "Close",
   "marker.popover.deleteConfirm": "Delete this comment? This cannot be undone.",
+  "marker.popover.statusAria": "Change status",
+  "marker.popover.statusMenuAria": "Statuses",
   "marker.replies.heading": "Replies",
   "marker.reply.delete": "Delete reply",
   "marker.reply.placeholder": "Write a reply…",

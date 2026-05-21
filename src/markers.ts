@@ -7,6 +7,7 @@ import { el, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import { STATUS_COLORS } from "./popup.js";
+import { createStatusDropdown, type StatusDropdownHandle } from "./status-dropdown.js";
 import type { AnnotationStore, UpdateAnchorInput } from "./store.js";
 import type { ThemeColors } from "./styles/theme.js";
 import type { AnchorData, AnnotationRecord, FeedbackStatus } from "./types.js";
@@ -55,6 +56,10 @@ export class MarkerManager {
    * page. */
   private includeDone = false;
   private popover: HTMLElement | null = null;
+  /** Status dropdown handle for the currently open popover. Null when no
+   * popover is open (or the open popover suppressed the dropdown because
+   * the store doesn't expose updateStatus). */
+  private popoverStatusDropdown: StatusDropdownHandle | null = null;
   /** Off-handlers for bus subscriptions opened during openPopover. */
   private popoverDisposers: Array<() => void> = [];
   private repositionTimer: number | null = null;
@@ -816,17 +821,19 @@ export class MarkerManager {
     setText(meta, `${author} · ${new Date(record.createdAt).toLocaleString()}`);
 
     const status: FeedbackStatus = record.status ?? "todo";
-    const sc = STATUS_COLORS[status];
-    const statusPill = el("span", {
-      style: `
-        display:inline-block;padding:2px 10px;border-radius:9999px;
-        font-size:10px;font-weight:600;letter-spacing:0.02em;
-        background:${sc.bg};color:${sc.fg};border:1px solid ${sc.border};
-        margin-right:6px;cursor:pointer;
-      `,
+    // PRO-67: replace the cycle-on-click pill with a proper combobox
+    // dropdown. The dropdown is read-only when the store can't persist
+    // status changes (e.g. tests passing a stripped store). Caller owns
+    // store write, bus emit, optimistic mutation, and marker recolor.
+    const readOnly = typeof this.store.updateStatus !== "function";
+    const dropdown = createStatusDropdown({
+      current: status,
+      colors: this.colors,
+      t: this.t,
+      readOnly,
+      onPick: (next) => this.onStatusPicked(record, next, dropdown),
     });
-    setText(statusPill, this.t(`status.${status}`).toUpperCase());
-    statusPill.addEventListener("click", () => this.cycleStatus(record));
+    this.popoverStatusDropdown = dropdown;
 
     const kindBadge = el("span", {
       style: `
@@ -838,8 +845,8 @@ export class MarkerManager {
     });
     setText(kindBadge, record.kind ?? "target");
 
-    const tagsRow = el("div", { style: "margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;" });
-    tagsRow.appendChild(statusPill);
+    const tagsRow = el("div", { style: "margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;" });
+    tagsRow.appendChild(dropdown.root);
     tagsRow.appendChild(kindBadge);
 
     const btnRow = el("div", { style: "display:flex;justify-content:flex-end;gap:8px;" });
@@ -1114,19 +1121,44 @@ export class MarkerManager {
     return row;
   }
 
-  private cycleStatus(record: AnnotationRecord): void {
-    const order: FeedbackStatus[] = ["todo", "review", "done", "question"];
-    const cur = record.status ?? "todo";
-    const next = order[(order.indexOf(cur) + 1) % order.length] ?? "todo";
+  /**
+   * Status pick handler — runs the persistence + recolor side of the
+   * dropdown's onPick contract. The dropdown module owns DOM/aria/keyboard;
+   * this method owns store + bus + marker.
+   */
+  private onStatusPicked(record: AnnotationRecord, next: FeedbackStatus, handle: StatusDropdownHandle): void {
     this.store.updateStatus?.(record.id, next);
     record.status = next;
     this.bus.emit("feedback:updated", record);
-    this.closePopover();
-    this.refresh();
+    handle.setCurrent(next);
+    handle.close();
+    this.repositionAndRecolor(record.id);
+  }
+
+  /**
+   * Update one marker's color + pulse animation in place when its status
+   * changes — avoids the close-popover + refresh round-trip the legacy
+   * cycle-on-click pill used to perform (PRO-67 §3). The open popover
+   * stays mounted while the marker recolors beneath.
+   */
+  private repositionAndRecolor(id: string): void {
+    const entry = this.entries.find((e) => e.record.id === id);
+    if (!entry) return;
+    const status: FeedbackStatus = entry.record.status ?? "todo";
+    const sc = STATUS_COLORS[status];
+    entry.node.style.background = sc.border;
+    entry.node.dataset.status = status;
+    entry.node.style.animation = status === "question" ? "ccm-pulse 1.6s ease-in-out infinite" : "";
+    // The drawer + FAB count care about this status change but neither
+    // re-renders from here — `feedback:updated` (emitted by the caller)
+    // already drives the drawer.refreshIfOpen + fab.updateCount path in
+    // src/index.ts.
   }
 
   private closePopover(): void {
     if (!this.popover) return;
+    this.popoverStatusDropdown?.destroy();
+    this.popoverStatusDropdown = null;
     this.popover.remove();
     this.popover = null;
     // Tear down the open-popover bus subscriptions so the closed popover
