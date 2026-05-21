@@ -3,6 +3,7 @@ import { parseSvg, setText } from "./dom-utils.js";
 import type { EventBus, WidgetEvents } from "./events.js";
 import type { TFunction } from "./i18n.js";
 import { ICON_AREA, ICON_CLOSE, ICON_LINK, ICON_PIN, ICON_SITEPING, ICON_TARGET, ICON_TRASH } from "./icons.js";
+import { STATUS_COLORS } from "./popup.js";
 
 interface RadialItem {
   id: "target" | "pin" | "area" | "export" | "copyUrl" | "clear";
@@ -37,7 +38,12 @@ export class Fab {
   private root: HTMLElement;
   private fab: HTMLButtonElement;
   private radialContainer: HTMLElement;
-  private countBadge: HTMLElement | null = null;
+  /** Yellow todo badge — top-right. */
+  private todoBadge: HTMLElement | null = null;
+  /** Blue review badge — top-left. */
+  private reviewBadge: HTMLElement | null = null;
+  /** Saved base aria-label so we can re-append count copy without leaking it. */
+  private readonly baseAriaLabel: string;
   private mode: OpenMode = "closed";
   private readonly items: RadialItem[];
   private readonly onDocumentClick: (e: MouseEvent) => void;
@@ -81,7 +87,8 @@ export class Fab {
     this.fab.className = "sp-fab sp-fab--bottom-right sp-anim-fab-in";
     this.fab.style.position = "fixed";
     this.fab.appendChild(parseSvg(ICON_SITEPING));
-    this.fab.setAttribute("aria-label", t("fab.aria"));
+    this.baseAriaLabel = t("fab.aria");
+    this.fab.setAttribute("aria-label", this.baseAriaLabel);
     this.fab.setAttribute("aria-expanded", "false");
     this.fab.addEventListener("click", (e) => {
       if (e.detail >= 2) return;
@@ -167,20 +174,49 @@ export class Fab {
     );
   }
 
-  updateCount(count: number): void {
-    if (count <= 0) {
-      this.countBadge?.remove();
-      this.countBadge = null;
+  /**
+   * Render up to two badges on the FAB: yellow `todo` top-right + blue
+   * `review` top-left (PRO-68 §5). Each badge hides when its count is zero.
+   * Both share a single `aria-label` on the FAB host so screen readers
+   * announce both numbers without competing live regions.
+   */
+  updateCounts(counts: { todo: number; review: number }): void {
+    this.todoBadge = this.renderBadge(this.todoBadge, counts.todo, "todo");
+    this.reviewBadge = this.renderBadge(this.reviewBadge, counts.review, "review");
+
+    if (counts.todo <= 0 && counts.review <= 0) {
+      this.fab.setAttribute("aria-label", this.baseAriaLabel);
       return;
     }
-    if (!this.countBadge) {
-      this.countBadge = document.createElement("span");
-      this.countBadge.className = "sp-fab-badge";
-      this.countBadge.setAttribute("role", "status");
-      this.countBadge.setAttribute("aria-live", "polite");
-      this.fab.appendChild(this.countBadge);
+    const parts: string[] = [];
+    if (counts.todo > 0) parts.push(`${counts.todo} todo`);
+    if (counts.review > 0) parts.push(`${counts.review} review`);
+    this.fab.setAttribute("aria-label", `${this.baseAriaLabel}, ${parts.join(", ")}`);
+  }
+
+  /** Lazily create / remove a status badge node. */
+  private renderBadge(current: HTMLElement | null, count: number, kind: "todo" | "review"): HTMLElement | null {
+    if (count <= 0) {
+      current?.remove();
+      return null;
     }
-    setText(this.countBadge, count > 99 ? "99+" : String(count));
+    let node = current;
+    if (!node) {
+      node = document.createElement("span");
+      // Both badges share the existing `.sp-fab-badge` chrome; the `--left`
+      // modifier flips its positioning for the review (blue) badge.
+      node.className = kind === "todo" ? "sp-fab-badge" : "sp-fab-badge sp-fab-badge--left";
+      // aria-hidden on the badge itself — the combined string lives on the
+      // FAB button's aria-label so SR users hear "Feedback, N todo, M review"
+      // as one announcement.
+      node.setAttribute("aria-hidden", "true");
+      const sc = STATUS_COLORS[kind];
+      node.style.background = sc.border;
+      node.style.color = "#fff";
+      this.fab.appendChild(node);
+    }
+    setText(node, count > 99 ? "99+" : String(count));
+    return node;
   }
 
   /** Toggle the `.sp-fab--drawer-open` modifier on the FAB + radial container
@@ -247,9 +283,11 @@ export class Fab {
   }
 
   private setFabIcon(svgStr: string): void {
-    const badge = this.countBadge;
+    const todo = this.todoBadge;
+    const review = this.reviewBadge;
     this.fab.replaceChildren(parseSvg(svgStr));
-    if (badge) this.fab.appendChild(badge);
+    if (todo) this.fab.appendChild(todo);
+    if (review) this.fab.appendChild(review);
   }
 
   private handleItemClick(id: RadialItem["id"]): void {

@@ -170,6 +170,12 @@ export function buildStyles(colors: ThemeColors): string {
       line-height: 1;
     }
 
+    /* PRO-68 §5 — mirror modifier for the blue review badge sitting top-left. */
+    .sp-fab-badge--left {
+      right: auto;
+      left: -4px;
+    }
+
     /* ============================
        Radial Menu
        ============================ */
