@@ -1,5 +1,12 @@
 import { RealtimeClient } from "./realtime.js";
-import { type AnnotationStore, buildRecord, normalizePath, type SaveInput } from "./store.js";
+import {
+  type AnnotationStore,
+  buildRecord,
+  buildReplyRecord,
+  normalizePath,
+  type ReplyInput,
+  type SaveInput,
+} from "./store.js";
 import type { AnnotationKind, AnnotationRecord, CapturedElement, FeedbackStatus } from "./types.js";
 
 /**
@@ -17,6 +24,19 @@ interface CloudStoreOptions {
   apiKey: string;
   projectName: string;
   onChange?: () => void;
+  /**
+   * Fired when a reply row arrives over realtime (a remote reviewer
+   * commented, or our own insert echoed back). Replies do NOT trigger
+   * onChange — they don't affect markers or the drawer's top-level list;
+   * the popover subscribes to feedback:replied via the bus.
+   */
+  onReply?: (record: AnnotationRecord) => void;
+  /**
+   * Fired when a reply row is deleted over realtime. Covers both direct
+   * deletes and cascade deletes from a parent removal. Like onReply, this
+   * deliberately bypasses onChange.
+   */
+  onReplyDeleted?: (id: string) => void;
   log?: (...args: unknown[]) => void;
 }
 
@@ -52,6 +72,7 @@ interface CloudRow {
   area_w?: number | null;
   area_h?: number | null;
   captured_elements?: CapturedElement[] | null;
+  parent_id?: string | null;
 }
 
 const TABLE = "ccm_widget_annotations";
@@ -115,6 +136,9 @@ function rowToRecord(row: CloudRow): AnnotationRecord {
   if (row.captured_elements && Array.isArray(row.captured_elements)) {
     record.capturedElements = row.captured_elements;
   }
+  // Conditional set: exactOptionalPropertyTypes forbids assigning `undefined`
+  // to an optional field. Match the elementId / pin / area pattern above.
+  if (row.parent_id) record.parentId = row.parent_id;
   return record;
 }
 
@@ -152,6 +176,10 @@ function recordToRow(r: AnnotationRecord): CloudRow {
   if (r.areaW != null) row.area_w = r.areaW;
   if (r.areaH != null) row.area_h = r.areaH;
   if (r.capturedElements) row.captured_elements = r.capturedElements;
+  // Omit parent_id entirely for top-level rows so the column default (NULL)
+  // applies — emitting `parent_id: null` would work but adds insert-payload
+  // noise for the common case.
+  if (r.parentId) row.parent_id = r.parentId;
   return row;
 }
 
@@ -163,6 +191,8 @@ export class CloudStore implements AnnotationStore {
   private readonly url: string;
   private readonly apiKey: string;
   private readonly onChange: () => void;
+  private readonly onReply: (record: AnnotationRecord) => void;
+  private readonly onReplyDeleted: (id: string) => void;
   private readonly log: (...args: unknown[]) => void;
   private realtime: RealtimeClient | null = null;
 
@@ -171,6 +201,8 @@ export class CloudStore implements AnnotationStore {
     this.url = opts.url;
     this.apiKey = opts.apiKey;
     this.onChange = opts.onChange ?? (() => {});
+    this.onReply = opts.onReply ?? (() => {});
+    this.onReplyDeleted = opts.onReplyDeleted ?? (() => {});
     this.log = opts.log ?? (() => {});
     this.endpoint = `${opts.url.replace(/\/$/, "")}/rest/v1/${TABLE}`;
     this.headers = {
@@ -211,7 +243,17 @@ export class CloudStore implements AnnotationStore {
       onInsert: (raw) => {
         const row = raw as unknown as CloudRow;
         if (this.cache.some((r) => r.id === row.id)) return;
-        this.cache.unshift(rowToRecord(row));
+        const record = rowToRecord(row);
+        if (record.parentId) {
+          // Reply: push to cache (append — listReplies sorts on read) and
+          // notify the popover via onReply. NEVER call onChange() — replies
+          // don't change the marker set or the drawer's top-level list,
+          // and a refresh() would flicker the page.
+          this.cache.push(record);
+          this.onReply(record);
+          return;
+        }
+        this.cache.unshift(record);
         this.onChange();
       },
       onUpdate: (raw) => {
@@ -230,7 +272,15 @@ export class CloudStore implements AnnotationStore {
         if (!id) return;
         const idx = this.cache.findIndex((r) => r.id === id);
         if (idx === -1) return;
+        const removed = this.cache[idx];
         this.cache.splice(idx, 1);
+        if (removed?.parentId) {
+          // Reply delete — could be a direct user delete on the reply or a
+          // cascade DELETE from a parent removal (REPLICA IDENTITY FULL +
+          // on-delete-cascade emits one event per cascaded child).
+          this.onReplyDeleted(id);
+          return;
+        }
         this.onChange();
       },
     });
@@ -243,12 +293,15 @@ export class CloudStore implements AnnotationStore {
   }
 
   list(): AnnotationRecord[] {
-    return [...this.cache];
+    // Replies remain in the cache (one flat array) but never surface as
+    // top-level comments. Markers / drawer / FAB count all go through
+    // list() — filtering here is the single source of truth.
+    return this.cache.filter((r) => !r.parentId);
   }
 
   listForPath(path: string): AnnotationRecord[] {
     const target = normalizePath(path);
-    return this.cache.filter((r) => normalizePath(r.path) === target);
+    return this.cache.filter((r) => !r.parentId && normalizePath(r.path) === target);
   }
 
   save(input: SaveInput): AnnotationRecord {
@@ -269,7 +322,16 @@ export class CloudStore implements AnnotationStore {
   delete(id: string): boolean {
     const idx = this.cache.findIndex((r) => r.id === id);
     if (idx === -1) return false;
-    this.cache.splice(idx, 1);
+    // Mirror the DB cascade in the cache BEFORE the network call so any
+    // popover currently rendering this parent's thread stops showing the
+    // (about-to-be-deleted) replies immediately. Postgres on-delete-cascade
+    // does the persistence side; realtime DELETE events for each cascaded
+    // child stream back through onDelete and are no-ops here because the
+    // cache has already dropped them.
+    this.cache = this.cache.filter((r) => r.id !== id && r.parentId !== id);
+    // pushDelete still targets the parent id only — Postgres cascades from
+    // there. This keeps the PRO-65 count=exact assertion intact: one row,
+    // one DELETE, one count.
     void this.pushDelete(id);
     return true;
   }
@@ -278,6 +340,24 @@ export class CloudStore implements AnnotationStore {
     const ids = this.cache.map((r) => r.id);
     this.cache = [];
     void this.pushClear(ids);
+  }
+
+  listReplies(parentId: string): AnnotationRecord[] {
+    return this.cache
+      .filter((r) => r.parentId === parentId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  addReply(input: ReplyInput): AnnotationRecord {
+    const record = buildReplyRecord(input);
+    // Newest-last; listReplies sorts on read.
+    this.cache.push(record);
+    // Reuses pushInsert verbatim — recordToRow emits parent_id when set, so
+    // the PostgREST payload carries the FK. PRO-65 left pushInsert untouched
+    // (no count=exact assertion on INSERT — a failed insert is already a
+    // non-2xx), so reply insert has zero PRO-65 regression surface.
+    void this.pushInsert(record);
+    return record;
   }
 
   /**
