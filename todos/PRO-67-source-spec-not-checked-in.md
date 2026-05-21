@@ -3,6 +3,7 @@
 **Severity:** P3
 **File:** referenced from `docs/plans/2026-05-21-001-feat-pro67-relocate-popover-tweaks-plan.md` (`origin:` frontmatter) and §References
 **Discovered by:** ce-code-review autofix (PRO-67, PR #32)
+**Status:** resolved (Option 1) — the spec lived as an untracked file in the main worktree on `dev` (untracked since before this branch existed). Copied into the PRO-67 worktree and added to the branch so the PR is self-contained and the plan's `origin:` / §References pointers resolve.
 
 ## Problem
 
