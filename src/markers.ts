@@ -11,11 +11,11 @@ import type { AnnotationRecord, FeedbackStatus } from "./types.js";
 const MARKER_SIZE = 26;
 const MARKER_OFFSET = MARKER_SIZE / 2;
 const REPOSITION_DEBOUNCE_MS = 200;
-const POPOVER_ANCHOR_NAME = "--ccm-popover-anchor";
-
-/** True when the browser supports CSS anchor positioning (Chrome 125+). */
-const SUPPORTS_ANCHOR =
-  typeof CSS !== "undefined" && CSS.supports("anchor-name: --a") && CSS.supports("position-area: bottom");
+// Popover dimensions used by the placement fallback to flip the popover
+// above the marker (or anchor it to the viewport edge) when the natural
+// below-right position would overflow the viewport.
+const POPOVER_NOMINAL_HEIGHT = 180;
+const POPOVER_NOMINAL_WIDTH = 300;
 
 interface MarkerEntry {
   record: AnnotationRecord;
@@ -38,7 +38,6 @@ export class MarkerManager {
    * page. */
   private includeDone = false;
   private popover: HTMLElement | null = null;
-  private anchoredMarker: HTMLElement | null = null;
   private repositionTimer: number | null = null;
   private readonly onResize: () => void;
   private readonly onScroll: () => void;
@@ -397,27 +396,34 @@ export class MarkerManager {
     pop.appendChild(meta);
     pop.appendChild(btnRow);
 
-    if (SUPPORTS_ANCHOR) {
-      marker.style.setProperty("anchor-name", POPOVER_ANCHOR_NAME);
-      this.anchoredMarker = marker;
-      pop.style.position = "absolute";
-      pop.style.setProperty("position-anchor", POPOVER_ANCHOR_NAME);
-      pop.style.setProperty("position-area", "bottom span-right");
-      pop.style.setProperty("position-try-fallbacks", "flip-block, flip-inline, flip-block flip-inline");
-      pop.style.setProperty("position-try-order", "most-height");
-      pop.style.margin = "8px 0 0 -10px";
-    } else {
-      const rect = marker.getBoundingClientRect();
-      pop.style.position = "fixed";
-      let top = rect.bottom + 8;
-      let left = rect.left - 10;
-      if (top + 180 > window.innerHeight) top = rect.top - 180 - 8;
-      if (left + 300 > window.innerWidth) left = window.innerWidth - 300 - 8;
-      top = Math.max(8, top);
-      left = Math.max(8, left);
-      pop.style.top = `${top}px`;
-      pop.style.left = `${left}px`;
+    // Manual `position: fixed` placement. We used to feature-detect CSS
+    // Anchor Positioning (`anchor-name` + `position-area`) and use it when
+    // available, but Chrome 125+ silently fails to PAINT the anchored
+    // element when the anchor lives inside an `overflow: clip` ancestor
+    // (PRO-64). Layout reports the correct rect; paint produces nothing.
+    // Since the marker container deliberately uses `overflow-x: clip` to
+    // prevent off-viewport pins from growing host scrollWidth, the bug
+    // hits every host page. Manual placement sidesteps the anchor-paint
+    // bug entirely and gives us explicit control over edge-flip behavior.
+    const rect = marker.getBoundingClientRect();
+    pop.style.position = "fixed";
+    let top = rect.bottom + 8;
+    let left = rect.left - 10;
+    // Flip above the marker if the natural below-position would overflow
+    // the viewport's bottom edge.
+    if (top + POPOVER_NOMINAL_HEIGHT > window.innerHeight) {
+      top = rect.top - POPOVER_NOMINAL_HEIGHT - 8;
     }
+    // Pull horizontally inside the viewport when the popover would extend
+    // past the right edge (common for markers clamped to the right edge by
+    // reposition()).
+    if (left + POPOVER_NOMINAL_WIDTH > window.innerWidth) {
+      left = window.innerWidth - POPOVER_NOMINAL_WIDTH - 8;
+    }
+    top = Math.max(8, top);
+    left = Math.max(8, left);
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
 
     document.body.appendChild(pop);
     this.popover = pop;
@@ -438,10 +444,6 @@ export class MarkerManager {
     if (!this.popover) return;
     this.popover.remove();
     this.popover = null;
-    if (this.anchoredMarker) {
-      this.anchoredMarker.style.removeProperty("anchor-name");
-      this.anchoredMarker = null;
-    }
   }
 
   private scheduleReposition(): void {
