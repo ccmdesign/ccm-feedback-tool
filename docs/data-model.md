@@ -190,12 +190,23 @@ Because the URL response and the downloaded file are the same shape, the `apply-
 Every top-level comment carries a persisted `sequenceNumber: number` (cloud column `sequence_number`). The number is:
 
 - **Project-scoped.** Uniqueness is per `projectName` — comment `#71` in project A is a different row from `#71` in project B.
-- **Monotonic.** New top-level inserts get `max(existing.sequenceNumber) + 1`. Deleted comments still consume their number; gaps are normal (deleting `#67` does not free it).
+- **Monotonic high-water mark.** Issuance is driven by a persisted per-project high-water mark, not by `max(existing rows.sequenceNumber)`. The next number to issue is read from a dedicated slot, assigned to the new row, and the slot is bumped by one. The slot is **never decremented** — not on delete, not on cascade delete, not on `Store.clear()`.
+- **Delete never lowers the next number.** Deleting `#67` keeps the gap. Deleting the current highest-numbered comment **also** keeps its number consumed — the next save uses `hwm`, not `max(rows) + 1`.
+- **Clear never resets the counter.** A project at `#71` whose rows are all deleted issues `#72` next, not `#1`.
 - **Assigned at create time.** Never reused, never recomputed. Once assigned, the value is immutable.
-- **Replies excluded.** Records with `parentId` set carry no `sequenceNumber`. The CLI / drawer render `↳` in the `#N` slot for replies.
+- **Replies excluded.** Records with `parentId` set carry no `sequenceNumber`, and saving a reply does **not** bump the HWM. The CLI / drawer render `↳` in the `#N` slot for replies.
 
-Uniqueness of the `(project_name, sequence_number)` pair is enforced **by convention** in v1 — the migration ships an index on the pair but no `UNIQUE` constraint. The trigger reads `max() + 1` per project, which serializes correctly under normal Postgres write conflict resolution; the documented race window for two concurrent inserts is listed under [cloud-mode.md Known limitations](cloud-mode.md#known-limitations).
+### Storage of the HWM
 
-LocalStorage rows from before PRO-68 land without `sequenceNumber`. The `Store` constructor runs a one-time `backfillSequenceNumbers` pass that assigns numbers in `createdAt` order and persists the result; missing fields fall back to `?` in the marker and drawer until that pass completes.
+| Store         | HWM lives in                                                                                                                                                                                                |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `localStorage`| Sibling key `ccm-feedback:<projectName>:seq-hwm` holding a JSON number = "next to issue". Read-and-bumped synchronously inside `Store.save()`. Unaffected by `delete` / `clear` / cascade.                  |
+| Supabase      | Per-project row in `ccm_widget_project_meta` (`project_name PK`, `next_sequence_number bigint`). The BEFORE INSERT trigger reads-and-bumps the row under `pg_advisory_xact_lock(hashtext(project_name))`.   |
+
+Uniqueness of the `(project_name, sequence_number)` pair is enforced by a unique partial index on `ccm_widget_annotations (project_name, sequence_number) WHERE parent_id IS NULL` (migration `0008`). The advisory lock + read-and-bump in the trigger makes duplicates impossible during normal operation; the partial index is the safety net for any future writer that bypasses the trigger.
+
+> **Shipped vs target state.** PRO-68 originally shipped with `max(existing.sequence_number) + 1` in both stores — `nextSequenceNumber()` in `src/store.ts` and the trigger function in `0007_sequence_number.sql`. That recipe **lowers the next-issued number when the current max is deleted**, violating the monotonic-HWM contract above. The follow-up ticket replaces both with the HWM mechanism described here (sibling localStorage key + `ccm_widget_project_meta` table). Until that ticket ships, expect the regression on delete-the-max.
+
+LocalStorage rows from before PRO-68 land without `sequenceNumber`. The `Store` constructor runs a one-time `backfillSequenceNumbers` pass that assigns numbers in `createdAt` order and persists the result; missing fields fall back to `?` in the marker and drawer until that pass completes. After the HWM mechanism lands, the constructor also seeds the HWM key from `max(rows.sequenceNumber) + 1` on first observation.
 
 The CLI (`bun run feedback`) accepts `#N`, bare `N`, or UUID anywhere a comment id is expected (see `scripts/feedback.ts`); `--project` is required for any non-UUID token.

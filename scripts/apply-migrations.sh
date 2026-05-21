@@ -21,6 +21,7 @@
 #   supabase/migrations/0006_replies.sql
 #   supabase/migrations/0007_sequence_number.sql
 #   supabase/migrations/0008_sequence_unique.sql
+#   supabase/migrations/0009_sequence_hwm.sql
 #
 # All migrations are idempotent (CREATE TABLE IF NOT EXISTS, etc.) — re-running
 # is safe. Optional hardening migrations live in supabase/migrations-optional/
