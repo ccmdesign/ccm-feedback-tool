@@ -1,5 +1,6 @@
 # PRO-68 — `Fab.setModeActive` clobbers `savedHostZIndex` on re-entry
 
+**Status:** RESOLVED — re-entrance guards added to `setModeActive` + `onModeStart`.
 **Severity:** P3 (defensive — not reachable in current UI flow)
 **Owner:** downstream-resolver
 **Files:** `src/fab.ts:232-239`, `src/fab.ts:241-251`
@@ -35,26 +36,31 @@ capture overlay blocks a second `*:start` until the first ESC's). But
 the invariant is load-bearing for z-index restoration and would silently
 break if a future code path emits overlapping `*:start` events.
 
-## Suggested fix
+## Resolution
 
-Short-circuit re-entry in `setModeActive`:
+Three coordinated guards in `src/fab.ts`:
 
-```ts
-setModeActive(active: boolean): void {
-  if (active) {
-    if (this.activeMode === null) {
-      this.savedHostZIndex = this.hostEl.style.zIndex;
-    }
-    this.hostEl.style.zIndex = String(Z_INDEX_MAX);
-  } else {
-    this.hostEl.style.zIndex = this.savedHostZIndex;
-  }
-}
-```
+1. **`setModeActive(true)`** snapshots `savedHostZIndex` only on the
+   transition from `activeMode === null` → mode. A redundant true-call
+   while a mode is already active leaves the saved value intact and
+   just re-applies `Z_INDEX_MAX` (idempotent).
+2. **`setModeActive(false)`** is a no-op when `activeMode === null`.
+   A stray end-event without a matching start no longer stomps the
+   host's z-index with a stale `savedHostZIndex` (possibly an empty
+   string from construction time).
+3. **`onModeStart(mode)`** short-circuits when `activeMode !== null`.
+   The second start is treated as a stray event, not a mode switch —
+   clobbering `activeMode` here would make the eventual `*:end` for
+   the original mode no-op (the `onModeEnd` guard checks
+   `activeMode === mode`), leaving the host lifted permanently. Order
+   inside `onModeStart` is `setModeActive(true)` then `activeMode =
+   mode` so the snapshot path in `setModeActive` reads the
+   pre-transition `null`.
 
-Or move the save into `onModeStart` so each true-call is paired with a
-single false-call. The check `activeMode === null` is the simpler guard.
+`destroy()`'s `if (this.activeMode) this.setModeActive(false);` still
+works because `activeMode` is non-null at that call site.
 
-Not auto-applied: defensive change, no observed regression, and modifies
-a method called from multiple bus subscribers — wants a targeted smoke
-test before landing.
+Verified with `bun run check` + `bun run lint` + `bun run build` —
+all green. No behavioral change on the happy path (modes are still
+mutually exclusive); the guards are defensive scaffolding for any
+future bus path that emits overlapping starts.

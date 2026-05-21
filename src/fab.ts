@@ -228,25 +228,53 @@ export class Fab {
   }
 
   /** Raise the widget shadow host above the capture overlay (`Z_INDEX_MAX - 1`)
-   * so the radial stays clickable during an active mode. Restored on exit. */
+   * so the radial stays clickable during an active mode. Restored on exit.
+   *
+   * Re-entrance safe: if `setModeActive(true)` fires while the host is already
+   * lifted (e.g. a second `*:start` event arrives without a matching `*:end`,
+   * or a future bus path that emits overlapping starts), the saved z-index is
+   * preserved — we only snapshot `savedHostZIndex` on the first true-call.
+   * Symmetrically, a redundant `setModeActive(false)` while no mode is active
+   * is a no-op rather than re-applying `savedHostZIndex` over a fresh value
+   * the host may have set in the meantime. This keeps z-index restoration
+   * load-bearing even if start/end pairing drifts.
+   */
   setModeActive(active: boolean): void {
     if (active) {
-      this.savedHostZIndex = this.hostEl.style.zIndex;
+      // Snapshot ONLY on the transition from no-mode → mode. Without this
+      // guard, a second `*:start` (re-entry) would read the already-lifted
+      // `Z_INDEX_MAX` value back into `savedHostZIndex`, and the next end
+      // would "restore" the host to Z_INDEX_MAX forever.
+      if (this.activeMode === null) {
+        this.savedHostZIndex = this.hostEl.style.zIndex;
+      }
       this.hostEl.style.zIndex = String(Z_INDEX_MAX);
     } else {
+      // Only restore when there's something to restore. A spurious end with
+      // no active mode would otherwise stomp the host's current z-index
+      // with whatever happened to be in `savedHostZIndex` (possibly an
+      // empty string from construction time).
+      if (this.activeMode === null) return;
       this.hostEl.style.zIndex = this.savedHostZIndex;
     }
   }
 
   private onModeStart(mode: CaptureMode): void {
-    this.activeMode = mode;
+    // Re-entrance: if a mode is already active, ignore the second start. The
+    // existing mode's lift is in place; clobbering `activeMode` here would
+    // make the eventual `*:end` for the original mode no-op (because the
+    // guard in `onModeEnd` checks `activeMode === mode`), leaving the host
+    // lifted permanently. Capture modes are mutually exclusive by design;
+    // the second start is a stray event, not a mode switch.
+    if (this.activeMode !== null) return;
     this.setModeActive(true);
+    this.activeMode = mode;
   }
 
   private onModeEnd(mode: CaptureMode): void {
     if (this.activeMode === mode) {
-      this.activeMode = null;
       this.setModeActive(false);
+      this.activeMode = null;
     }
   }
 
