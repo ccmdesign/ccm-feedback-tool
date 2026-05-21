@@ -6,6 +6,7 @@ import {
   normalizePath,
   type ReplyInput,
   type SaveInput,
+  type UpdateAnchorInput,
 } from "./store.js";
 import type { AnnotationKind, AnnotationRecord, CapturedElement, FeedbackStatus } from "./types.js";
 
@@ -37,6 +38,14 @@ interface CloudStoreOptions {
    * deliberately bypasses onChange.
    */
   onReplyDeleted?: (id: string) => void;
+  /**
+   * Fired when a top-level (non-reply) row arrives via realtime UPDATE so
+   * host integrations on the receiving tab see anchor/status updates as
+   * `feedback:updated` events (PRO-67). `onChange` is the cache-fanout
+   * hook; `onUpdated` is the bus-emit hook. Optional — bypassed when not
+   * wired.
+   */
+  onUpdated?: (record: AnnotationRecord) => void;
   log?: (...args: unknown[]) => void;
 }
 
@@ -193,6 +202,7 @@ export class CloudStore implements AnnotationStore {
   private readonly onChange: () => void;
   private readonly onReply: (record: AnnotationRecord) => void;
   private readonly onReplyDeleted: (id: string) => void;
+  private readonly onUpdated: (record: AnnotationRecord) => void;
   private readonly log: (...args: unknown[]) => void;
   private realtime: RealtimeClient | null = null;
 
@@ -203,6 +213,7 @@ export class CloudStore implements AnnotationStore {
     this.onChange = opts.onChange ?? (() => {});
     this.onReply = opts.onReply ?? (() => {});
     this.onReplyDeleted = opts.onReplyDeleted ?? (() => {});
+    this.onUpdated = opts.onUpdated ?? (() => {});
     this.log = opts.log ?? (() => {});
     this.endpoint = `${opts.url.replace(/\/$/, "")}/rest/v1/${TABLE}`;
     this.headers = {
@@ -272,6 +283,9 @@ export class CloudStore implements AnnotationStore {
         // aren't in the drawer's top-level list, so a marker refresh would
         // flicker the page for no visual gain.
         if (next.parentId) return;
+        // Fan out the bus event before onChange so host integrations see the
+        // update with the same timing as a marker re-render (PRO-67).
+        this.onUpdated(next);
         this.onChange();
       },
       onDelete: (raw) => {
@@ -323,6 +337,74 @@ export class CloudStore implements AnnotationStore {
     if (!item) return false;
     item.status = status;
     void this.pushUpdate(id, { status });
+    return true;
+  }
+
+  updateAnchor(id: string, input: UpdateAnchorInput): boolean {
+    const item = this.cache.find((r) => r.id === id);
+    if (!item) return false;
+    // Optimistic cache mutation so the marker re-renders before the network
+    // round-trip. Mirror Store.updateAnchor's slot rules (PRO-67).
+    item.cssSelector = input.anchor.cssSelector;
+    item.xpath = input.anchor.xpath;
+    item.textSnippet = input.anchor.textSnippet;
+    item.elementTag = input.anchor.elementTag;
+    item.elementId = input.anchor.elementId;
+    item.textPrefix = input.anchor.textPrefix;
+    item.textSuffix = input.anchor.textSuffix;
+    item.fingerprint = input.anchor.fingerprint;
+    item.neighborText = input.anchor.neighborText;
+    item.xPct = input.rect.xPct;
+    item.yPct = input.rect.yPct;
+    item.wPct = input.rect.wPct;
+    item.hPct = input.rect.hPct;
+    item.kind = input.kind;
+    if (input.pin) {
+      item.pinX = input.pin.x;
+      item.pinY = input.pin.y;
+    } else {
+      delete item.pinX;
+      delete item.pinY;
+    }
+    if (input.area) {
+      item.areaX = input.area.x;
+      item.areaY = input.area.y;
+      item.areaW = input.area.w;
+      item.areaH = input.area.h;
+    } else {
+      delete item.areaX;
+      delete item.areaY;
+      delete item.areaW;
+      delete item.areaH;
+    }
+
+    // Build the PATCH payload. Always include the full anchor+rect+kind
+    // group; pin/area columns are explicitly nulled when the new kind
+    // doesn't use them so the row can't carry stale coords across a kind
+    // transition.
+    const patch: Partial<CloudRow> = {
+      css_selector: input.anchor.cssSelector,
+      xpath: input.anchor.xpath,
+      text_snippet: input.anchor.textSnippet,
+      element_tag: input.anchor.elementTag,
+      element_id: input.anchor.elementId ?? null,
+      text_prefix: input.anchor.textPrefix,
+      text_suffix: input.anchor.textSuffix,
+      fingerprint: input.anchor.fingerprint,
+      neighbor_text: input.anchor.neighborText,
+      x_pct: input.rect.xPct,
+      y_pct: input.rect.yPct,
+      w_pct: input.rect.wPct,
+      h_pct: input.rect.hPct,
+      kind: input.kind,
+      pin_x: input.pin ? input.pin.x : null,
+      pin_y: input.pin ? input.pin.y : null,
+      area_x: input.area ? input.area.x : null,
+      area_y: input.area ? input.area.y : null,
+      area_w: input.area ? input.area.w : null,
+      area_h: input.area ? input.area.h : null,
+    };
+    void this.pushUpdate(id, patch);
     return true;
   }
 

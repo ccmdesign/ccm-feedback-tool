@@ -86,6 +86,24 @@ The `review` status closes the agent loop without letting the agent complete its
 
 `pin` and `area` kinds populate `capturedElements` with snapshots of whatever DOM was under/inside the marker at capture time, so a developer (or an AI agent) reading the export still has DOM context even though the pin isn't anchored to a specific element.
 
+### Kind transitions (drag-relocate, PRO-67)
+
+Markers can be relocated by drag — click-and-hold a marker, then drop on a new target. The drop algorithm decides the new `kind` from where the cursor lands:
+
+| Starting kind | Drop on element                                           | Drop on empty space (body / html / widget host)                |
+| ------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
+| `target`      | Stays `target`; anchor fields overwritten with new selector / xpath / text / fingerprint, `xPct/yPct` set to drop fraction inside the new element, `pinX/pinY/areaX/areaY/areaW/areaH` cleared. | Flips to `pin`; anchor fields blanked (empty strings), `pinX/pinY` set to document-space drop coords, `area*` cleared. |
+| `pin`         | Flips to `target`; anchor populated from `generateAnchor(target)`, `xPct/yPct` from drop fraction, `pinX/pinY` cleared. | Stays `pin`; `pinX/pinY` updated to new document-space coords. |
+| `area`        | Stays `area` (drop ignored, see note).                    | Stays `area` (drop ignored, see note).                         |
+
+**Area drag = translate-intact** (override of the spec's "area becomes target/pin" line). Dragging an area marker shifts `areaX/areaY` by the drag delta in document space; `areaW/areaH` are unchanged, `kind` stays `"area"`. The marker anchor — rendered at `areaX + areaW` (see `MarkerManager.reposition`) — is horizontally clamped so the anchor stays inside `[scrollX + 8, scrollX + innerWidth - 8]`. Vertical clamping is not enforced today — the marker remains reachable on scroll regardless.
+
+**Drop-on-same-element no-op.** When a `target` marker is dropped on its existing `anchorEl`, the drop is treated as a no-op: no `updateAnchor` write, no `feedback:updated` event. Saves a realtime round-trip on accidental short drags. Pin/area markers always commit (their "same element" check is meaningless because they aren't anchored to one).
+
+**Slot nulling rule.** Whenever `kind` transitions, the slots the new kind doesn't use are explicitly cleared — `pinX/pinY` to undefined when leaving `pin`, `areaX/areaY/areaW/areaH` to undefined when leaving `area`. This prevents a row from carrying stale coords across a transition. `CloudStore.updateAnchor` PATCHes the corresponding columns to `null`; `Store.updateAnchor` `delete`s the field on the cached object.
+
+ESC, right-click, the cancel button, or SPA navigation mid-drag → cleanup, no store write. The marker returns to its original position via `reposition()`.
+
 ## Replies (`parentId`)
 
 A **reply** is an `AnnotationRecord` where `parentId` is set — pointing at the parent comment's `id`. Replies are degenerate rows: identity + body fields populated, every spatial / lifecycle field at its zero-value default. Specifically:
