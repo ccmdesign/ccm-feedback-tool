@@ -194,14 +194,14 @@ function recordToRow(r: AnnotationRecord): CloudRow {
   // applies — emitting `parent_id: null` would work but adds insert-payload
   // noise for the common case.
   if (r.parentId) row.parent_id = r.parentId;
-  // sequence_number: send the optimistic local guess so realtime echoes
-  // carry the same number the local cache rendered with. The server trigger
-  // ignores any supplied value when the column is null OR — more usefully —
-  // accepts the supplied value when one is present (see migration 0007).
-  // For the optimistic insert path the local guess and the trigger result
-  // will usually match because the client is the only writer for the typical
-  // single-reviewer session; in races the realtime UPDATE/INSERT carries the
-  // authoritative number.
+  // sequence_number: only sent when the in-memory record carries one.
+  // PRO-81 — `CloudStore.save()` builds the optimistic local record with
+  // NO `sequenceNumber`, so the regular insert path leaves this column
+  // null and the server trigger assigns the canonical value from the
+  // per-project HWM meta slot (`ccm_widget_project_meta`). The path that
+  // DOES supply a number is `migrateFromLocal`, where the local
+  // `sequenceNumber` is canonical and the trigger fast-forwards the meta
+  // slot to match.
   if (typeof r.sequenceNumber === "number") row.sequence_number = r.sequenceNumber;
   return row;
 }
@@ -267,7 +267,25 @@ export class CloudStore implements AnnotationStore {
       log: this.log,
       onInsert: (raw) => {
         const row = raw as unknown as CloudRow;
-        if (this.cache.some((r) => r.id === row.id)) return;
+        const idx = this.cache.findIndex((r) => r.id === row.id);
+        if (idx !== -1) {
+          // PRO-81 — optimistic-row carve-out. The local row from
+          // `CloudStore.save()` was inserted with no `sequenceNumber`
+          // (the server is authoritative). When the realtime echo for
+          // that same row arrives carrying the trigger-assigned number,
+          // replace the cache entry so markers/drawer re-render `#?`
+          // → `#N`. Skip the replace when the cache entry already has
+          // a sequenceNumber (means the realtime echo got here twice,
+          // or another tab's insert beat ours; either way the cached
+          // value is already canonical).
+          const cached = this.cache[idx];
+          if (cached && typeof cached.sequenceNumber !== "number" && typeof row.sequence_number === "number") {
+            const updated = rowToRecord(row);
+            this.cache[idx] = updated;
+            if (!updated.parentId) this.onChange();
+          }
+          return;
+        }
         const record = rowToRecord(row);
         if (record.parentId) {
           // Reply: push to cache (append — listReplies sorts on read) and
@@ -340,11 +358,16 @@ export class CloudStore implements AnnotationStore {
   }
 
   save(input: SaveInput): AnnotationRecord {
-    // Pass the in-memory cache so `buildRecord` can compute an optimistic
-    // `sequenceNumber = max(cache) + 1`. The server trigger reconfirms /
-    // overwrites authoritatively on INSERT; realtime echo carries the
-    // canonical value. PRO-68 §8.
-    const record = buildRecord(input, this.cache);
+    // PRO-81 — the local optimistic row carries NO `sequenceNumber`. The
+    // server trigger is the only writer of authoritative `#N` values
+    // (read-and-bump against `ccm_widget_project_meta`), so any local
+    // guess would only differ from it during the ~1 RTT window before
+    // the realtime echo lands. Markers/drawer already render `#?` for
+    // absent `sequenceNumber` (the legacy-row fallback path covers this
+    // case naturally). The realtime echo in `onInsert` replaces the
+    // cache entry with `rowToRecord(row)`, which carries the assigned
+    // number — see the optimistic-row carve-out below.
+    const record = buildRecord(input, undefined);
     this.cache.unshift(record);
     void this.pushInsert(record);
     return record;
@@ -476,16 +499,19 @@ export class CloudStore implements AnnotationStore {
     const fresh = records.filter((r) => !known.has(r.id));
     if (fresh.length === 0) return 0;
     try {
-      // PRO-68 §8 — drop client-side `sequence_number` from migration
-      // payloads. Pre-migration local numbers were render-indices, not
-      // canonical identifiers; the server trigger assigns fresh authoritative
-      // values that interleave correctly with any existing cloud rows for the
-      // same project.
-      const payload = fresh.map((r) => {
-        const row = recordToRow(r);
-        delete row.sequence_number;
-        return row;
-      });
+      // PRO-81 — keep client-supplied `sequence_number` on each migrated
+      // row. Local numbers are now canonical (the localStorage path uses
+      // the HWM mechanism, same contract as cloud), so carrying them
+      // through migration preserves the reviewer-facing `#N` identifiers
+      // they've been referencing. The server trigger fast-forwards the
+      // per-project meta slot when a supplied number is >= the slot's
+      // current value, so future inserts don't collide. Pre-PRO-81 local
+      // rows whose numbers came from the old `max+1` recipe are preserved
+      // the same way — the constructor seed step (`Store` ctor) backfills
+      // the HWM key from `max(rows.sequenceNumber) + 1`, so the local
+      // numbers being migrated are consistent with the cloud fast-forward
+      // that lands them.
+      const payload = fresh.map((r) => recordToRow(r));
       const res = await fetch(this.endpoint, {
         method: "POST",
         headers: {
