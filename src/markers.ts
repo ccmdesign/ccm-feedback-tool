@@ -613,8 +613,9 @@ export class MarkerManager {
       // Resolve drop target with overlay click-through.
       const target = resolveTarget(e.clientX, e.clientY);
 
-      // SPA nav can fire between mousedown and mouseup — bail if path moved.
-      // (The outer popstate handler also calls cancel via dragCancel below.)
+      // SPA nav between mousedown and mouseup is handled by the `dragSpaNav`
+      // popstate listener wired below — it calls `cancel()` which tears the
+      // drag down. No extra check needed here.
 
       // Decide branch. See doc-block above.
       const kind = entry.record.kind ?? "target";
