@@ -61,6 +61,8 @@ interface CloudRow {
   area_w?: number | null;
   area_h?: number | null;
   captured_elements?: unknown[] | null;
+  parent_id?: string | null;
+  sequence_number?: number | null;
 }
 
 /** Mirrors rowToRecord() in src/cloud-store.ts. */
@@ -104,6 +106,12 @@ function rowToRecord(row: CloudRow): Record<string, unknown> {
   if (row.captured_elements && Array.isArray(row.captured_elements)) {
     record.capturedElements = row.captured_elements;
   }
+  // Reply linkage + human-grokkable id — MUST mirror src/cloud-store.ts
+  // rowToRecord(). Without parentId the apply-ccm-feedback skill can't tell a
+  // reply from a top-level comment (it source-maps replies and false-escalates
+  // them); without sequenceNumber it can't resolve "#N" references.
+  if (row.parent_id) record.parentId = row.parent_id;
+  if (typeof row.sequence_number === "number") record.sequenceNumber = row.sequence_number;
   return record;
 }
 
