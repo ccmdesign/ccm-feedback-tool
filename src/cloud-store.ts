@@ -352,6 +352,12 @@ export class CloudStore implements AnnotationStore {
     return this.cache.filter((r) => !r.parentId);
   }
 
+  listAll(): AnnotationRecord[] {
+    // Whole cache, replies included — the export path's gather. Marker /
+    // drawer / FAB count never call this; they go through list().
+    return [...this.cache];
+  }
+
   listForPath(path: string): AnnotationRecord[] {
     const target = normalizePath(path);
     return this.cache.filter((r) => !r.parentId && normalizePath(r.path) === target);

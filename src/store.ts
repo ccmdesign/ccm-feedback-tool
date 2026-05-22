@@ -60,6 +60,14 @@ export interface UpdateAnchorInput {
 /** Common store contract implemented by both `Store` (localStorage) and `CloudStore` (Supabase). */
 export interface AnnotationStore {
   list(): AnnotationRecord[];
+  /**
+   * Every record for the project — comments AND replies (parentId-bearing
+   * rows). `list()` deliberately filters replies out so they never become
+   * markers; the JSON export path uses `listAll()` instead so the downloaded
+   * payload carries replies (the apply-ccm-feedback skill partitions them by
+   * `parentId`). See docs/replies.md § "Export / agent ingestion".
+   */
+  listAll(): AnnotationRecord[];
   listForPath(path: string): AnnotationRecord[];
   save(input: SaveInput): AnnotationRecord;
   delete(id: string): boolean;
@@ -338,6 +346,12 @@ export class Store implements AnnotationStore {
     // boundary so marker / drawer / FAB code paths can't accidentally render
     // a reply as a standalone work item.
     return load(this.projectName).filter((r) => !r.parentId);
+  }
+
+  listAll(): AnnotationRecord[] {
+    // Everything, replies included — the export path's gather. Never used by
+    // marker / drawer / FAB code (those go through list()).
+    return load(this.projectName);
   }
 
   /** Records scoped to a single page path. Replies excluded — see `list()`. */

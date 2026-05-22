@@ -239,7 +239,9 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
   const areaMode = new AreaMode(colors, bus, t, onAreaCapture, shouldIgnore, markers);
 
   bus.on("export:click", () => {
-    const records = store.list();
+    // listAll() — replies included so the downloaded JSON matches the share
+    // endpoint payload. The apply-ccm-feedback skill partitions by parentId.
+    const records = store.listAll();
     if (records.length === 0) {
       console.info("[ccm-feedback] No annotations to export.");
       return;
@@ -330,7 +332,8 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
     },
     count: () => store.list().length,
     export: () => {
-      const records = store.list();
+      // listAll() — replies included; see the export:click handler above.
+      const records = store.listAll();
       if (records.length === 0) return;
       exportAsJson(config.projectName, records);
     },
