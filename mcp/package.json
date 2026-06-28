@@ -1,0 +1,32 @@
+{
+  "name": "ccm-feedback-mcp",
+  "version": "0.1.0",
+  "description": "Stdio MCP server letting AI agents read, reply to, edit, and close ccm-feedback comments via Supabase PostgREST.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "ccm-feedback-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --import tsx ./src/__tests__/self-check.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
