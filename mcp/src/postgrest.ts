@@ -162,7 +162,7 @@ export class PostgrestClient {
       method: "GET",
       headers: this.headers,
     });
-    if (!res.ok) throw new Error(`PostgREST list failed: ${res.status} ${await safeBody(res)}`);
+    if (!res.ok) throw await postgrestError("list", res);
     const rows = (await res.json()) as CloudRow[];
     return Array.isArray(rows) ? rows.map(rowToRecord) : [];
   }
@@ -174,7 +174,7 @@ export class PostgrestClient {
       headers: { ...this.headers, Prefer: "return=representation" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error(`PostgREST update failed: ${res.status} ${await safeBody(res)}`);
+    if (!res.ok) throw await postgrestError("update", res);
     const rows = (await res.json()) as CloudRow[];
     return Array.isArray(rows) ? rows.map(rowToRecord) : [];
   }
@@ -186,7 +186,7 @@ export class PostgrestClient {
       method: "GET",
       headers: this.headers,
     });
-    if (!res.ok) throw new Error(`PostgREST parent lookup failed: ${res.status} ${await safeBody(res)}`);
+    if (!res.ok) throw await postgrestError("parent lookup", res);
     const rows = (await res.json()) as ParentInheritedFields[];
     return Array.isArray(rows) && rows.length > 0 ? (rows[0] ?? null) : null;
   }
@@ -198,17 +198,26 @@ export class PostgrestClient {
       headers: { ...this.headers, Prefer: "return=representation" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error(`PostgREST reply insert failed: ${res.status} ${await safeBody(res)}`);
+    if (!res.ok) throw await postgrestError("reply insert", res);
     const rows = (await res.json()) as CloudRow[];
     return Array.isArray(rows) ? rows.map(rowToRecord) : [];
   }
 }
 
-/** Read a response body for error context without throwing. */
-async function safeBody(res: Response): Promise<string> {
+/**
+ * Build a PostgREST error for a failed response WITHOUT leaking the upstream
+ * body into the thrown message. The upstream body (which an auth error can echo
+ * request context into) is logged to stderr for the operator only — never
+ * surfaced to the MCP client. Mirrors the no-forward posture in
+ * `netlify/functions/feedback.mts` (which never forwards `res.text()` for the
+ * same reason). stdout is the JSON-RPC channel, so diagnostics go to stderr.
+ */
+async function postgrestError(operation: string, res: Response): Promise<Error> {
   try {
-    return await res.text();
+    const body = await res.text();
+    if (body) process.stderr.write(`[ccm-feedback-mcp] PostgREST ${operation} ${res.status}: ${body}\n`);
   } catch {
-    return "<no body>";
+    // ignore body read failures — the generic error below is enough
   }
+  return new Error(`PostgREST ${operation} failed: ${res.status}`);
 }
