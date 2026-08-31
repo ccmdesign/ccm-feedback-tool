@@ -18,17 +18,19 @@ Built and used by [CCM Design](https://ccm.design) for client website reviews.
 
 ## Install
 
-Drop a single script tag in your HTML:
+Drop a single script tag in your HTML. **Always include `data-supabase-url` + `data-supabase-key`** — omit them and the widget silently drops into localStorage-only mode (comments never leave the reviewer's browser, nothing syncs, and nothing tells you it happened):
 
 ```html
 <script
   src="https://ccm-feedback-582.netlify.app/w.js"
   data-project="my-project"
+  data-supabase-url="https://qnkvkumtssihbjmocbtv.supabase.co"
+  data-supabase-key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk"
   defer
 ></script>
 ```
 
-That's it. The floating action button appears bottom-right on desktop. Annotations persist in `localStorage` under `ccm-feedback:my-project`.
+That's it. The floating action button appears bottom-right on desktop. `data-supabase-url`/`data-supabase-key` above point at CCM's shared multi-tenant Supabase project — `data-project` is what keeps `my-project`'s annotations isolated from every other site on that shared backend, so **set it to a slug unique to this site** (never leave it as the literal string `my-project`). Want your own dedicated Supabase project instead of the shared one? See [docs/self-hosting.md](docs/self-hosting.md).
 
 > Mobile (<768px) is hidden by design — this is a desktop review tool.
 
@@ -36,35 +38,35 @@ That's it. The floating action button appears bottom-right on desktop. Annotatio
 
 | Attribute             | Purpose                                              | Default     |
 | --------------------- | ---------------------------------------------------- | ----------- |
-| `data-project`        | **Required.** Namespace for storage + cloud filter.  | —           |
+| `data-project`        | **Required.** Namespace for storage + cloud filter. Must be unique per site. | —           |
+| `data-supabase-url`   | **Required by default.** Supabase project URL — enables cloud mode. Omit both this and `data-supabase-key` only if you deliberately want localStorage-only mode. | —           |
+| `data-supabase-key`   | **Required by default.** Supabase **anon** key. Browser-safe. Paired with `data-supabase-url` above. | —           |
 | `data-accent`         | Hex color (`#RGB`, `#RRGGBB`, `#RRGGBBAA`).          | `#0066ff`   |
 | `data-theme`          | `light`, `dark`, or `auto`.                          | `light`     |
 | `data-debug`          | Console-log lifecycle events.                        | off         |
-| `data-supabase-url`   | Supabase project URL. Enables cloud mode (with key). | —           |
-| `data-supabase-key`   | Supabase **anon** key. Browser-safe.                 | —           |
 
 Or initialize manually:
 
 ```ts
 window.CcmFeedback.init({
-  projectName: "my-project",
+  projectName: "my-project", // unique per site
   accentColor: "#0066ff",
   theme: "auto",
-  // Optional cloud mode:
-  supabaseUrl: "https://YOURREF.supabase.co",
-  supabaseKey: "YOUR_ANON_KEY",
+  // Always set these two — omitting them silently drops to localStorage-only mode:
+  supabaseUrl: "https://qnkvkumtssihbjmocbtv.supabase.co",
+  supabaseKey: "YOUR_ANON_KEY", // see the Install snippet above for the shared CCM anon key
 });
 ```
 
 ## Two modes
 
-### 1. Local mode (default — no infra)
+### 1. Cloud mode (Supabase) — the default install
 
-Don't pass `data-supabase-*`. Annotations are saved to `localStorage` per project, scoped to the current browser. Hit **Export** to download a JSON file. This is the recommended starting point.
+Pass `data-supabase-url` + `data-supabase-key` (the Install snippet above already does). Annotations sync to a Supabase Postgres table (`ccm_widget_annotations`) over PostgREST, and updates from other reviewers stream in over Supabase Realtime. No `@supabase/supabase-js` dependency — the widget speaks raw HTTP and WebSocket. This is what every install should ship with.
 
-### 2. Cloud mode (Supabase)
+### 2. Local mode (opt-out only)
 
-Pass `data-supabase-url` + `data-supabase-key`. Annotations sync to a Supabase Postgres table (`ccm_widget_annotations`) over PostgREST, and updates from other reviewers stream in over Supabase Realtime. No `@supabase/supabase-js` dependency — the widget speaks raw HTTP and WebSocket.
+Deliberately omit `data-supabase-*`. Annotations are saved to `localStorage` per project, scoped to the current browser, with no sync — a `review` step doesn't reach a second browser or device. Hit **Export** to download a JSON file instead. Only choose this on purpose (offline demo, no infra allowed); it is **not** the recommended path, and it's easy to fall into it by accident by forgetting the Supabase attributes.
 
 To self-host the backend, see [docs/self-hosting.md](docs/self-hosting.md). Quick version: create a Supabase project, run `supabase/migrations/*.sql` in order, paste the URL + anon key into the script tag.
 

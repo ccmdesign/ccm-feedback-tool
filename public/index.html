@@ -608,21 +608,27 @@
 
 STEP 1 — INSTALL (always)
 
-Find the global layout file (pages/_app.tsx, app/layout.tsx, app.vue, src/app.html, layouts/baseof.html, application.html.erb, base.html — whichever wraps every route). Add this right before &lt;/body&gt;:
+Find the global layout file (pages/_app.tsx, app/layout.tsx, app.vue, src/app.html, layouts/baseof.html, application.html.erb, base.html — whichever wraps every route). Add this right before &lt;/body&gt; — ALWAYS include the data-supabase-* attributes below; omitting them silently drops the widget into localStorage-only mode with no error:
 
-  &lt;script src="https://ccm-feedback-582.netlify.app/w.js" defer&gt;&lt;/script&gt;
+  &lt;script
+    src="https://ccm-feedback-582.netlify.app/w.js"
+    data-project="&lt;unique-slug-for-this-site&gt;"
+    data-supabase-url="https://qnkvkumtssihbjmocbtv.supabase.co"
+    data-supabase-key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk"
+    defer
+  &gt;&lt;/script&gt;
 
-Auto-namespaces by hostname (prod and staging stay isolated). Optional attrs: data-accent="#hex", data-theme="auto", data-debug="true".
+This uses CCM's shared multi-tenant Supabase project — cloud sync is on from the first paste. data-project must be unique per site (it's what keeps this site's comments isolated on the shared backend) — set it to the hostname or repo slug, never leave the placeholder. Optional attrs: data-accent="#hex", data-theme="auto", data-debug="true".
 
 Verify by running the dev server and confirming a floating button appears bottom-right on desktop (≥768px).
 
 STEP 2 — ASK ME (after install verifies green)
 
-"The widget is installed in localStorage mode. Want me to also set up:
- (a) Cloud sync via Supabase (multi-reviewer, multi-device)?
- (b) If yes to (a) — production RLS hardening?"
+"Cloud sync is already on via CCM's shared Supabase project, isolated by data-project. Want me to also set up:
+ (a) A dedicated Supabase project of your own instead of the shared one?
+ (b) Production RLS hardening on whichever backend is in play?"
 
-If I say no to (a), stop and report what you changed.
+If I say no to both, stop and report what you changed.
 
 STEP 3 — FETCH AND EXECUTE SUB-PROMPTS YOURSELF
 
@@ -635,7 +641,7 @@ STEP 4 — REPORT
 
 Tell me which files you edited, whether (a) and (b) ran, and any failures.
 
-Notes: widget is desktop-only. If a Supabase key is needed later, ONLY the anon/publishable key is acceptable — never the service-role key.</span>
+Notes: widget is desktop-only. If a Supabase key is needed later (e.g. for a dedicated project), ONLY the anon/publishable key is acceptable — never the service-role key.</span>
             </div>
           </div>
         </div>

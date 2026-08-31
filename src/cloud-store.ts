@@ -496,14 +496,17 @@ export class CloudStore implements AnnotationStore {
 
   /**
    * Bulk-import existing records (e.g. from a localStorage migration) into the
-   * cloud, skipping any rows whose primary key already exists. Returns the
-   * count of newly-inserted records. On any error, returns 0 and logs.
+   * cloud, skipping any rows whose primary key already exists. Returns
+   * `{ ok, inserted }` — `ok: false` means the network write failed (the
+   * caller must NOT mark the migration complete); `ok: true, inserted: 0`
+   * means there was genuinely nothing new to push (already migrated, or every
+   * row deduped against the cloud), which IS a completed migration.
    */
-  async migrateFromLocal(records: AnnotationRecord[]): Promise<number> {
-    if (records.length === 0) return 0;
+  async migrateFromLocal(records: AnnotationRecord[]): Promise<{ ok: boolean; inserted: number }> {
+    if (records.length === 0) return { ok: true, inserted: 0 };
     const known = new Set(this.cache.map((r) => r.id));
     const fresh = records.filter((r) => !known.has(r.id));
-    if (fresh.length === 0) return 0;
+    if (fresh.length === 0) return { ok: true, inserted: 0 };
     try {
       // PRO-81 — keep client-supplied `sequence_number` on each migrated
       // row. Local numbers are now canonical (the localStorage path uses
@@ -529,7 +532,7 @@ export class CloudStore implements AnnotationStore {
       if (!res.ok) {
         const body = await res.text();
         console.warn(`[ccm-feedback] cloud migrate failed: ${res.status} ${body}`);
-        return 0;
+        return { ok: false, inserted: 0 };
       }
       const inserted = (await res.json()) as CloudRow[];
       for (const row of inserted) {
@@ -538,10 +541,10 @@ export class CloudStore implements AnnotationStore {
       }
       this.log("cloud migrated", inserted.length, "of", fresh.length, "local annotations");
       this.onChange();
-      return inserted.length;
+      return { ok: true, inserted: inserted.length };
     } catch (err) {
       console.warn("[ccm-feedback] cloud migrate error", err);
-      return 0;
+      return { ok: false, inserted: 0 };
     }
   }
 

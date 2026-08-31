@@ -24,16 +24,23 @@ You will run this end-to-end. Don't make me paste another prompt at any point �
 
    If unsure, search for `</body>` or `<head>` to find the file that renders site chrome on every route.
 
-2. **Add this single script tag right before `</body>`** in that file:
+2. **Add this script tag right before `</body>`** in that file — **always include the three attributes below.** This is not optional: omit `data-supabase-url` / `data-supabase-key` and the widget silently falls back to localStorage-only mode — comments never leave the reviewer's own browser, nothing syncs, and there is no error to tell you that happened.
 
    ```html
-   <script src="https://ccm-feedback-582.netlify.app/w.js" defer></script>
+   <script
+     src="https://ccm-feedback-582.netlify.app/w.js"
+     data-project="<unique-slug-for-this-site>"
+     data-supabase-url="https://qnkvkumtssihbjmocbtv.supabase.co"
+     data-supabase-key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk"
+     defer
+   ></script>
    ```
 
-   No build step. The widget self-installs from the CDN. It auto-namespaces feedback by hostname so production and staging stay isolated automatically.
+   No build step. The widget self-installs from the CDN. `data-supabase-url` + `data-supabase-key` point at CCM's shared multi-tenant Supabase project — cloud sync is on from the first paste, no provisioning needed. `data-project` is what isolates this site's annotations from every other site on that same shared backend, so **set it to something unique** (hostname or repo slug is fine) — never leave it as the literal placeholder above, and never copy another project's value.
 
-3. **Optional attributes** — only add if relevant:
-   - `data-project="explicit-name"` — override the auto-derived hostname namespace.
+   If I explicitly ask for a dedicated Supabase project instead of the shared one (data isolation, my own RLS policy, etc.), skip this shared-key snippet and go straight to Step 3 to fetch and run `self-host-supabase.md`.
+
+3. **Other optional attributes** — only add if relevant:
    - `data-accent="#hex"` — match the site's brand color.
    - `data-theme="auto"` — follow the site's dark mode.
    - `data-debug="true"` — log lifecycle events to the console (remove for prod).
@@ -44,17 +51,17 @@ You will run this end-to-end. Don't make me paste another prompt at any point �
    - Clicking "target" then any DOM element opens a textarea popover.
    - Submitting (`⌘/Ctrl + Enter`) places a marker that persists across page reloads.
 
-## Step 2 — Ask me about cloud sync and hardening
+## Step 2 — Ask me about hardening (and about opting out of the shared backend)
 
-After install verifies green, ask me **one question with two parts**:
+Cloud sync is already live after Step 1 — there is no "want cloud sync?" question anymore, the widget is never left in localStorage-only mode by default. After install verifies green, ask me **one question with two parts**:
 
-> "The widget is installed in localStorage mode (one reviewer per browser, no infra). Want me to also set up:
+> "The widget is installed with cloud sync on, using CCM's shared Supabase project (isolated by `data-project=<slug>`). Want me to also set up:
 >
-> (a) **Cloud sync** via Supabase, so multiple reviewers see each other's pins across devices?
+> (a) **A dedicated Supabase project** of your own instead of the shared one — full data isolation, your own RLS?
 >
-> (b) If yes to (a) — **production RLS hardening**, so the public anon key can't be used to vandalize the table?"
+> (b) **Production RLS hardening** on whichever backend is in play (shared or dedicated), so the anon key can't be used to vandalize rows outside this project's namespace?"
 
-If I say no to (a), stop here. Report what you did in Step 1.
+If I say no to both, stop here. Report what you did in Step 1.
 
 ## Step 3 — If I said yes to (a), fetch and execute the cloud-sync prompt
 
@@ -64,7 +71,7 @@ Don't ask me to paste it. Fetch directly:
 https://raw.githubusercontent.com/ccmdesign/ccm-feedback-tool/main/prompts/self-host-supabase.md
 ```
 
-Read it cold. It's self-contained. Execute it end-to-end against this same project. Skip its "Step 1" if my widget is already installed (it is — you just did it).
+Read it cold. It's self-contained. Execute it end-to-end against this same project — it provisions a fresh Supabase project and replaces the shared `data-supabase-url` / `data-supabase-key` from Step 1 with the dedicated ones. Skip its "Step 1" framing about installing the widget (it's already installed with cloud sync on — you're only swapping which backend it points at).
 
 When that prompt completes, return here.
 
@@ -108,13 +115,17 @@ Tell me:
 - **Service-role key:** if the cloud-sync sub-prompt asks me for a Supabase key, only the **anon / publishable** key is acceptable. The service-role key bypasses RLS and must never appear in the codebase. If I paste the wrong one, refuse and tell me to find the anon key.
 - **Don't break the existing build.** If `lint`, `typecheck`, or `build` were passing before, they should still pass after.
 - **CSP:** if the site has a Content Security Policy, you'll need `script-src https://ccm-feedback-582.netlify.app`. The widget uses inline `<style>` inside its Shadow DOM, so `style-src 'unsafe-inline'` is required if CSP is strict.
-- **SSR:** the widget boots from `document.currentScript`. If a `<Script>` wrapper that injects it server-side breaks auto-detect, switch to manual init:
+- **SSR:** the widget boots from `document.currentScript`. If a `<Script>` wrapper that injects it server-side breaks auto-detect, switch to manual init — **still pass the Supabase params, or you're back to the silent localStorage fallback:**
 
   ```html
   <script src="https://ccm-feedback-582.netlify.app/w.js" defer></script>
   <script>
     window.addEventListener("load", () => {
-      window.CcmFeedback.init({ projectName: location.hostname });
+      window.CcmFeedback.init({
+        projectName: "<unique-slug-for-this-site>",
+        supabaseUrl: "https://qnkvkumtssihbjmocbtv.supabase.co",
+        supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk",
+      });
     });
   </script>
   ```

@@ -1,6 +1,6 @@
 # ccm-feedback
 
-> A single-script-tag feedback widget for visual website reviews. Reviewers pin comments on any element of any HTML page, then export a JSON file (or sync via Supabase) for handoff to a developer or AI coding agent. Browser-only. No SDK. localStorage by default; Supabase cloud mode is opt-in.
+> A single-script-tag feedback widget for visual website reviews. Reviewers pin comments on any element of any HTML page, synced live via Supabase (or exported as a JSON file) for handoff to a developer or AI coding agent. Browser-only. No SDK. **Supabase cloud mode is the default install** — the install prompt always sets `data-supabase-url` + `data-supabase-key` (CCM's shared multi-tenant project, isolated per site by a unique `data-project`); localStorage-only mode is an explicit opt-out, not what a plain install produces.
 
 ccm-feedback is a TypeScript widget bundled to a single static JS file (`dist/w.js`, ~30 KB minified). It self-installs from a `<script>` tag, mounts a floating action button on desktop viewports, and persists pinned comments locally or to Supabase. It is a fork of [SitePing](https://github.com/NeosiaNexus/SitePing) (MIT) maintained by [CCM Design](https://ccm.design).
 
@@ -36,9 +36,9 @@ Use this file as the index when reading the project as an AI agent. Each linked 
 
 ## Agent prompts
 
-ccm-feedback's DX posture: **the user only ever pastes one prompt.** The orchestrator handles install and asks about cloud sync + RLS hardening; if the user wants either, the agent `WebFetch`es the corresponding sub-prompt from GitHub and executes it. Sub-prompts exist as files so the orchestrator can fetch them, not so users have to copy them.
+ccm-feedback's DX posture: **the user only ever pastes one prompt.** The orchestrator installs with cloud sync already on by default (CCM's shared Supabase project, isolated by `data-project`) and asks about a dedicated Supabase project + RLS hardening; if the user wants either, the agent `WebFetch`es the corresponding sub-prompt from GitHub and executes it. Sub-prompts exist as files so the orchestrator can fetch them, not so users have to copy them.
 
-- [prompts/install-widget.md](prompts/install-widget.md): **the orchestrator.** This is what the user pastes. Inlines install (framework matrix for Next/Astro/Nuxt/SvelteKit/Remix/Hugo/Rails/Django/static), then routes to cloud / harden sub-flows by raw GitHub URL.
+- [prompts/install-widget.md](prompts/install-widget.md): **the orchestrator.** This is what the user pastes. Inlines install (framework matrix for Next/Astro/Nuxt/SvelteKit/Remix/Hugo/Rails/Django/static) with the Supabase attributes always included by default, then routes to dedicated-backend / harden sub-flows by raw GitHub URL.
 - [prompts/self-host-supabase.md](prompts/self-host-supabase.md): sub-flow. Agent provisions Supabase, runs migrations, wires the script tag, validates cloud sync end-to-end. Refuses service-role key.
 - [prompts/harden-rls.md](prompts/harden-rls.md): sub-flow. Agent runs `check-rls.sql` diagnostic, generates a strict policy migration with the operator's project_name allowlist, applies it, re-verifies.
 - [skills/apply-ccm-feedback/SKILL.md](skills/apply-ccm-feedback/SKILL.md): installable skill. Auto-triggers on a `…/feedback?project=…` share URL, a raw PostgREST URL, or an exported `ccm-feedback-*.json` payload. Maps each comment to a source file, applies the edit, then sets the handled comment's status to **`review`** via `bun run feedback set-status <id> review` (PostgREST PATCH fallback). **Never sets `done`** — a human verifies in the widget and flips `review`→`done`. `question`/`pin`/`area` items are surfaced, not edited.

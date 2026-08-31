@@ -342,10 +342,33 @@ export function initCcmFeedback(config: CcmFeedbackConfig): CcmFeedbackInstance 
 }
 
 /**
- * One-shot migration: when cloud mode is enabled, push any leftover
- * localStorage records into Supabase and clear the local key. Covers both
- * the explicit project key and a legacy hostname-derived key (the auto-init
- * default before `data-project` was set).
+ * Marker for machine-seeded records (e.g. the BFNA wireframe annotations
+ * bootstrap writes `userAgent: "seed"`). Seed records exist in EVERY
+ * visitor's localStorage, so migrating them per-visitor would spam the cloud
+ * table — they are excluded from migration entirely.
+ */
+function isSeedRecord(r: AnnotationRecord): boolean {
+  return r.userAgent === "seed";
+}
+
+/**
+ * Backwards-compat migration: when cloud mode is enabled, push any
+ * pre-existing localStorage records (created while the widget ran in
+ * localStorage fallback mode) up to Supabase. Covers both the explicit
+ * project key and a legacy hostname-derived key (the auto-init default
+ * before `data-project` was set).
+ *
+ * Contract:
+ * - Seed records (`userAgent: "seed"`) are never uploaded — see isSeedRecord.
+ * - Idempotent: dedupes by record id against the cloud cache, and PostgREST
+ *   inserts run with `resolution=ignore-duplicates`, so re-running on every
+ *   page load / device is safe.
+ * - Local records are NEVER deleted — they may be the only copy until their
+ *   presence in Supabase is confirmed. On confirmed success a
+ *   `ccm-feedback:<project>:migrated` timestamp flag is set and later loads
+ *   skip the network round-trip.
+ * - A failed migration sets no flag and deletes nothing; the widget keeps
+ *   operating normally and the migration retries on the next load.
  */
 async function migrateLocalToCloud(
   cloudStore: CloudStore,
@@ -358,6 +381,9 @@ async function migrateLocalToCloud(
     const key = `ccm-feedback:${project}`;
     let raw: string | null = null;
     try {
+      // Skip keys already confirmed migrated — the flag is only ever set
+      // after a successful (or genuinely empty) migration below.
+      if (localStorage.getItem(`${key}:migrated`)) continue;
       raw = localStorage.getItem(key);
     } catch {
       continue;
@@ -366,17 +392,23 @@ async function migrateLocalToCloud(
     let records: AnnotationRecord[] = [];
     try {
       const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed) || parsed.length === 0) continue;
-      records = (parsed as AnnotationRecord[]).map((r) => ({ ...r, projectName }));
+      if (!Array.isArray(parsed)) continue;
+      records = (parsed as AnnotationRecord[]).filter((r) => !isSeedRecord(r)).map((r) => ({ ...r, projectName }));
     } catch {
       continue;
     }
-    log("Migrating", records.length, "local records from", key);
-    const inserted = await cloudStore.migrateFromLocal(records);
-    total += inserted;
+    if (records.length > 0) log("Migrating", records.length, "local records from", key);
+    const result = await cloudStore.migrateFromLocal(records);
+    if (!result.ok) {
+      // Network / API failure: leave the key and the flag untouched so the
+      // next load retries. Never fatal to widget operation.
+      continue;
+    }
+    total += result.inserted;
     try {
+      // Success: flag the key so later loads skip the upload. The local
+      // records themselves are deliberately kept (backup copy).
       localStorage.setItem(`${key}:migrated`, new Date().toISOString());
-      localStorage.removeItem(key);
     } catch {
       // ignore quota / privacy-mode failures
     }
