@@ -31,7 +31,7 @@ You will run this end-to-end. Don't make me paste another prompt at any point â€
      src="https://ccm-feedback-582.netlify.app/w.js"
      data-project="<unique-slug-for-this-site>"
      data-supabase-url="https://qnkvkumtssihbjmocbtv.supabase.co"
-     data-supabase-key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk"
+     data-supabase-key="sb_publishable_l3VC8NDshond94BU8puRWw_MQ96cyZk"
      defer
    ></script>
    ```
@@ -124,7 +124,7 @@ Tell me:
       window.CcmFeedback.init({
         projectName: "<unique-slug-for-this-site>",
         supabaseUrl: "https://qnkvkumtssihbjmocbtv.supabase.co",
-        supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFua3ZrdW10c3NpaGJqbW9jYnR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Nzc0OTcsImV4cCI6MjA5MjI1MzQ5N30._lmyjRjITwD9m-ov0QTzzRNmqpwtbYoXM_HLF2rzfSk",
+        supabaseKey: "sb_publishable_l3VC8NDshond94BU8puRWw_MQ96cyZk",
       });
     });
   </script>
